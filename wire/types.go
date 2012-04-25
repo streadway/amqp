@@ -1,6 +1,9 @@
 package wire
 
-import "errors"
+import (
+	"errors"
+	"io"
+)
 
 var (
 	ErrUnexpectedMethod    = errors.New("Bad protocol: Received out of order method")
@@ -11,7 +14,12 @@ var (
 	ErrBadFrameTermination = errors.New("Bad frame: invalid terminator")
 )
 
-// XXX(ST) discuss where best to put these types, rather in buffer.go?
+// XXX(ST) discuss where best to put these common types.
+
+type Method interface {
+	io.WriterTo
+}
+
 type Unit struct{}
 
 type Decimal struct {
