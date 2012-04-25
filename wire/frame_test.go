@@ -15,8 +15,6 @@ var (
 	//  octet   short         long         size octets       octet 
 	//
 	frameTune       = []byte{1, 0, 11, 0, 0, 0, 12, 0, 10, 0, 30, 0, 5, 0, 0, 1, 0, 0, 7, 206}
-	frameShortShort = []byte{1, 0, 11, 0, 0, 0, 0, 206, 1, 0, 2, 0, 0, 0, 1, 206}
-	frameBadMethod  = []byte{7, 0, 11, 0, 0, 0, 0, 206}
 	frameHeartbeat  = []byte{8, 0, 11, 0, 0, 0, 0, 206}
 	frameBody       = []byte{3, 0, 11, 0, 0, 0, 4, 'o', 'h', 'a', 'i', 206}
 
@@ -27,7 +25,11 @@ var (
 	// +----------+--------+-----------+----------------+------------- - -
 	//    short     short    long long       short        remainder... 
 	//
-	frameHeader = []byte{2, 0, 11, 0, 0, 0, 15, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x00, 1, 206}
+	frameHeader  = []byte{2, 0, 11, 0, 0, 0, 15, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x00, 1, 206}
+
+	readShortShort = []byte{1, 0, 11, 0, 0, 0, 0, 206, 1, 0, 2, 0, 0, 0, 1, 206}
+	readBadMethod  = []byte{7, 0, 11, 0, 0, 0, 0, 206}
+
 )
 
 func TestReadMethodFrame(t *testing.T) {
@@ -65,7 +67,7 @@ func TestReadMethodFrame(t *testing.T) {
 }
 
 func TestReadShortFrameShouldReturnErrShortBuffer(t *testing.T) {
-	r := NewFrameReader(bytes.NewBuffer(frameShortShort))
+	r := NewFrameReader(bytes.NewBuffer(readShortShort))
 	_, err := r.Read()
 	if err != io.ErrShortBuffer {
 		t.Error("Bad error:", err)
@@ -73,7 +75,7 @@ func TestReadShortFrameShouldReturnErrShortBuffer(t *testing.T) {
 }
 
 func TestReadBadMethod(t *testing.T) {
-	r := NewFrameReader(bytes.NewBuffer(frameBadMethod))
+	r := NewFrameReader(bytes.NewBuffer(readBadMethod))
 	_, err := r.Read()
 	if err != ErrBadFrameType {
 		t.Error("Bad error:", err)
@@ -136,5 +138,76 @@ func TestReadHeartbeatFrame(t *testing.T) {
 
 	if m.Channel != 11 {
 		t.Error("Channel error", m)
+	}
+}
+
+var ()
+
+func TestWriteMethod(t *testing.T) {
+	var buf bytes.Buffer
+
+	f := MethodFrame{
+		Channel: 11,
+		Method: ConnectionTune{
+			ChannelMax: 5,
+			FrameMax:   0x100,
+			Heartbeat:  7,
+		},
+	}
+
+	f.WriteTo(&buf)
+
+	if bytes.Compare(buf.Bytes(), frameTune) != 0 {
+		t.Error("ConnectionTune not written", buf.Bytes(), frameTune)
+	}
+}
+
+func TestWriteHeartbeat(t *testing.T) {
+	var buf bytes.Buffer
+
+	f := HeartbeatFrame{
+		Channel: 11,
+	}
+
+	f.WriteTo(&buf)
+
+	if bytes.Compare(buf.Bytes(), frameHeartbeat) != 0 {
+		t.Error("ConnectionTune not written", buf.Bytes(), frameHeartbeat)
+	}
+}
+
+func TestWriteHeader(t *testing.T) {
+	var buf bytes.Buffer
+
+	f := HeaderFrame{
+		Channel: 11,
+		Header: ContentHeader{
+			Class: 10,
+			Size:  0,
+			Properties: ContentProperties{
+				DeliveryMode: 1,
+			},
+		},
+	}
+
+	f.WriteTo(&buf)
+
+	if bytes.Compare(buf.Bytes(), frameHeader) != 0 {
+		t.Error("Header not written", buf.Bytes(), frameHeader)
+	}
+}
+
+func TestWriteBody(t *testing.T) {
+	var buf bytes.Buffer
+
+	f := BodyFrame{
+		Channel: 11,
+		Payload: []byte("ohai"),
+	}
+
+	f.WriteTo(&buf)
+
+	if bytes.Compare(buf.Bytes(), frameBody) != 0 {
+		t.Error("Body not written", buf.Bytes(), frameBody)
 	}
 }
