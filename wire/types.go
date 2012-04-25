@@ -18,6 +18,8 @@ var (
 
 type Method interface {
 	io.WriterTo
+	HasContent() bool
+	IsSynchronous() bool
 }
 
 type Unit struct{}

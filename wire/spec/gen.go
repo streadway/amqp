@@ -158,6 +158,14 @@ var (
 				wn, err := w.Write(buf.Bytes())
 				return int64(wn), err
 			}
+
+			func (me {{camel $class.Name $method.Name}}) HasContent() bool {
+				return {{.Content}}
+			}
+
+			func (me {{camel $class.Name $method.Name}}) IsSynchronous() bool {
+				return {{.Synchronous}}
+			}
 		{{end}}
 	{{end}}
 
