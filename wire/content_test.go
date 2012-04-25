@@ -1,8 +1,8 @@
 package wire
 
 import (
-	"testing"
 	"io"
+	"testing"
 )
 
 type ContentHeader struct {

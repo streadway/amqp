@@ -138,13 +138,13 @@ func (me MethodFrame) WriteTo(w io.Writer) (int64, error) {
 	return writeFrameTo(w, FrameMethod, me.Channel, payload.Bytes())
 }
 
-	// CONTENT HEADER
-	// 0          2        4           12               14
-	// +----------+--------+-----------+----------------+------------- - -
-	// | class-id | weight | body size | property flags | property list...
-	// +----------+--------+-----------+----------------+------------- - -
-	//    short     short    long long       short        remainder... 
-	//
+// CONTENT HEADER
+// 0          2        4           12               14
+// +----------+--------+-----------+----------------+------------- - -
+// | class-id | weight | body size | property flags | property list...
+// +----------+--------+-----------+----------------+------------- - -
+//    short     short    long long       short        remainder... 
+//
 func (me HeaderFrame) WriteTo(w io.Writer) (int64, error) {
 	var payload bytes.Buffer
 	_, err := me.Header.WriteTo(&payload)
