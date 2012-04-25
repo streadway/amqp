@@ -2,8 +2,8 @@ package wire
 
 import (
 	"bytes"
-	"errors"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 )

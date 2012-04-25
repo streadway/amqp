@@ -166,6 +166,10 @@ var (
 			func (me {{camel $class.Name $method.Name}}) IsSynchronous() bool {
 				return {{.Synchronous}}
 			}
+
+			func (me {{camel $class.Name $method.Name}}) Class() uint16 {
+				return {{$class.Index}}
+			}
 		{{end}}
 	{{end}}
 

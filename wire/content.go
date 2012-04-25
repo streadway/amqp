@@ -195,4 +195,3 @@ func (me *ContentHeader) WriteTo(w io.Writer) (int64, error) {
 
 	return io.Copy(w, &header)
 }
-

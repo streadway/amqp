@@ -14,9 +14,9 @@ var (
 	// +------+---------+-------------+  +------------+  +-----------+
 	//  octet   short         long         size octets       octet 
 	//
-	frameTune       = []byte{1, 0, 11, 0, 0, 0, 12, 0, 10, 0, 30, 0, 5, 0, 0, 1, 0, 0, 7, 206}
-	frameHeartbeat  = []byte{8, 0, 11, 0, 0, 0, 0, 206}
-	frameBody       = []byte{3, 0, 11, 0, 0, 0, 4, 'o', 'h', 'a', 'i', 206}
+	frameTune      = []byte{1, 0, 11, 0, 0, 0, 12, 0, 10, 0, 30, 0, 5, 0, 0, 1, 0, 0, 7, 206}
+	frameHeartbeat = []byte{8, 0, 11, 0, 0, 0, 0, 206}
+	frameBody      = []byte{3, 0, 11, 0, 0, 0, 4, 'o', 'h', 'a', 'i', 206}
 
 	// CONTENT HEADER
 	// 0          2        4           12               14
@@ -25,11 +25,10 @@ var (
 	// +----------+--------+-----------+----------------+------------- - -
 	//    short     short    long long       short        remainder... 
 	//
-	frameHeader  = []byte{2, 0, 11, 0, 0, 0, 15, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x00, 1, 206}
+	frameHeader = []byte{2, 0, 11, 0, 0, 0, 15, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x00, 1, 206}
 
 	readShortShort = []byte{1, 0, 11, 0, 0, 0, 0, 206, 1, 0, 2, 0, 0, 0, 1, 206}
 	readBadMethod  = []byte{7, 0, 11, 0, 0, 0, 0, 206}
-
 )
 
 func TestReadMethodFrame(t *testing.T) {

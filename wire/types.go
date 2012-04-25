@@ -20,6 +20,7 @@ type Method interface {
 	io.WriterTo
 	HasContent() bool
 	IsSynchronous() bool
+	Class() uint16
 }
 
 type Unit struct{}
