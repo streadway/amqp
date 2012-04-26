@@ -59,9 +59,9 @@ func TestRecvContentMethodContent(t *testing.T) {
 	}()
 
 	assertEqualMessage(t, f.Recv(), Message{Method: wire.ConnectionOpenOk{}})
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.BasicDeliver{}, Body: []byte("ohai")})
+	assertEqualMessage(t, f.RecvAsynchronous(), Message{Method: wire.BasicDeliver{}, Body: []byte("ohai")})
 	assertEqualMessage(t, f.Recv(), Message{Method: wire.ConnectionTuneOk{}})
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.BasicDeliver{}, Body: []byte("lol")})
+	assertEqualMessage(t, f.RecvAsynchronous(), Message{Method: wire.BasicDeliver{}, Body: []byte("lol")})
 }
 
 func TestRecvContent(t *testing.T) {
@@ -73,7 +73,7 @@ func TestRecvContent(t *testing.T) {
 		s2c <- wire.BodyFrame{Channel: 1, Payload: []byte("ohai")}
 	}()
 
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.BasicDeliver{}, Body: []byte("ohai")})
+	assertEqualMessage(t, f.RecvAsynchronous(), Message{Method: wire.BasicDeliver{}, Body: []byte("ohai")})
 }
 
 func TestRecvInterruptedContent(t *testing.T) {
@@ -100,7 +100,7 @@ func TestRecvMethodContentMethod(t *testing.T) {
 		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicCancelOk{}}
 	}()
 
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.BasicDeliver{}, Body: []byte("ohai")})
+	assertEqualMessage(t, f.RecvAsynchronous(), Message{Method: wire.BasicDeliver{}, Body: []byte("ohai")})
 	assertEqualMessage(t, f.Recv(), Message{Method: wire.BasicCancelOk{}})
 }
 

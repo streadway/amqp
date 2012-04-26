@@ -6,6 +6,7 @@ import (
 )
 
 // Struct that contains the method and any content if the method HasContent
+// intended to be used by higher level APIs like Client/Channel/Connection
 type Message struct {
 	Method     wire.Method
 	Properties wire.ContentProperties
@@ -201,11 +202,18 @@ func (me *Framing) recvContent(f wire.Frame) error {
 		me.body = append(me.body, frame.Payload...)
 
 		if uint64(len(me.body)) >= me.header.Header.Size {
-			me.sync <- Message{
+			msg := Message{
 				Method:     me.method.Method,
 				Properties: me.header.Header.Properties,
 				Body:       me.body,
 			}
+
+			if me.method.Method.IsSynchronous() {
+				me.sync <- msg
+			} else {
+				me.async <- msg
+			}
+
 			return me.transition((*Framing).recvMethod)
 		}
 
