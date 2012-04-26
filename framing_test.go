@@ -7,15 +7,15 @@ import (
 	"testing"
 )
 
-func newFraming() (*Framing, chan wire.Frame, chan wire.Frame) {
+func newTestFraming() (*Framing, chan wire.Frame, chan wire.Frame) {
 	c2s := make(chan wire.Frame)
 	s2c := make(chan wire.Frame)
 
-	return NewFraming(1, 1024, s2c, c2s), s2c, c2s
+	return newFraming(1, 1024, s2c, c2s), s2c, c2s
 }
 
 func TestRecvMethod(t *testing.T) {
-	f, s2c, _ := newFraming()
+	f, s2c, _ := newTestFraming()
 	frame := wire.MethodFrame{
 		Channel: 1,
 		Method:  wire.ConnectionOpenOk{},
@@ -29,7 +29,7 @@ func TestRecvMethod(t *testing.T) {
 }
 
 func TestRecvMethodMethod(t *testing.T) {
-	f, s2c, _ := newFraming()
+	f, s2c, _ := newTestFraming()
 
 	go func() {
 		s2c <- wire.MethodFrame{Channel: 1, Method: wire.ConnectionOpenOk{}}
@@ -41,7 +41,7 @@ func TestRecvMethodMethod(t *testing.T) {
 }
 
 func TestRecvContentMethodContent(t *testing.T) {
-	f, s2c, _ := newFraming()
+	f, s2c, _ := newTestFraming()
 
 	go func() {
 		s2c <- wire.MethodFrame{Channel: 1, Method: wire.ConnectionOpenOk{}}
@@ -65,7 +65,7 @@ func TestRecvContentMethodContent(t *testing.T) {
 }
 
 func TestRecvContent(t *testing.T) {
-	f, s2c, _ := newFraming()
+	f, s2c, _ := newTestFraming()
 
 	go func() {
 		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicDeliver{}}
@@ -77,7 +77,7 @@ func TestRecvContent(t *testing.T) {
 }
 
 func TestRecvInterruptedContent(t *testing.T) {
-	f, s2c, _ := newFraming()
+	f, s2c, _ := newTestFraming()
 
 	go func() {
 		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicDeliver{}}
@@ -91,7 +91,7 @@ func TestRecvInterruptedContent(t *testing.T) {
 }
 
 func TestRecvMethodContentMethod(t *testing.T) {
-	f, s2c, _ := newFraming()
+	f, s2c, _ := newTestFraming()
 
 	go func() {
 		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicDeliver{}}
@@ -105,7 +105,7 @@ func TestRecvMethodContentMethod(t *testing.T) {
 }
 
 func TestSendMethod(t *testing.T) {
-	f, _, c2s := newFraming()
+	f, _, c2s := newTestFraming()
 
 	go func() {
 		f.Send(Message{Method: wire.BasicCancel{}})
@@ -117,7 +117,7 @@ func TestSendMethod(t *testing.T) {
 }
 
 func TestSendMethodThenContent(t *testing.T) {
-	f, _, c2s := newFraming()
+	f, _, c2s := newTestFraming()
 
 	go func() {
 		f.Send(Message{Method: wire.BasicConsumeOk{}})

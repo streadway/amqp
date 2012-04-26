@@ -56,6 +56,7 @@ In realistic implementations where performance is a concern, we would use “rea
 */
 type Frame interface {
 	io.WriterTo
+	ChannelID() int
 }
 
 /*
@@ -85,6 +86,25 @@ type MethodFrame struct {
 	Method  Method
 }
 
+func (me MethodFrame) ChannelID() int {
+	return int(me.Channel)
+}
+
+func (me MethodFrame) WriteTo(w io.Writer) (int64, error) {
+	var payload bytes.Buffer
+
+	if me.Method == nil {
+		return 0, errors.New("malformed frame: missing method")
+	}
+
+	_, err := me.Method.WriteTo(&payload)
+	if err != nil {
+		return 0, err
+	}
+
+	return writeFrameTo(w, FrameMethod, me.Channel, payload.Bytes())
+}
+
 /*
 Heartbeating is a technique designed to undo one of TCP/IP's features, namely
 its ability to recover from a broken physical connection by closing only after
@@ -96,6 +116,17 @@ class method.
 */
 type HeartbeatFrame struct {
 	Channel uint16
+}
+
+func (me HeartbeatFrame) ChannelID() int {
+	return int(me.Channel)
+}
+
+// Heartbeat
+//
+// Payload is empty
+func (me HeartbeatFrame) WriteTo(w io.Writer) (n int64, err error) {
+	return writeFrameTo(w, FrameHeartbeat, me.Channel, []byte{})
 }
 
 /*
@@ -122,6 +153,26 @@ type HeaderFrame struct {
 	Header  ContentHeader
 }
 
+func (me HeaderFrame) ChannelID() int {
+	return int(me.Channel)
+}
+
+// CONTENT HEADER
+// 0          2        4           12               14
+// +----------+--------+-----------+----------------+------------- - -
+// | class-id | weight | body size | property flags | property list...
+// +----------+--------+-----------+----------------+------------- - -
+//    short     short    long long       short        remainder... 
+//
+func (me HeaderFrame) WriteTo(w io.Writer) (int64, error) {
+	var payload bytes.Buffer
+	_, err := me.Header.WriteTo(&payload)
+	if err != nil {
+		return 0, err
+	}
+	return writeFrameTo(w, FrameHeader, me.Channel, payload.Bytes())
+}
+
 /*
 Content is the application data we carry from client-to-client via the AMQP
 server.  Content is, roughly speaking, a set of properties plus a binary data
@@ -142,35 +193,8 @@ type BodyFrame struct {
 	Payload []byte
 }
 
-func (me MethodFrame) WriteTo(w io.Writer) (int64, error) {
-	var payload bytes.Buffer
-
-	if me.Method == nil {
-		return 0, errors.New("malformed frame: missing method")
-	}
-
-	_, err := me.Method.WriteTo(&payload)
-	if err != nil {
-		return 0, err
-	}
-
-	return writeFrameTo(w, FrameMethod, me.Channel, payload.Bytes())
-}
-
-// CONTENT HEADER
-// 0          2        4           12               14
-// +----------+--------+-----------+----------------+------------- - -
-// | class-id | weight | body size | property flags | property list...
-// +----------+--------+-----------+----------------+------------- - -
-//    short     short    long long       short        remainder... 
-//
-func (me HeaderFrame) WriteTo(w io.Writer) (int64, error) {
-	var payload bytes.Buffer
-	_, err := me.Header.WriteTo(&payload)
-	if err != nil {
-		return 0, err
-	}
-	return writeFrameTo(w, FrameHeader, me.Channel, payload.Bytes())
+func (me BodyFrame) ChannelID() int {
+	return int(me.Channel)
 }
 
 // Body
@@ -179,13 +203,6 @@ func (me HeaderFrame) WriteTo(w io.Writer) (int64, error) {
 // Header frame
 func (me BodyFrame) WriteTo(w io.Writer) (n int64, err error) {
 	return writeFrameTo(w, FrameBody, me.Channel, me.Payload)
-}
-
-// Heartbeat
-//
-// Payload is empty
-func (me HeartbeatFrame) WriteTo(w io.Writer) (n int64, err error) {
-	return writeFrameTo(w, FrameHeartbeat, me.Channel, []byte{})
 }
 
 // Writes a complete buffer to the io.Writer to avoid fragmentation on the wire

@@ -12,6 +12,8 @@ var (
 	ErrUnknownFrameType    = errors.New("Bad frame: unknown type")
 	ErrBadFrameSize        = errors.New("Bad frame: invalid size")
 	ErrBadFrameTermination = errors.New("Bad frame: invalid terminator")
+
+	ProtocolHeader = []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}
 )
 
 // XXX(ST) discuss where best to put these common types.

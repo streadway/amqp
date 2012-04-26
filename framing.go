@@ -38,7 +38,7 @@ type Framing struct {
 	body   []byte
 }
 
-func NewFraming(channel uint16, maxSize int, s2c, c2s chan wire.Frame) *Framing {
+func newFraming(channel uint16, maxSize int, s2c, c2s chan wire.Frame) *Framing {
 	me := &Framing{
 		sync:    make(chan Message),
 		async:   make(chan Message),

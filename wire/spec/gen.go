@@ -153,7 +153,7 @@ var (
 				buf.PutShort({{$class.Index}})
 				buf.PutShort({{$method.Index}})
 				{{range .Fields}}{{$.FieldEncode .}}
-				{{end}}
+				{{end}}{{$.FinishEncode}}
 				fmt.Println("encode: {{$class.Name}}.{{$method.Name}} {{$class.Index}} {{$method.Index}}", buf.Bytes())
 				wn, err := w.Write(buf.Bytes())
 				return int64(wn), err
@@ -228,6 +228,11 @@ func (me *renderer) BitIncrement(field Field, bits *int) {
 	}
 }
 
+func (me *renderer) FinishEncode() (str string, err error) {
+	me.bitcounter = 0
+	return
+}
+
 func (me *renderer) FieldEncode(field Field) (str string, err error) {
 	var fieldType, nativeType, fieldName string
 
@@ -294,7 +299,7 @@ func (me *renderer) FieldDecode(name string, field Field) (string, error) {
 
 	if me.bitcounter > 0 {
 		// We've advanced past a bit word, so consume it before the real decoding
-		str = "me.NextOctet()\n" + str
+		str = "me.NextOctet() // reset\n" + str
 		me.bitcounter = 0
 	}
 

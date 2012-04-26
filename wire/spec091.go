@@ -580,7 +580,8 @@ func (me ChannelFlowOk) WriteTo(w io.Writer) (int64, error) {
 	var buf buffer
 	buf.PutShort(20)
 	buf.PutShort(21)
-	buf.PutBit(me.Active, 1)
+	buf.PutOctet(0)
+	buf.PutBit(me.Active, 0)
 
 	fmt.Println("encode: channel.flow-ok 20 21", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
@@ -1829,7 +1830,8 @@ func (me BasicRecoverAsync) WriteTo(w io.Writer) (int64, error) {
 	var buf buffer
 	buf.PutShort(60)
 	buf.PutShort(100)
-	buf.PutBit(me.Requeue, 1)
+	buf.PutOctet(0)
+	buf.PutBit(me.Requeue, 0)
 
 	fmt.Println("encode: basic.recover-async 60 100", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
@@ -1861,7 +1863,8 @@ func (me BasicRecover) WriteTo(w io.Writer) (int64, error) {
 	var buf buffer
 	buf.PutShort(60)
 	buf.PutShort(110)
-	buf.PutBit(me.Requeue, 2)
+	buf.PutOctet(0)
+	buf.PutBit(me.Requeue, 0)
 
 	fmt.Println("encode: basic.recover 60 110", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
@@ -2138,7 +2141,8 @@ func (me ConfirmSelect) WriteTo(w io.Writer) (int64, error) {
 	var buf buffer
 	buf.PutShort(85)
 	buf.PutShort(10)
-	buf.PutBit(me.Nowait, 2)
+	buf.PutOctet(0)
+	buf.PutBit(me.Nowait, 0)
 
 	fmt.Println("encode: confirm.select 85 10", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
@@ -2198,7 +2202,6 @@ func (me *buffer) NextMethod() (value Method) {
 		case 10: // connection start
 			fmt.Println("NextMethod: class:10 method:10")
 			message := ConnectionStart{}
-			me.NextOctet()
 			message.VersionMajor = me.NextOctet()
 			message.VersionMinor = me.NextOctet()
 			message.ServerProperties = me.NextTable()
@@ -2346,7 +2349,7 @@ func (me *buffer) NextMethod() (value Method) {
 			message.AutoDelete = me.NextBit(2)
 			message.Internal = me.NextBit(3)
 			message.NoWait = me.NextBit(4)
-			me.NextOctet()
+			me.NextOctet() // reset
 			message.Arguments = me.NextTable()
 
 			return message
@@ -2381,7 +2384,7 @@ func (me *buffer) NextMethod() (value Method) {
 			message.Source = me.NextShortstr()
 			message.RoutingKey = me.NextShortstr()
 			message.NoWait = me.NextBit(0)
-			me.NextOctet()
+			me.NextOctet() // reset
 			message.Arguments = me.NextTable()
 
 			return message
@@ -2400,7 +2403,7 @@ func (me *buffer) NextMethod() (value Method) {
 			message.Source = me.NextShortstr()
 			message.RoutingKey = me.NextShortstr()
 			message.NoWait = me.NextBit(0)
-			me.NextOctet()
+			me.NextOctet() // reset
 			message.Arguments = me.NextTable()
 
 			return message
@@ -2426,7 +2429,7 @@ func (me *buffer) NextMethod() (value Method) {
 			message.Exclusive = me.NextBit(2)
 			message.AutoDelete = me.NextBit(3)
 			message.NoWait = me.NextBit(4)
-			me.NextOctet()
+			me.NextOctet() // reset
 			message.Arguments = me.NextTable()
 
 			return message
@@ -2448,7 +2451,7 @@ func (me *buffer) NextMethod() (value Method) {
 			message.Exchange = me.NextShortstr()
 			message.RoutingKey = me.NextShortstr()
 			message.NoWait = me.NextBit(0)
-			me.NextOctet()
+			me.NextOctet() // reset
 			message.Arguments = me.NextTable()
 
 			return message
@@ -2540,7 +2543,7 @@ func (me *buffer) NextMethod() (value Method) {
 			message.NoAck = me.NextBit(1)
 			message.Exclusive = me.NextBit(2)
 			message.NoWait = me.NextBit(3)
-			me.NextOctet()
+			me.NextOctet() // reset
 			message.Arguments = me.NextTable()
 
 			return message
@@ -2594,7 +2597,7 @@ func (me *buffer) NextMethod() (value Method) {
 			message.ConsumerTag = me.NextShortstr()
 			message.DeliveryTag = me.NextLonglong()
 			message.Redelivered = me.NextBit(0)
-			me.NextOctet()
+			me.NextOctet() // reset
 			message.Exchange = me.NextShortstr()
 			message.RoutingKey = me.NextShortstr()
 
@@ -2614,7 +2617,7 @@ func (me *buffer) NextMethod() (value Method) {
 			message := BasicGetOk{}
 			message.DeliveryTag = me.NextLonglong()
 			message.Redelivered = me.NextBit(0)
-			me.NextOctet()
+			me.NextOctet() // reset
 			message.Exchange = me.NextShortstr()
 			message.RoutingKey = me.NextShortstr()
 			message.MessageCount = me.NextLong()
