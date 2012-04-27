@@ -75,6 +75,12 @@ func (me *Framing) loop() {
 	}
 }
 
+// Frames and sends a method that should not have a payload
+func (me *Framing) SendMethod(method wire.Method) {
+	me.Send(Message{Method: method})
+}
+
+// Frames and sends a method that may or may not have payload
 func (me *Framing) Send(msg Message) {
 	fmt.Println("Send: msg", msg)
 

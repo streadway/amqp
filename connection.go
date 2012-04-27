@@ -20,7 +20,7 @@ type connection struct {
 	heartbeatInterval int
 
 	seq      chan uint16
-	channels map[uint16]*channel
+	channels map[uint16]*Channel
 }
 
 // XXX(ST) how/when does this get GC'd?  Better solutions must exist.
@@ -37,7 +37,7 @@ func newConnection(s2c, c2s chan wire.Frame) (me *connection) {
 		framing:  newFraming(0, wire.FrameMinSize, make(chan wire.Frame), c2s),
 		s2c:      s2c, // shared chan across all channels including the connection
 		seq:      seq,
-		channels: make(map[uint16]*channel),
+		channels: make(map[uint16]*Channel),
 	}
 	go sequence(1, seq)
 	go me.demux()
@@ -73,7 +73,7 @@ func (me *connection) demux() {
 // Only needs to be called if you want to interleave multiple publishers or
 // multiple consumers on the same network connection.  Each client comes with a
 // opened embedded channel and exposes all channel related interfaces directly.
-func (me *connection) OpenChannel() (channel *channel, err error) {
+func (me *connection) OpenChannel() (channel *Channel, err error) {
 	id := uint16(<-me.seq)
 	framing := newFraming(id, me.maxFrameSize, make(chan wire.Frame), me.framing.c2s)
 

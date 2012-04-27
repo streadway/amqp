@@ -9,7 +9,7 @@ import (
 type Client struct {
 	io io.ReadWriter
 	*connection
-	*channel
+	*Channel
 }
 
 // When this returns, an AMPQ connection and AMQP Channel will be opened,
@@ -38,7 +38,7 @@ func NewClient(conn io.ReadWriter, username, password, vhost string) (me *Client
 		return
 	}
 
-	me.channel = channel
+	me.Channel = channel
 
 	return
 }
