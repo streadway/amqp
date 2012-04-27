@@ -33,7 +33,7 @@ var (
 
 func TestReadMethodFrame(t *testing.T) {
 	r := NewFrameReader(bytes.NewBuffer(frameTune))
-	f, err := r.Read()
+	f, err := r.NextFrame()
 	if err != nil {
 		t.Error("Bad read:", err)
 	}
@@ -67,7 +67,7 @@ func TestReadMethodFrame(t *testing.T) {
 
 func TestReadShortFrameShouldReturnErrShortBuffer(t *testing.T) {
 	r := NewFrameReader(bytes.NewBuffer(readShortShort))
-	_, err := r.Read()
+	_, err := r.NextFrame()
 	if err != io.ErrShortBuffer {
 		t.Error("Bad error:", err)
 	}
@@ -75,7 +75,7 @@ func TestReadShortFrameShouldReturnErrShortBuffer(t *testing.T) {
 
 func TestReadBadMethod(t *testing.T) {
 	r := NewFrameReader(bytes.NewBuffer(readBadMethod))
-	_, err := r.Read()
+	_, err := r.NextFrame()
 	if err != ErrBadFrameType {
 		t.Error("Bad error:", err)
 	}
@@ -83,7 +83,7 @@ func TestReadBadMethod(t *testing.T) {
 
 func TestReadContentHeader(t *testing.T) {
 	r := NewFrameReader(bytes.NewBuffer(frameHeader))
-	f, err := r.Read()
+	f, err := r.NextFrame()
 	if err != nil {
 		t.Error("Bad read:", err)
 	}
@@ -104,7 +104,7 @@ func TestReadContentHeader(t *testing.T) {
 
 func TestReadContent(t *testing.T) {
 	r := NewFrameReader(bytes.NewBuffer(frameBody))
-	f, err := r.Read()
+	f, err := r.NextFrame()
 	if err != nil {
 		t.Error("Bad read:", err)
 	}
@@ -125,7 +125,7 @@ func TestReadContent(t *testing.T) {
 
 func TestReadHeartbeatFrame(t *testing.T) {
 	r := NewFrameReader(bytes.NewBuffer(frameHeartbeat))
-	f, err := r.Read()
+	f, err := r.NextFrame()
 	if err != nil {
 		t.Error("Bad read:", err)
 	}

@@ -56,7 +56,7 @@ In realistic implementations where performance is a concern, we would use “rea
 */
 type Frame interface {
 	io.WriterTo
-	ChannelID() int
+	ChannelID() uint16
 }
 
 /*
@@ -86,8 +86,8 @@ type MethodFrame struct {
 	Method  Method
 }
 
-func (me MethodFrame) ChannelID() int {
-	return int(me.Channel)
+func (me MethodFrame) ChannelID() uint16 {
+	return me.Channel
 }
 
 func (me MethodFrame) WriteTo(w io.Writer) (int64, error) {
@@ -118,8 +118,8 @@ type HeartbeatFrame struct {
 	Channel uint16
 }
 
-func (me HeartbeatFrame) ChannelID() int {
-	return int(me.Channel)
+func (me HeartbeatFrame) ChannelID() uint16 {
+	return me.Channel
 }
 
 // Heartbeat
@@ -153,8 +153,8 @@ type HeaderFrame struct {
 	Header  ContentHeader
 }
 
-func (me HeaderFrame) ChannelID() int {
-	return int(me.Channel)
+func (me HeaderFrame) ChannelID() uint16 {
+	return me.Channel
 }
 
 // CONTENT HEADER
@@ -193,8 +193,8 @@ type BodyFrame struct {
 	Payload []byte
 }
 
-func (me BodyFrame) ChannelID() int {
-	return int(me.Channel)
+func (me BodyFrame) ChannelID() uint16 {
+	return me.Channel
 }
 
 // Body
@@ -270,7 +270,9 @@ In realistic implementations where performance is a concern, we would use
 
 “gathering reads” to avoid doing three separate system calls to read a frame.
 */
-func (me *frameReader) Read() (frame Frame, err error) {
+func (me *frameReader) NextFrame() (frame Frame, err error) {
+	fmt.Println("NextFrame: ", me.reader)
+
 	// Capture and recover from any short buffers during read
 	defer func() {
 		if r := recover(); r != nil {

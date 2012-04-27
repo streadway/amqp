@@ -6,19 +6,18 @@ import (
 	"io"
 )
 
-type client struct {
-	io  io.ReadWriter
-	s2c chan wire.Frame
-	c2s chan wire.Frame
+type Client struct {
+	io io.ReadWriter
 	*connection
+	*channel
 }
 
-// When this returns, an AMPQ Connection and AMQP Channel will be opened,
+// When this returns, an AMPQ connection and AMQP Channel will be opened,
 // authenticated and ready to use.
 //
 // XXX(ST) NewClient will block until the wire handshake completes, is it expected in Go to have blocking constructors?
-func NewClient(conn io.ReadWriter, username, password, vhost string) (me *client, err error) {
-	me = &client{
+func NewClient(conn io.ReadWriter, username, password, vhost string) (me *Client, err error) {
+	me = &Client{
 		io:         conn,
 		connection: newConnection(make(chan wire.Frame), make(chan wire.Frame)),
 	}
@@ -34,15 +33,24 @@ func NewClient(conn io.ReadWriter, username, password, vhost string) (me *client
 		return
 	}
 
+	channel, err := me.connection.OpenChannel()
+	if err != nil {
+		return
+	}
+
+	me.channel = channel
+
 	return
 }
 
-// Reads each frame off the IO and dispatches it to the right channel/connection
-func (me *client) reader() {
+// Reads each frame off the IO and hand off to the connection object that
+// will demux the streams and dispatch to one of the opened channels or
+// handle on channel 0 (the connection channel).
+func (me *Client) reader() {
 	reader := wire.NewFrameReader(me.io)
 
 	for {
-		frame, err := reader.Read()
+		frame, err := reader.NextFrame()
 		fmt.Println("frame read: ", frame)
 
 		if err != nil {
@@ -50,16 +58,11 @@ func (me *client) reader() {
 			panic(fmt.Sprintf("TODO process io error by initiating a shutdown/reconnect", err))
 		}
 
-		switch frame.ChannelID() {
-		case 0:
-			me.connection.framing.s2c <- frame
-		default:
-			// TODO lookup and dispatch to the right Channel
-		}
+		me.connection.s2c <- frame
 	}
 }
 
-func (me *client) writer() {
+func (me *Client) writer() {
 	for {
 		frame := <-me.connection.framing.c2s
 		// TODO handle when the chan closes

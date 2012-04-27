@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewClientHandshake(t *testing.T) {
+	done := make(chan bool)
 	server, client := interPipes()
 
 	go func() {
@@ -34,6 +35,11 @@ func TestNewClientHandshake(t *testing.T) {
 			Channel: 0,
 			Method:  wire.ConnectionOpenOk{},
 		}.WriteTo(server)
+
+		wire.MethodFrame{
+			Channel: 1,
+			Method:  wire.ChannelOpenOk{},
+		}.WriteTo(server)
 	}()
 
 	go func() {
@@ -49,7 +55,7 @@ func TestNewClientHandshake(t *testing.T) {
 		var err error
 		var ok bool
 
-		if f, err = r.Read(); err != nil {
+		if f, err = r.NextFrame(); err != nil {
 			t.Error("bad read", err)
 		}
 
@@ -57,7 +63,7 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Error("expected ConnectionStartOk")
 		}
 
-		if f, err = r.Read(); err != nil {
+		if f, err = r.NextFrame(); err != nil {
 			t.Error("bad read", err)
 		}
 
@@ -65,7 +71,7 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Error("expected ConnectionTuneOk")
 		}
 
-		if f, err = r.Read(); err != nil {
+		if f, err = r.NextFrame(); err != nil {
 			t.Error("bad read", err)
 		}
 
@@ -74,9 +80,27 @@ func TestNewClientHandshake(t *testing.T) {
 
 		}
 
+		if f, err = r.NextFrame(); err != nil {
+			t.Error("bad read", err)
+		}
+
+		if _, ok = f.(wire.MethodFrame).Method.(wire.ChannelOpen); !ok {
+			t.Error("expected ChannelOpen")
+		}
+
+		if f.ChannelID() != 1 {
+			t.Error("expected ChannelOpen on channel 1")
+		}
+
 		server.Close()
+		done <- true
 	}()
 
-	amqp.NewClient(client, "guest", "guest", "/")
+	c, err := amqp.NewClient(client, "guest", "guest", "/")
+	if err != nil {
+		t.Error("could not create client:", c, err)
+	}
 
+	println("X X X X X X X X X X X X X X X X X X X X Ohai")
+	<-done
 }
