@@ -2,8 +2,7 @@ package amqp
 
 import (
 	"amqp/wire"
-	"bytes"
-	"io"
+	"fmt"
 )
 
 type Lifetime int
@@ -30,15 +29,43 @@ type QueueState struct {
 // Represents an AMQP channel, used for concurrent, interleaved publishers and
 // consumers on the same connection.
 type Channel struct {
-	framing *Framing
-	noWait  bool
+	framing   *Framing
+	noWait    bool
+	consumers map[string]chan Message
 }
 
 // Constructs and opens a new channel with the given framing rules
 func newChannel(framing *Framing) (me *Channel, err error) {
-	return &Channel{
-		framing: framing,
-	}, nil
+	me = &Channel{
+		framing:   framing,
+		consumers: make(map[string]chan Message),
+	}
+
+	go me.handleAsync()
+
+	return me, nil
+}
+
+// Can be one of the following methods:
+func (me *Channel) handleAsync() {
+	for {
+		msg, ok := <-me.framing.async
+		if !ok {
+			// channels closed
+			return
+		}
+		switch method := msg.Method.(type) {
+		case wire.BasicDeliver:
+			consumer, ok := me.consumers[method.ConsumerTag]
+			if !ok {
+				// TODO handle missing consumer
+			} else {
+				consumer <- msg
+			}
+		default:
+			fmt.Println("Unhandled async method:", method)
+		}
+	}
 }
 
 //    channel             = open-channel *use-channel close-channel
@@ -70,6 +97,7 @@ func newQueueState(msg *wire.QueueDeclareOk) *QueueState {
 
 func (me *Channel) unhandled(msg wire.Method) error {
 	// TODO CLOSE/CLOSE-OK/ERROR
+	fmt.Println("UNHANDLED", msg)
 	return nil
 }
 
@@ -88,10 +116,10 @@ func lifetimeParams(l Lifetime) (durable bool, autoDelete bool) {
 
 func (me *Channel) DeclareExchange(lifetime Lifetime, typ, name string) error {
 	durable, autoDelete := lifetimeParams(lifetime)
-	return me.DeclareCustomExchange(typ, name, durable, autoDelete, false, nil)
+	return me.CustomDeclareExchange(typ, name, durable, autoDelete, false, nil)
 }
 
-func (me *Channel) DeclareCustomExchange(typ string, name string, durable bool, autoDelete bool, internal bool, args Table) error {
+func (me *Channel) CustomDeclareExchange(typ string, name string, durable bool, autoDelete bool, internal bool, args Table) error {
 	msg := wire.ExchangeDeclare{
 		Exchange:   name,
 		Type:       typ,
@@ -161,10 +189,10 @@ func (me *Channel) DeleteExchange(name string, ifUnused bool) error {
 }
 
 func (me *Channel) BindExchange(destination, source, routingKey string) error {
-	return me.BindCustomExchange(destination, source, routingKey, nil)
+	return me.CustomBindExchange(destination, source, routingKey, nil)
 }
 
-func (me *Channel) BindCustomExchange(destination string, source string, routingKey string, arguments Table) error {
+func (me *Channel) CustomBindExchange(destination string, source string, routingKey string, arguments Table) error {
 	msg := wire.ExchangeBind{
 		Destination: destination,
 		Source:      source,
@@ -188,10 +216,10 @@ func (me *Channel) BindCustomExchange(destination string, source string, routing
 }
 
 func (me *Channel) UnbindExchange(destination string, source string, routingKey string) error {
-	return me.UnbindCustomExchange(destination, source, routingKey, nil)
+	return me.CustomUnbindExchange(destination, source, routingKey, nil)
 }
 
-func (me *Channel) UnbindCustomExchange(destination string, source string, routingKey string, arguments Table) error {
+func (me *Channel) CustomUnbindExchange(destination string, source string, routingKey string, arguments Table) error {
 	msg := wire.ExchangeUnbind{
 		Destination: destination,
 		Source:      source,
@@ -216,10 +244,10 @@ func (me *Channel) UnbindCustomExchange(destination string, source string, routi
 
 func (me *Channel) DeclareQueue(lifetime Lifetime, name string) (*QueueState, error) {
 	durable, autoDelete := lifetimeParams(lifetime)
-	return me.DeclareCustomQueue(name, durable, autoDelete, false, nil)
+	return me.CustomDeclareQueue(name, durable, autoDelete, false, nil)
 }
 
-func (me *Channel) DeclareCustomQueue(name string, durable bool, autoDelete bool, exclusive bool, arguments Table) (*QueueState, error) {
+func (me *Channel) CustomDeclareQueue(name string, durable bool, autoDelete bool, exclusive bool, arguments Table) (*QueueState, error) {
 	msg := wire.QueueDeclare{
 		Queue:      name,
 		Passive:    false,
@@ -263,10 +291,10 @@ func (me *Channel) InspectQueue(name string) (*QueueState, error) {
 }
 
 func (me *Channel) BindQueue(exchange string, queue string, routingKey string) error {
-	return me.BindCustomQueue(exchange, queue, routingKey, nil)
+	return me.CustomBindQueue(exchange, queue, routingKey, nil)
 }
 
-func (me *Channel) BindCustomQueue(exchange string, queue string, routingKey string, arguments Table) error {
+func (me *Channel) CustomBindQueue(exchange string, queue string, routingKey string, arguments Table) error {
 	msg := wire.QueueBind{
 		Queue:      queue,
 		Exchange:   exchange,
@@ -290,10 +318,10 @@ func (me *Channel) BindCustomQueue(exchange string, queue string, routingKey str
 }
 
 func (me *Channel) UnbindQueue(exchange string, queue string, routingKey string) error {
-	return me.UnbindCustomQueue(exchange, queue, routingKey, nil)
+	return me.CustomUnbindQueue(exchange, queue, routingKey, nil)
 }
 
-func (me *Channel) UnbindCustomQueue(exchange string, queue string, routingKey string, arguments Table) error {
+func (me *Channel) CustomUnbindQueue(exchange string, queue string, routingKey string, arguments Table) error {
 	msg := wire.QueueUnbind{
 		Queue:      queue,
 		Exchange:   exchange,
@@ -376,34 +404,55 @@ func (me *Channel) Qos(prefetchMessageCount int, prefetchWindowByteSize int) err
 }
 
 func (me *Channel) Publish(exchange string, routingKey string, body []byte, headers Table) {
-	me.PublishCustom(exchange, routingKey, false, false, int64(len(body)), bytes.NewBuffer(body), Properties(wire.ContentProperties{
+	me.CustomPublish(exchange, routingKey, false, false, int64(len(body)), body, Properties(wire.ContentProperties{
 		Headers:      wire.Table(headers),
 		DeliveryMode: wire.TransientDelivery,
 	}))
 }
 
 func (me *Channel) PublishPersistent(exchange string, routingKey string, body []byte, headers Table) {
-	me.PublishCustom(exchange, routingKey, false, false, int64(len(body)), bytes.NewBuffer(body), Properties(wire.ContentProperties{
+	me.CustomPublish(exchange, routingKey, false, false, int64(len(body)), body, Properties(wire.ContentProperties{
 		Headers:      wire.Table(headers),
 		DeliveryMode: wire.PersistentDelivery,
 	}))
 }
 
-func (me *Channel) PublishCustom(exchange string, routingKey string, mandatory bool, immediate bool, size int64, body io.Reader, properties Properties) {
-	// msg := Message{
-	// 	Method: wire.BasicPublish{
-	// 		Exchange:   exchange,
-	// 		RoutingKey: routingKey,
-	// 		Mandatory:  mandatory,
-	// 		Immediate:  immediate,
-	// 	},
-	// 	Size:       uint64(size),
-	// 	Properties: wire.ContentProperties(properties),
-	// 	Body:       body,
-	// }
+func (me *Channel) CustomPublish(exchange string, routingKey string, mandatory bool, immediate bool, size int64, body []byte, properties Properties) {
+	me.framing.Send(Message{
+		Method: wire.BasicPublish{
+			Exchange:   exchange,
+			RoutingKey: routingKey,
+			Mandatory:  mandatory,
+			Immediate:  immediate,
+		},
+		Properties: wire.ContentProperties(properties),
+		Body:       body,
+	})
+}
 
-	// // TODO handle errors
-	// me.framing.Send(msg)
+func (me *Channel) Consume(queue string) (chan Message, error) {
+	msg := wire.BasicConsume{
+		Queue:       queue,
+		ConsumerTag: "",
+		NoLocal:     false,
+		NoAck:       false,
+		Exclusive:   false,
+		NoWait:      me.noWait,
+		//Arguments
+	}
+
+	me.framing.SendMethod(msg)
+
+	switch res := me.framing.Recv().Method.(type) {
+	case wire.BasicConsumeOk:
+		messages := make(chan Message)
+		me.consumers[res.ConsumerTag] = messages
+		return messages, nil
+	default:
+		return nil, me.unhandled(res)
+	}
+
+	panic("unreachable")
 }
 
 //func (me *Channel) Consume(buffersize) -> Consumer.(Cancel|messages -> Message(queue, exchange, key, tag, chan).(Reject|Ack)) {

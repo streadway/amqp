@@ -86,6 +86,7 @@ func (me *Framing) Send(msg Message) {
 
 	set := make(chan wire.Frame)
 	me.out <- set
+
 	set <- wire.MethodFrame{
 		Channel: me.channel,
 		Method:  msg.Method,
@@ -119,10 +120,6 @@ func (me *Framing) Send(msg Message) {
 
 func (me *Framing) Recv() Message {
 	return <-me.sync
-}
-
-func (me *Framing) RecvAsynchronous() Message {
-	return <-me.async
 }
 
 func (me *Framing) transition(f func(*Framing, wire.Frame) error) error {
