@@ -67,13 +67,13 @@ func TestIntegrationPublishConsume(t *testing.T) {
 	sub, _ := integrationConnection(t).OpenChannel()
 
 	if pub != nil && sub != nil {
-		sub.DeclareQueue(amqp.UntilUnused, queue)
+		sub.QueueDeclare(queue, false, true, false, nil)
 
-		pub.Publish("", queue, []byte("1"), nil)
-		pub.Publish("", queue, []byte("2"), nil)
-		pub.Publish("", queue, []byte("3"), nil)
+		pub.BasicPublish("", queue, false, false, []byte("1"), amqp.Properties{})
+		pub.BasicPublish("", queue, false, false, []byte("2"), amqp.Properties{})
+		pub.BasicPublish("", queue, false, false, []byte("3"), amqp.Properties{})
 
-		messages, _ := sub.Consume(queue)
+		messages, _ := sub.BasicConsume(queue, "", false, false, false, nil)
 
 		assertMessageBody(t, <-messages, []byte("1"))
 		assertMessageBody(t, <-messages, []byte("2"))

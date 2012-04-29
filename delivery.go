@@ -23,15 +23,15 @@ type Delivery struct {
 // Cancels the asynchronous consumer that received this message, this is
 // similar to "unsubscribing" from a queue.  Any messages in flight will still
 // be delivered to the consumer until the consumer channel is closed.
-func (me *Delivery) CancelConsumer() error {
-	return me.channel.cancel(me.method.ConsumerTag)
+func (me *Delivery) Cancel() error {
+	return me.channel.BasicCancel(me.method.ConsumerTag)
 }
 
 // Acknowledges the client has recevied and processed this message on this
 // channel This should be called if you have a begun a consumer with
 // "ConsumeReliable"
 func (me *Delivery) Ack() {
-	me.channel.ack(me.method.DeliveryTag, false)
+	me.channel.BasicAck(me.method.DeliveryTag, false)
 }
 
 // Acknowledges the client has recevied and processed this message on this channel
@@ -39,5 +39,5 @@ func (me *Delivery) Ack() {
 // This should be called if you have a begun a consumer with "ConsumeReliable"
 // and prefer to periodically batch your acknowledgements.
 func (me *Delivery) AckAll() {
-	me.channel.ack(me.method.DeliveryTag, true)
+	me.channel.BasicAck(me.method.DeliveryTag, true)
 }

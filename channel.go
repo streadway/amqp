@@ -6,14 +6,6 @@ import (
 	"sync"
 )
 
-type Lifetime int
-
-const (
-	UntilDeleted         Lifetime = iota // durable
-	UntilServerRestarted                 // not durable, not auto-delete
-	UntilUnused                          // auto-delete
-)
-
 const (
 	Direct  = "direct"
 	Topic   = "topic"
@@ -112,25 +104,7 @@ func (me *Channel) unhandled(msg wire.Method) error {
 	return nil
 }
 
-func lifetimeParams(l Lifetime) (durable bool, autoDelete bool) {
-	switch l {
-	case UntilDeleted:
-		return true, false
-	case UntilServerRestarted:
-		return false, false
-	case UntilUnused:
-		return false, true
-	}
-
-	panic("unreachable")
-}
-
-func (me *Channel) DeclareExchange(lifetime Lifetime, typ, name string) error {
-	durable, autoDelete := lifetimeParams(lifetime)
-	return me.CustomDeclareExchange(typ, name, durable, autoDelete, false, nil)
-}
-
-func (me *Channel) CustomDeclareExchange(typ string, name string, durable bool, autoDelete bool, internal bool, args Table) error {
+func (me *Channel) ExchangeDeclare(typ string, name string, durable bool, autoDelete bool, internal bool, args Table) error {
 	msg := wire.ExchangeDeclare{
 		Exchange:   name,
 		Type:       typ,
@@ -157,28 +131,7 @@ func (me *Channel) CustomDeclareExchange(typ string, name string, durable bool, 
 	return nil
 }
 
-func (me *Channel) InspectExchange(name string) (bool, error) {
-	msg := wire.ExchangeDeclare{
-		Exchange: name,
-		Passive:  true,
-	}
-
-	me.framing.SendMethod(msg)
-
-	// XXX maybe a select over the in and err channels is better?
-	switch res := me.framing.Recv().Method.(type) {
-	case wire.ExchangeDeclareOk:
-		return true, nil
-	case wire.ChannelClose:
-		return false, nil
-	default:
-		return false, me.unhandled(res)
-	}
-
-	panic("unreachable")
-}
-
-func (me *Channel) DeleteExchange(name string, ifUnused bool) error {
+func (me *Channel) ExchangeDelete(name string, ifUnused bool) error {
 	msg := wire.ExchangeDelete{
 		Exchange: name,
 		IfUnused: ifUnused,
@@ -199,11 +152,7 @@ func (me *Channel) DeleteExchange(name string, ifUnused bool) error {
 	return nil
 }
 
-func (me *Channel) BindExchange(destination, source, routingKey string) error {
-	return me.CustomBindExchange(destination, source, routingKey, nil)
-}
-
-func (me *Channel) CustomBindExchange(destination string, source string, routingKey string, arguments Table) error {
+func (me *Channel) ExchangeBind(destination string, source string, routingKey string, arguments Table) error {
 	msg := wire.ExchangeBind{
 		Destination: destination,
 		Source:      source,
@@ -226,11 +175,7 @@ func (me *Channel) CustomBindExchange(destination string, source string, routing
 	return nil
 }
 
-func (me *Channel) UnbindExchange(destination string, source string, routingKey string) error {
-	return me.CustomUnbindExchange(destination, source, routingKey, nil)
-}
-
-func (me *Channel) CustomUnbindExchange(destination string, source string, routingKey string, arguments Table) error {
+func (me *Channel) ExchangeUnbind(destination string, source string, routingKey string, arguments Table) error {
 	msg := wire.ExchangeUnbind{
 		Destination: destination,
 		Source:      source,
@@ -253,12 +198,7 @@ func (me *Channel) CustomUnbindExchange(destination string, source string, routi
 	return nil
 }
 
-func (me *Channel) DeclareQueue(lifetime Lifetime, name string) (*QueueState, error) {
-	durable, autoDelete := lifetimeParams(lifetime)
-	return me.CustomDeclareQueue(name, durable, autoDelete, false, nil)
-}
-
-func (me *Channel) CustomDeclareQueue(name string, durable bool, autoDelete bool, exclusive bool, arguments Table) (*QueueState, error) {
+func (me *Channel) QueueDeclare(name string, durable bool, autoDelete bool, exclusive bool, arguments Table) (*QueueState, error) {
 	msg := wire.QueueDeclare{
 		Queue:      name,
 		Passive:    false,
@@ -283,29 +223,7 @@ func (me *Channel) CustomDeclareQueue(name string, durable bool, autoDelete bool
 	return nil, nil
 }
 
-func (me *Channel) InspectQueue(name string) (*QueueState, error) {
-	msg := wire.QueueDeclare{
-		Queue:   name,
-		Passive: true,
-	}
-
-	me.framing.SendMethod(msg)
-
-	switch res := me.framing.Recv().Method.(type) {
-	case wire.QueueDeclareOk:
-		return newQueueState(&res), nil
-	default:
-		return nil, me.unhandled(res)
-	}
-
-	panic("unreachable")
-}
-
-func (me *Channel) BindQueue(exchange string, queue string, routingKey string) error {
-	return me.CustomBindQueue(exchange, queue, routingKey, nil)
-}
-
-func (me *Channel) CustomBindQueue(exchange string, queue string, routingKey string, arguments Table) error {
+func (me *Channel) QueueBind(exchange string, queue string, routingKey string, arguments Table) error {
 	msg := wire.QueueBind{
 		Queue:      queue,
 		Exchange:   exchange,
@@ -328,11 +246,7 @@ func (me *Channel) CustomBindQueue(exchange string, queue string, routingKey str
 	return nil
 }
 
-func (me *Channel) UnbindQueue(exchange string, queue string, routingKey string) error {
-	return me.CustomUnbindQueue(exchange, queue, routingKey, nil)
-}
-
-func (me *Channel) CustomUnbindQueue(exchange string, queue string, routingKey string, arguments Table) error {
+func (me *Channel) QueueUnbind(exchange string, queue string, routingKey string, arguments Table) error {
 	msg := wire.QueueUnbind{
 		Queue:      queue,
 		Exchange:   exchange,
@@ -352,7 +266,7 @@ func (me *Channel) CustomUnbindQueue(exchange string, queue string, routingKey s
 	panic("unreachable")
 }
 
-func (me *Channel) PurgeQueue(name string) error {
+func (me *Channel) QueuePurge(name string) error {
 	msg := wire.QueuePurge{
 		Queue:  name,
 		NoWait: me.noWait,
@@ -372,7 +286,7 @@ func (me *Channel) PurgeQueue(name string) error {
 	return nil
 }
 
-func (me *Channel) DeleteQueue(name string, ifUnused bool, ifEmpty bool) error {
+func (me *Channel) QueueDelete(name string, ifUnused bool, ifEmpty bool) error {
 	msg := wire.QueueDelete{
 		Queue:    name,
 		IfUnused: ifUnused,
@@ -395,7 +309,7 @@ func (me *Channel) DeleteQueue(name string, ifUnused bool, ifEmpty bool) error {
 }
 
 // Only applies to this Channel
-func (me *Channel) Qos(prefetchMessageCount int, prefetchWindowByteSize int) error {
+func (me *Channel) BasicQos(prefetchMessageCount int, prefetchWindowByteSize int) error {
 	msg := wire.BasicQos{
 		PrefetchCount: uint16(prefetchMessageCount),
 		PrefetchSize:  uint32(prefetchWindowByteSize),
@@ -414,21 +328,7 @@ func (me *Channel) Qos(prefetchMessageCount int, prefetchWindowByteSize int) err
 	panic("unreachable")
 }
 
-func (me *Channel) Publish(exchange string, routingKey string, body []byte, headers Table) {
-	me.CustomPublish(exchange, routingKey, false, false, int64(len(body)), body, Properties(wire.ContentProperties{
-		Headers:      wire.Table(headers),
-		DeliveryMode: wire.TransientDelivery,
-	}))
-}
-
-func (me *Channel) PublishPersistent(exchange string, routingKey string, body []byte, headers Table) {
-	me.CustomPublish(exchange, routingKey, false, false, int64(len(body)), body, Properties(wire.ContentProperties{
-		Headers:      wire.Table(headers),
-		DeliveryMode: wire.PersistentDelivery,
-	}))
-}
-
-func (me *Channel) CustomPublish(exchange string, routingKey string, mandatory bool, immediate bool, size int64, body []byte, properties Properties) {
+func (me *Channel) BasicPublish(exchange string, routingKey string, mandatory bool, immediate bool, body []byte, properties Properties) {
 	me.framing.Send(Message{
 		Method: wire.BasicPublish{
 			Exchange:   exchange,
@@ -447,9 +347,9 @@ func (me *Channel) CustomPublish(exchange string, routingKey string, mandatory b
 //
 // These consumers are much faster and typically benefit from higher
 // prefetching values set in the Qos method.
-func (me *Channel) Consume(queue string) (chan *Delivery, error) {
-	return me.CustomConsume(queue, "", false, false, false, nil)
-}
+//func (me *Channel) Consume(queue string) (chan *Delivery, error) {
+//	return me.CustomConsume(queue, "", false, false, false, nil)
+//}
 
 // When consuming reliably, each delivery must be acknowledeged after it has
 // been reliably handled.  All messages that have been delivered to this
@@ -460,12 +360,12 @@ func (me *Channel) Consume(queue string) (chan *Delivery, error) {
 //
 // It's common to use the Qos method to limit the number deliveries prefetched
 // to 1 per channel.
-func (me *Channel) ConsumeReliable(queue string) (chan *Delivery, error) {
-	return me.CustomConsume(queue, "", false, true, false, nil)
-}
+//func (me *Channel) ConsumeReliable(queue string) (chan *Delivery, error) {
+//	return me.CustomConsume(queue, "", false, true, false, nil)
+//}
 
 // Custom consumers
-func (me *Channel) CustomConsume(queue string, consumerTag string, noLocal bool, noAck bool, exclusive bool, arguments Table) (chan *Delivery, error) {
+func (me *Channel) BasicConsume(queue string, consumerTag string, noLocal bool, noAck bool, exclusive bool, arguments Table) (chan *Delivery, error) {
 	me.consumersMutex.Lock()
 	defer me.consumersMutex.Unlock()
 
@@ -495,7 +395,7 @@ func (me *Channel) CustomConsume(queue string, consumerTag string, noLocal bool,
 
 // Cancels, removes and closes the consumer at this tag, intended to be delegated
 // from a delivery
-func (me *Channel) cancel(consumerTag string) error {
+func (me *Channel) BasicCancel(consumerTag string) error {
 	me.consumersMutex.Lock()
 	defer me.consumersMutex.Unlock()
 
@@ -530,7 +430,7 @@ func (me *Channel) cancel(consumerTag string) error {
 	return nil
 }
 
-func (me *Channel) ack(deliveryTag uint64, multiple bool) {
+func (me *Channel) BasicAck(deliveryTag uint64, multiple bool) {
 	me.framing.SendMethod(wire.BasicAck{
 		DeliveryTag: deliveryTag,
 		Multiple:    multiple,
