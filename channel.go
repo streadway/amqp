@@ -3,6 +3,7 @@ package amqp
 import (
 	"amqp/wire"
 	"fmt"
+	"sync"
 )
 
 type Lifetime int
@@ -29,16 +30,17 @@ type QueueState struct {
 // Represents an AMQP channel, used for concurrent, interleaved publishers and
 // consumers on the same connection.
 type Channel struct {
-	framing   *Framing
-	noWait    bool
-	consumers map[string]chan Message
+	framing        *Framing
+	noWait         bool
+	consumers      map[string]chan *Delivery
+	consumersMutex sync.Mutex
 }
 
 // Constructs and opens a new channel with the given framing rules
 func newChannel(framing *Framing) (me *Channel, err error) {
 	me = &Channel{
 		framing:   framing,
-		consumers: make(map[string]chan Message),
+		consumers: make(map[string]chan *Delivery),
 	}
 
 	go me.handleAsync()
@@ -60,7 +62,15 @@ func (me *Channel) handleAsync() {
 			if !ok {
 				// TODO handle missing consumer
 			} else {
-				consumer <- msg
+				consumer <- &Delivery{
+					channel:     me,
+					method:      &method,
+					Exchange:    method.Exchange,
+					Redelivered: method.Redelivered,
+					RoutingKey:  method.RoutingKey,
+					Properties:  Properties(msg.Properties),
+					Body:        msg.Body,
+				}
 			}
 		default:
 			fmt.Println("Unhandled async method:", method)
@@ -387,8 +397,8 @@ func (me *Channel) DeleteQueue(name string, ifUnused bool, ifEmpty bool) error {
 // Only applies to this Channel
 func (me *Channel) Qos(prefetchMessageCount int, prefetchWindowByteSize int) error {
 	msg := wire.BasicQos{
-		PrefetchSize:  uint32(prefetchWindowByteSize),
 		PrefetchCount: uint16(prefetchMessageCount),
+		PrefetchSize:  uint32(prefetchWindowByteSize),
 		Global:        false, // connection global change from a channel message, durr...
 	}
 
@@ -431,29 +441,100 @@ func (me *Channel) CustomPublish(exchange string, routingKey string, mandatory b
 	})
 }
 
-func (me *Channel) Consume(queue string) (chan Message, error) {
+// When consuming from a queue, the server will delivery to the first available
+// consumer then remove it from the queue.  If the message is not fully
+// processed by the client, it will be lost.
+//
+// These consumers are much faster and typically benefit from higher
+// prefetching values set in the Qos method.
+func (me *Channel) Consume(queue string) (chan *Delivery, error) {
+	return me.CustomConsume(queue, "", false, false, false, nil)
+}
+
+// When consuming reliably, each delivery must be acknowledeged after it has
+// been reliably handled.  All messages that have been delivered to this
+// channel that have not been acknowledged will be redelivered to the back of
+// the queue when this channel closes.
+//
+// Reliable consumers are slower because of the amount of bookeeping required.
+//
+// It's common to use the Qos method to limit the number deliveries prefetched
+// to 1 per channel.
+func (me *Channel) ConsumeReliable(queue string) (chan *Delivery, error) {
+	return me.CustomConsume(queue, "", false, true, false, nil)
+}
+
+// Custom consumers
+func (me *Channel) CustomConsume(queue string, consumerTag string, noLocal bool, noAck bool, exclusive bool, arguments Table) (chan *Delivery, error) {
+	me.consumersMutex.Lock()
+	defer me.consumersMutex.Unlock()
+
 	msg := wire.BasicConsume{
 		Queue:       queue,
-		ConsumerTag: "",
+		ConsumerTag: consumerTag,
 		NoLocal:     false,
 		NoAck:       false,
 		Exclusive:   false,
 		NoWait:      me.noWait,
-		//Arguments
+		Arguments:   wire.Table(arguments),
 	}
 
 	me.framing.SendMethod(msg)
 
 	switch res := me.framing.Recv().Method.(type) {
 	case wire.BasicConsumeOk:
-		messages := make(chan Message)
-		me.consumers[res.ConsumerTag] = messages
-		return messages, nil
+		consumer := make(chan *Delivery)
+		me.consumers[res.ConsumerTag] = consumer
+		return consumer, nil
 	default:
 		return nil, me.unhandled(res)
 	}
 
 	panic("unreachable")
+}
+
+// Cancels, removes and closes the consumer at this tag, intended to be delegated
+// from a delivery
+func (me *Channel) cancel(consumerTag string) error {
+	me.consumersMutex.Lock()
+	defer me.consumersMutex.Unlock()
+
+	consumer, ok := me.consumers[consumerTag]
+	if ok {
+		msg := wire.BasicCancel{
+			ConsumerTag: consumerTag,
+			NoWait:      me.noWait,
+		}
+
+		me.framing.SendMethod(msg)
+
+		if msg.NoWait {
+			delete(me.consumers, consumerTag)
+			close(consumer)
+		} else {
+			switch res := me.framing.Recv().Method.(type) {
+			case wire.BasicCancelOk:
+				if res.ConsumerTag == consumerTag {
+					delete(me.consumers, consumerTag)
+					close(consumer)
+					return nil
+				}
+				return ErrBadProtocol
+			default:
+				return me.unhandled(res)
+			}
+			return ErrBadProtocol
+		}
+	}
+
+	return nil
+}
+
+func (me *Channel) ack(deliveryTag uint64, multiple bool) {
+	me.framing.SendMethod(wire.BasicAck{
+		DeliveryTag: deliveryTag,
+		Multiple:    multiple,
+	})
 }
 
 //func (me *Channel) Consume(buffersize) -> Consumer.(Cancel|messages -> Message(queue, exchange, key, tag, chan).(Reject|Ack)) {

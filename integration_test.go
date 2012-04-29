@@ -48,7 +48,7 @@ func integrationClient(t *testing.T) *amqp.Client {
 	return c
 }
 
-func assertMessageBody(t *testing.T, msg amqp.Message, body []byte) {
+func assertMessageBody(t *testing.T, msg *amqp.Delivery, body []byte) {
 	if bytes.Compare(msg.Body, body) != 0 {
 		t.Errorf("Message body does not match have: %v expect %v", msg.Body, body)
 	}
