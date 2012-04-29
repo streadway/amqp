@@ -51,7 +51,7 @@ func (me *Channel) handleAsync() {
 	for {
 		msg, ok := <-me.framing.async
 		if !ok {
-			// channels closed
+			// TODO close all consumer channels
 			return
 		}
 		switch method := msg.Method.(type) {
@@ -98,6 +98,7 @@ func newQueueState(msg *wire.QueueDeclareOk) *QueueState {
 func (me *Channel) unhandled(msg wire.Method) error {
 	// TODO CLOSE/CLOSE-OK/ERROR
 	fmt.Println("UNHANDLED", msg)
+	panic("UNHANDLED")
 	return nil
 }
 
@@ -135,7 +136,7 @@ func (me *Channel) CustomDeclareExchange(typ string, name string, durable bool, 
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case *wire.ExchangeDeclareOk:
+		case wire.ExchangeDeclareOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -156,9 +157,9 @@ func (me *Channel) InspectExchange(name string) (bool, error) {
 
 	// XXX maybe a select over the in and err channels is better?
 	switch res := me.framing.Recv().Method.(type) {
-	case *wire.ExchangeDeclareOk:
+	case wire.ExchangeDeclareOk:
 		return true, nil
-	case *wire.ChannelClose:
+	case wire.ChannelClose:
 		return false, nil
 	default:
 		return false, me.unhandled(res)
@@ -178,7 +179,7 @@ func (me *Channel) DeleteExchange(name string, ifUnused bool) error {
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case *wire.ExchangeDeleteOk:
+		case wire.ExchangeDeleteOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -205,7 +206,7 @@ func (me *Channel) CustomBindExchange(destination string, source string, routing
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case *wire.ExchangeBindOk:
+		case wire.ExchangeBindOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -232,7 +233,7 @@ func (me *Channel) CustomUnbindExchange(destination string, source string, routi
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case *wire.ExchangeUnbindOk:
+		case wire.ExchangeUnbindOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -262,8 +263,8 @@ func (me *Channel) CustomDeclareQueue(name string, durable bool, autoDelete bool
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case *wire.QueueDeclareOk:
-			return newQueueState(res), nil
+		case wire.QueueDeclareOk:
+			return newQueueState(&res), nil
 		default:
 			return nil, me.unhandled(res)
 		}
@@ -281,8 +282,8 @@ func (me *Channel) InspectQueue(name string) (*QueueState, error) {
 	me.framing.SendMethod(msg)
 
 	switch res := me.framing.Recv().Method.(type) {
-	case *wire.QueueDeclareOk:
-		return newQueueState(res), nil
+	case wire.QueueDeclareOk:
+		return newQueueState(&res), nil
 	default:
 		return nil, me.unhandled(res)
 	}
@@ -307,7 +308,7 @@ func (me *Channel) CustomBindQueue(exchange string, queue string, routingKey str
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case *wire.QueueBindOk:
+		case wire.QueueBindOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -332,7 +333,7 @@ func (me *Channel) CustomUnbindQueue(exchange string, queue string, routingKey s
 	me.framing.SendMethod(msg)
 
 	switch res := me.framing.Recv().Method.(type) {
-	case *wire.QueueUnbindOk:
+	case wire.QueueUnbindOk:
 		return nil
 	default:
 		return me.unhandled(res)
@@ -351,7 +352,7 @@ func (me *Channel) PurgeQueue(name string) error {
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case *wire.QueuePurgeOk:
+		case wire.QueuePurgeOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -373,7 +374,7 @@ func (me *Channel) DeleteQueue(name string, ifUnused bool, ifEmpty bool) error {
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case *wire.QueueDeleteOk:
+		case wire.QueueDeleteOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -394,7 +395,7 @@ func (me *Channel) Qos(prefetchMessageCount int, prefetchWindowByteSize int) err
 	me.framing.SendMethod(msg)
 
 	switch res := me.framing.Recv().Method.(type) {
-	case *wire.BasicQosOk:
+	case wire.BasicQosOk:
 		return nil
 	default:
 		return me.unhandled(res)

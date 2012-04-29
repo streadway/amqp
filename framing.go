@@ -2,7 +2,6 @@ package amqp
 
 import (
 	"amqp/wire"
-	"fmt"
 )
 
 // Struct that contains the method and any content if the method HasContent
@@ -82,8 +81,6 @@ func (me *Framing) SendMethod(method wire.Method) {
 
 // Frames and sends a method that may or may not have payload
 func (me *Framing) Send(msg Message) {
-	fmt.Println("Send: msg", msg)
-
 	set := make(chan wire.Frame)
 	me.out <- set
 
@@ -131,8 +128,6 @@ func (me *Framing) transition(f func(*Framing, wire.Frame) error) error {
 // hasContent
 
 func (me *Framing) recvMethod(f wire.Frame) error {
-	fmt.Println("recvMethod: f,c: ", f, me.method, me.header)
-
 	switch frame := f.(type) {
 	case wire.MethodFrame:
 		me.method = &frame
@@ -167,8 +162,6 @@ func (me *Framing) recvMethod(f wire.Frame) error {
 }
 
 func (me *Framing) recvHeader(f wire.Frame) error {
-	fmt.Println("recvHeader: f,c: ", f, me.method, me.header)
-
 	switch frame := f.(type) {
 	case wire.MethodFrame:
 		// interrupt content and handle method
@@ -190,8 +183,6 @@ func (me *Framing) recvHeader(f wire.Frame) error {
 // state after method + header and before the length
 // defined by the header has been reached
 func (me *Framing) recvContent(f wire.Frame) error {
-	fmt.Println("recvContent: f: ", f)
-
 	switch frame := f.(type) {
 	case wire.MethodFrame:
 		// interrupt content and handle method

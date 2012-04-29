@@ -39,7 +39,7 @@ func integrationClient(t *testing.T) *amqp.Client {
 		return nil
 	}
 
-	c, err := amqp.NewClient(&logIO{"integration", conn}, username, password, vhost)
+	c, err := amqp.NewClient(&logIO{t, "integration", conn}, username, password, vhost)
 	if err != nil {
 		t.Error("Failed to create client against integration server:", err)
 		return nil

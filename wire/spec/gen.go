@@ -127,7 +127,7 @@ var (
 	package wire
 
 	import (
-		"fmt"
+		//"fmt"
 		"io"
 	)
 
@@ -154,7 +154,7 @@ var (
 				buf.PutShort({{$method.Index}})
 				{{range .Fields}}{{$.FieldEncode .}}
 				{{end}}{{$.FinishEncode}}
-				fmt.Println("encode: {{$class.Name}}.{{$method.Name}} {{$class.Index}} {{$method.Index}}", buf.Bytes())
+				//fmt.Println("encode: {{$class.Name}}.{{$method.Name}} {{$class.Index}} {{$method.Index}}", buf.Bytes())
 				wn, err := w.Write(buf.Bytes())
 				return int64(wn), err
 			}
@@ -165,6 +165,10 @@ var (
 
 			func (me {{camel $class.Name $method.Name}}) IsSynchronous() bool {
 				return {{.Synchronous}}
+			}
+
+			func (me {{camel $class.Name $method.Name}}) Method() uint16 {
+				return {{$method.Index}}
 			}
 
 			func (me {{camel $class.Name $method.Name}}) Class() uint16 {
@@ -184,7 +188,7 @@ var (
 			switch method {
 			{{range .Methods}}
 			case {{.Index}}: // {{$class.Name}} {{.Name}}
-				fmt.Println("NextMethod: class:{{$class.Index}} method:{{.Index}}")
+				//fmt.Println("NextMethod: class:{{$class.Index}} method:{{.Index}}")
 				message := {{camel $class.Name .Name}}{}
 				{{range .Fields}}{{$.FieldDecode "message" .}}
 				{{end}}{{$.FinishDecode}}

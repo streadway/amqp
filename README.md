@@ -11,12 +11,13 @@ Provide a high level interface to capture the common task of sending and receivi
 
 ## Shutdown
   * Propagate closing of IO in Framing
-	* leaks of go routines
+  * leaks of go routines
 
 ## Tests
 
 	* wire round trip equality
 	* concurrency
+	* interruption of synchronous messages
 
 # Non-goals
 

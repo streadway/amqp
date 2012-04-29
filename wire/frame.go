@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 )
 
@@ -271,8 +270,6 @@ In realistic implementations where performance is a concern, we would use
 “gathering reads” to avoid doing three separate system calls to read a frame.
 */
 func (me *frameReader) NextFrame() (frame Frame, err error) {
-	fmt.Println("NextFrame: ", me.reader)
-
 	// Capture and recover from any short buffers during read
 	defer func() {
 		if r := recover(); r != nil {
@@ -316,9 +313,13 @@ func (me *frameReader) NextFrame() (frame Frame, err error) {
 		}
 
 	case FrameBody:
+		// TODO simplify buffer management/reuse so this copy isn't neccessary
+		buf := make([]byte, int(size))
+		copy(buf, me.payload.Next(int(size)))
+
 		frame = BodyFrame{
 			Channel: channel,
-			Payload: me.payload.Next(int(size)),
+			Payload: buf,
 		}
 
 	case FrameHeartbeat:
@@ -329,8 +330,6 @@ func (me *frameReader) NextFrame() (frame Frame, err error) {
 	default:
 		return nil, ErrBadFrameType
 	}
-
-	fmt.Println("payload:", me.payload.Bytes())
 
 	if end := me.payload.Next(1)[0]; end != FrameEnd {
 		return nil, ErrBadFrameEnd

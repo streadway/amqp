@@ -51,7 +51,6 @@ func (me *Client) reader() {
 
 	for {
 		frame, err := reader.NextFrame()
-		fmt.Println("frame read: ", frame)
 
 		if err != nil {
 			return
@@ -66,7 +65,6 @@ func (me *Client) writer() {
 	for {
 		frame := <-me.connection.framing.c2s
 		// TODO handle when the chan closes
-		fmt.Println("frame write: ", frame)
 		_, err := frame.WriteTo(me.io)
 		if err != nil {
 			// TODO handle write failure to cleanly shutdown the connection

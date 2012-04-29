@@ -4,7 +4,7 @@
 package wire
 
 import (
-	"fmt"
+	//"fmt"
 	"io"
 )
 
@@ -152,7 +152,7 @@ func (me ConnectionStart) WriteTo(w io.Writer) (int64, error) {
 	buf.PutLongstr(me.Mechanisms)
 	buf.PutLongstr(me.Locales)
 
-	fmt.Println("encode: connection.start 10 10", buf.Bytes())
+	//fmt.Println("encode: connection.start 10 10", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -163,6 +163,10 @@ func (me ConnectionStart) HasContent() bool {
 
 func (me ConnectionStart) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionStart) Method() uint16 {
+	return 10
 }
 
 func (me ConnectionStart) Class() uint16 {
@@ -188,7 +192,7 @@ func (me ConnectionStartOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutLongstr(me.Response)
 	buf.PutShortstr(me.Locale)
 
-	fmt.Println("encode: connection.start-ok 10 11", buf.Bytes())
+	//fmt.Println("encode: connection.start-ok 10 11", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -199,6 +203,10 @@ func (me ConnectionStartOk) HasContent() bool {
 
 func (me ConnectionStartOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionStartOk) Method() uint16 {
+	return 11
 }
 
 func (me ConnectionStartOk) Class() uint16 {
@@ -220,7 +228,7 @@ func (me ConnectionSecure) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(20)
 	buf.PutLongstr(me.Challenge)
 
-	fmt.Println("encode: connection.secure 10 20", buf.Bytes())
+	//fmt.Println("encode: connection.secure 10 20", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -231,6 +239,10 @@ func (me ConnectionSecure) HasContent() bool {
 
 func (me ConnectionSecure) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionSecure) Method() uint16 {
+	return 20
 }
 
 func (me ConnectionSecure) Class() uint16 {
@@ -251,7 +263,7 @@ func (me ConnectionSecureOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(21)
 	buf.PutLongstr(me.Response)
 
-	fmt.Println("encode: connection.secure-ok 10 21", buf.Bytes())
+	//fmt.Println("encode: connection.secure-ok 10 21", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -262,6 +274,10 @@ func (me ConnectionSecureOk) HasContent() bool {
 
 func (me ConnectionSecureOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionSecureOk) Method() uint16 {
+	return 21
 }
 
 func (me ConnectionSecureOk) Class() uint16 {
@@ -286,7 +302,7 @@ func (me ConnectionTune) WriteTo(w io.Writer) (int64, error) {
 	buf.PutLong(me.FrameMax)
 	buf.PutShort(me.Heartbeat)
 
-	fmt.Println("encode: connection.tune 10 30", buf.Bytes())
+	//fmt.Println("encode: connection.tune 10 30", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -297,6 +313,10 @@ func (me ConnectionTune) HasContent() bool {
 
 func (me ConnectionTune) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionTune) Method() uint16 {
+	return 30
 }
 
 func (me ConnectionTune) Class() uint16 {
@@ -321,7 +341,7 @@ func (me ConnectionTuneOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutLong(me.FrameMax)
 	buf.PutShort(me.Heartbeat)
 
-	fmt.Println("encode: connection.tune-ok 10 31", buf.Bytes())
+	//fmt.Println("encode: connection.tune-ok 10 31", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -332,6 +352,10 @@ func (me ConnectionTuneOk) HasContent() bool {
 
 func (me ConnectionTuneOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionTuneOk) Method() uint16 {
+	return 31
 }
 
 func (me ConnectionTuneOk) Class() uint16 {
@@ -359,7 +383,7 @@ func (me ConnectionOpen) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(Reserved2, 0)
 
-	fmt.Println("encode: connection.open 10 40", buf.Bytes())
+	//fmt.Println("encode: connection.open 10 40", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -370,6 +394,10 @@ func (me ConnectionOpen) HasContent() bool {
 
 func (me ConnectionOpen) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionOpen) Method() uint16 {
+	return 40
 }
 
 func (me ConnectionOpen) Class() uint16 {
@@ -389,7 +417,7 @@ func (me ConnectionOpenOk) WriteTo(w io.Writer) (int64, error) {
 	var Reserved1 string
 	buf.PutShortstr(Reserved1)
 
-	fmt.Println("encode: connection.open-ok 10 41", buf.Bytes())
+	//fmt.Println("encode: connection.open-ok 10 41", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -400,6 +428,10 @@ func (me ConnectionOpenOk) HasContent() bool {
 
 func (me ConnectionOpenOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionOpenOk) Method() uint16 {
+	return 41
 }
 
 func (me ConnectionOpenOk) Class() uint16 {
@@ -428,7 +460,7 @@ func (me ConnectionClose) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(me.ClassId)
 	buf.PutShort(me.MethodId)
 
-	fmt.Println("encode: connection.close 10 50", buf.Bytes())
+	//fmt.Println("encode: connection.close 10 50", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -439,6 +471,10 @@ func (me ConnectionClose) HasContent() bool {
 
 func (me ConnectionClose) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionClose) Method() uint16 {
+	return 50
 }
 
 func (me ConnectionClose) Class() uint16 {
@@ -457,7 +493,7 @@ func (me ConnectionCloseOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(10)
 	buf.PutShort(51)
 
-	fmt.Println("encode: connection.close-ok 10 51", buf.Bytes())
+	//fmt.Println("encode: connection.close-ok 10 51", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -468,6 +504,10 @@ func (me ConnectionCloseOk) HasContent() bool {
 
 func (me ConnectionCloseOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ConnectionCloseOk) Method() uint16 {
+	return 51
 }
 
 func (me ConnectionCloseOk) Class() uint16 {
@@ -487,7 +527,7 @@ func (me ChannelOpen) WriteTo(w io.Writer) (int64, error) {
 	var Reserved1 string
 	buf.PutShortstr(Reserved1)
 
-	fmt.Println("encode: channel.open 20 10", buf.Bytes())
+	//fmt.Println("encode: channel.open 20 10", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -498,6 +538,10 @@ func (me ChannelOpen) HasContent() bool {
 
 func (me ChannelOpen) IsSynchronous() bool {
 	return true
+}
+
+func (me ChannelOpen) Method() uint16 {
+	return 10
 }
 
 func (me ChannelOpen) Class() uint16 {
@@ -517,7 +561,7 @@ func (me ChannelOpenOk) WriteTo(w io.Writer) (int64, error) {
 	var Reserved1 string
 	buf.PutLongstr(Reserved1)
 
-	fmt.Println("encode: channel.open-ok 20 11", buf.Bytes())
+	//fmt.Println("encode: channel.open-ok 20 11", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -528,6 +572,10 @@ func (me ChannelOpenOk) HasContent() bool {
 
 func (me ChannelOpenOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ChannelOpenOk) Method() uint16 {
+	return 11
 }
 
 func (me ChannelOpenOk) Class() uint16 {
@@ -552,7 +600,7 @@ func (me ChannelFlow) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.Active, 0)
 
-	fmt.Println("encode: channel.flow 20 20", buf.Bytes())
+	//fmt.Println("encode: channel.flow 20 20", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -563,6 +611,10 @@ func (me ChannelFlow) HasContent() bool {
 
 func (me ChannelFlow) IsSynchronous() bool {
 	return true
+}
+
+func (me ChannelFlow) Method() uint16 {
+	return 20
 }
 
 func (me ChannelFlow) Class() uint16 {
@@ -583,7 +635,7 @@ func (me ChannelFlowOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.Active, 0)
 
-	fmt.Println("encode: channel.flow-ok 20 21", buf.Bytes())
+	//fmt.Println("encode: channel.flow-ok 20 21", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -594,6 +646,10 @@ func (me ChannelFlowOk) HasContent() bool {
 
 func (me ChannelFlowOk) IsSynchronous() bool {
 	return false
+}
+
+func (me ChannelFlowOk) Method() uint16 {
+	return 21
 }
 
 func (me ChannelFlowOk) Class() uint16 {
@@ -622,7 +678,7 @@ func (me ChannelClose) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(me.ClassId)
 	buf.PutShort(me.MethodId)
 
-	fmt.Println("encode: channel.close 20 40", buf.Bytes())
+	//fmt.Println("encode: channel.close 20 40", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -633,6 +689,10 @@ func (me ChannelClose) HasContent() bool {
 
 func (me ChannelClose) IsSynchronous() bool {
 	return true
+}
+
+func (me ChannelClose) Method() uint16 {
+	return 40
 }
 
 func (me ChannelClose) Class() uint16 {
@@ -651,7 +711,7 @@ func (me ChannelCloseOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(20)
 	buf.PutShort(41)
 
-	fmt.Println("encode: channel.close-ok 20 41", buf.Bytes())
+	//fmt.Println("encode: channel.close-ok 20 41", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -662,6 +722,10 @@ func (me ChannelCloseOk) HasContent() bool {
 
 func (me ChannelCloseOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ChannelCloseOk) Method() uint16 {
+	return 41
 }
 
 func (me ChannelCloseOk) Class() uint16 {
@@ -699,7 +763,7 @@ func (me ExchangeDeclare) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.NoWait, 4)
 	buf.PutTable(me.Arguments)
 
-	fmt.Println("encode: exchange.declare 40 10", buf.Bytes())
+	//fmt.Println("encode: exchange.declare 40 10", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -710,6 +774,10 @@ func (me ExchangeDeclare) HasContent() bool {
 
 func (me ExchangeDeclare) IsSynchronous() bool {
 	return true
+}
+
+func (me ExchangeDeclare) Method() uint16 {
+	return 10
 }
 
 func (me ExchangeDeclare) Class() uint16 {
@@ -728,7 +796,7 @@ func (me ExchangeDeclareOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(40)
 	buf.PutShort(11)
 
-	fmt.Println("encode: exchange.declare-ok 40 11", buf.Bytes())
+	//fmt.Println("encode: exchange.declare-ok 40 11", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -739,6 +807,10 @@ func (me ExchangeDeclareOk) HasContent() bool {
 
 func (me ExchangeDeclareOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ExchangeDeclareOk) Method() uint16 {
+	return 11
 }
 
 func (me ExchangeDeclareOk) Class() uint16 {
@@ -766,7 +838,7 @@ func (me ExchangeDelete) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.IfUnused, 0)
 	buf.PutBit(me.NoWait, 1)
 
-	fmt.Println("encode: exchange.delete 40 20", buf.Bytes())
+	//fmt.Println("encode: exchange.delete 40 20", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -777,6 +849,10 @@ func (me ExchangeDelete) HasContent() bool {
 
 func (me ExchangeDelete) IsSynchronous() bool {
 	return true
+}
+
+func (me ExchangeDelete) Method() uint16 {
+	return 20
 }
 
 func (me ExchangeDelete) Class() uint16 {
@@ -792,7 +868,7 @@ func (me ExchangeDeleteOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(40)
 	buf.PutShort(21)
 
-	fmt.Println("encode: exchange.delete-ok 40 21", buf.Bytes())
+	//fmt.Println("encode: exchange.delete-ok 40 21", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -803,6 +879,10 @@ func (me ExchangeDeleteOk) HasContent() bool {
 
 func (me ExchangeDeleteOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ExchangeDeleteOk) Method() uint16 {
+	return 21
 }
 
 func (me ExchangeDeleteOk) Class() uint16 {
@@ -831,7 +911,7 @@ func (me ExchangeBind) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.NoWait, 0)
 	buf.PutTable(me.Arguments)
 
-	fmt.Println("encode: exchange.bind 40 30", buf.Bytes())
+	//fmt.Println("encode: exchange.bind 40 30", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -842,6 +922,10 @@ func (me ExchangeBind) HasContent() bool {
 
 func (me ExchangeBind) IsSynchronous() bool {
 	return true
+}
+
+func (me ExchangeBind) Method() uint16 {
+	return 30
 }
 
 func (me ExchangeBind) Class() uint16 {
@@ -857,7 +941,7 @@ func (me ExchangeBindOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(40)
 	buf.PutShort(31)
 
-	fmt.Println("encode: exchange.bind-ok 40 31", buf.Bytes())
+	//fmt.Println("encode: exchange.bind-ok 40 31", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -868,6 +952,10 @@ func (me ExchangeBindOk) HasContent() bool {
 
 func (me ExchangeBindOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ExchangeBindOk) Method() uint16 {
+	return 31
 }
 
 func (me ExchangeBindOk) Class() uint16 {
@@ -896,7 +984,7 @@ func (me ExchangeUnbind) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.NoWait, 0)
 	buf.PutTable(me.Arguments)
 
-	fmt.Println("encode: exchange.unbind 40 40", buf.Bytes())
+	//fmt.Println("encode: exchange.unbind 40 40", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -907,6 +995,10 @@ func (me ExchangeUnbind) HasContent() bool {
 
 func (me ExchangeUnbind) IsSynchronous() bool {
 	return true
+}
+
+func (me ExchangeUnbind) Method() uint16 {
+	return 40
 }
 
 func (me ExchangeUnbind) Class() uint16 {
@@ -922,7 +1014,7 @@ func (me ExchangeUnbindOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(40)
 	buf.PutShort(51)
 
-	fmt.Println("encode: exchange.unbind-ok 40 51", buf.Bytes())
+	//fmt.Println("encode: exchange.unbind-ok 40 51", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -933,6 +1025,10 @@ func (me ExchangeUnbindOk) HasContent() bool {
 
 func (me ExchangeUnbindOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ExchangeUnbindOk) Method() uint16 {
+	return 51
 }
 
 func (me ExchangeUnbindOk) Class() uint16 {
@@ -969,7 +1065,7 @@ func (me QueueDeclare) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.NoWait, 4)
 	buf.PutTable(me.Arguments)
 
-	fmt.Println("encode: queue.declare 50 10", buf.Bytes())
+	//fmt.Println("encode: queue.declare 50 10", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -980,6 +1076,10 @@ func (me QueueDeclare) HasContent() bool {
 
 func (me QueueDeclare) IsSynchronous() bool {
 	return true
+}
+
+func (me QueueDeclare) Method() uint16 {
+	return 10
 }
 
 func (me QueueDeclare) Class() uint16 {
@@ -1004,7 +1104,7 @@ func (me QueueDeclareOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutLong(me.MessageCount)
 	buf.PutLong(me.ConsumerCount)
 
-	fmt.Println("encode: queue.declare-ok 50 11", buf.Bytes())
+	//fmt.Println("encode: queue.declare-ok 50 11", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1015,6 +1115,10 @@ func (me QueueDeclareOk) HasContent() bool {
 
 func (me QueueDeclareOk) IsSynchronous() bool {
 	return true
+}
+
+func (me QueueDeclareOk) Method() uint16 {
+	return 11
 }
 
 func (me QueueDeclareOk) Class() uint16 {
@@ -1048,7 +1152,7 @@ func (me QueueBind) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.NoWait, 0)
 	buf.PutTable(me.Arguments)
 
-	fmt.Println("encode: queue.bind 50 20", buf.Bytes())
+	//fmt.Println("encode: queue.bind 50 20", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1059,6 +1163,10 @@ func (me QueueBind) HasContent() bool {
 
 func (me QueueBind) IsSynchronous() bool {
 	return true
+}
+
+func (me QueueBind) Method() uint16 {
+	return 20
 }
 
 func (me QueueBind) Class() uint16 {
@@ -1074,7 +1182,7 @@ func (me QueueBindOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(50)
 	buf.PutShort(21)
 
-	fmt.Println("encode: queue.bind-ok 50 21", buf.Bytes())
+	//fmt.Println("encode: queue.bind-ok 50 21", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1085,6 +1193,10 @@ func (me QueueBindOk) HasContent() bool {
 
 func (me QueueBindOk) IsSynchronous() bool {
 	return true
+}
+
+func (me QueueBindOk) Method() uint16 {
+	return 21
 }
 
 func (me QueueBindOk) Class() uint16 {
@@ -1110,7 +1222,7 @@ func (me QueueUnbind) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShortstr(me.RoutingKey)
 	buf.PutTable(me.Arguments)
 
-	fmt.Println("encode: queue.unbind 50 50", buf.Bytes())
+	//fmt.Println("encode: queue.unbind 50 50", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1121,6 +1233,10 @@ func (me QueueUnbind) HasContent() bool {
 
 func (me QueueUnbind) IsSynchronous() bool {
 	return true
+}
+
+func (me QueueUnbind) Method() uint16 {
+	return 50
 }
 
 func (me QueueUnbind) Class() uint16 {
@@ -1136,7 +1252,7 @@ func (me QueueUnbindOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(50)
 	buf.PutShort(51)
 
-	fmt.Println("encode: queue.unbind-ok 50 51", buf.Bytes())
+	//fmt.Println("encode: queue.unbind-ok 50 51", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1147,6 +1263,10 @@ func (me QueueUnbindOk) HasContent() bool {
 
 func (me QueueUnbindOk) IsSynchronous() bool {
 	return true
+}
+
+func (me QueueUnbindOk) Method() uint16 {
+	return 51
 }
 
 func (me QueueUnbindOk) Class() uint16 {
@@ -1172,7 +1292,7 @@ func (me QueuePurge) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.NoWait, 0)
 
-	fmt.Println("encode: queue.purge 50 30", buf.Bytes())
+	//fmt.Println("encode: queue.purge 50 30", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1183,6 +1303,10 @@ func (me QueuePurge) HasContent() bool {
 
 func (me QueuePurge) IsSynchronous() bool {
 	return true
+}
+
+func (me QueuePurge) Method() uint16 {
+	return 30
 }
 
 func (me QueuePurge) Class() uint16 {
@@ -1200,7 +1324,7 @@ func (me QueuePurgeOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(31)
 	buf.PutLong(me.MessageCount)
 
-	fmt.Println("encode: queue.purge-ok 50 31", buf.Bytes())
+	//fmt.Println("encode: queue.purge-ok 50 31", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1211,6 +1335,10 @@ func (me QueuePurgeOk) HasContent() bool {
 
 func (me QueuePurgeOk) IsSynchronous() bool {
 	return true
+}
+
+func (me QueuePurgeOk) Method() uint16 {
+	return 31
 }
 
 func (me QueuePurgeOk) Class() uint16 {
@@ -1241,7 +1369,7 @@ func (me QueueDelete) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.IfEmpty, 1)
 	buf.PutBit(me.NoWait, 2)
 
-	fmt.Println("encode: queue.delete 50 40", buf.Bytes())
+	//fmt.Println("encode: queue.delete 50 40", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1252,6 +1380,10 @@ func (me QueueDelete) HasContent() bool {
 
 func (me QueueDelete) IsSynchronous() bool {
 	return true
+}
+
+func (me QueueDelete) Method() uint16 {
+	return 40
 }
 
 func (me QueueDelete) Class() uint16 {
@@ -1269,7 +1401,7 @@ func (me QueueDeleteOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(41)
 	buf.PutLong(me.MessageCount)
 
-	fmt.Println("encode: queue.delete-ok 50 41", buf.Bytes())
+	//fmt.Println("encode: queue.delete-ok 50 41", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1280,6 +1412,10 @@ func (me QueueDeleteOk) HasContent() bool {
 
 func (me QueueDeleteOk) IsSynchronous() bool {
 	return true
+}
+
+func (me QueueDeleteOk) Method() uint16 {
+	return 41
 }
 
 func (me QueueDeleteOk) Class() uint16 {
@@ -1308,7 +1444,7 @@ func (me BasicQos) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.Global, 0)
 
-	fmt.Println("encode: basic.qos 60 10", buf.Bytes())
+	//fmt.Println("encode: basic.qos 60 10", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1319,6 +1455,10 @@ func (me BasicQos) HasContent() bool {
 
 func (me BasicQos) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicQos) Method() uint16 {
+	return 10
 }
 
 func (me BasicQos) Class() uint16 {
@@ -1338,7 +1478,7 @@ func (me BasicQosOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(60)
 	buf.PutShort(11)
 
-	fmt.Println("encode: basic.qos-ok 60 11", buf.Bytes())
+	//fmt.Println("encode: basic.qos-ok 60 11", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1349,6 +1489,10 @@ func (me BasicQosOk) HasContent() bool {
 
 func (me BasicQosOk) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicQosOk) Method() uint16 {
+	return 11
 }
 
 func (me BasicQosOk) Class() uint16 {
@@ -1385,7 +1529,7 @@ func (me BasicConsume) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.NoWait, 3)
 	buf.PutTable(me.Arguments)
 
-	fmt.Println("encode: basic.consume 60 20", buf.Bytes())
+	//fmt.Println("encode: basic.consume 60 20", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1396,6 +1540,10 @@ func (me BasicConsume) HasContent() bool {
 
 func (me BasicConsume) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicConsume) Method() uint16 {
+	return 20
 }
 
 func (me BasicConsume) Class() uint16 {
@@ -1416,7 +1564,7 @@ func (me BasicConsumeOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(21)
 	buf.PutShortstr(me.ConsumerTag)
 
-	fmt.Println("encode: basic.consume-ok 60 21", buf.Bytes())
+	//fmt.Println("encode: basic.consume-ok 60 21", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1427,6 +1575,10 @@ func (me BasicConsumeOk) HasContent() bool {
 
 func (me BasicConsumeOk) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicConsumeOk) Method() uint16 {
+	return 21
 }
 
 func (me BasicConsumeOk) Class() uint16 {
@@ -1463,7 +1615,7 @@ func (me BasicCancel) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.NoWait, 0)
 
-	fmt.Println("encode: basic.cancel 60 30", buf.Bytes())
+	//fmt.Println("encode: basic.cancel 60 30", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1474,6 +1626,10 @@ func (me BasicCancel) HasContent() bool {
 
 func (me BasicCancel) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicCancel) Method() uint16 {
+	return 30
 }
 
 func (me BasicCancel) Class() uint16 {
@@ -1493,7 +1649,7 @@ func (me BasicCancelOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(31)
 	buf.PutShortstr(me.ConsumerTag)
 
-	fmt.Println("encode: basic.cancel-ok 60 31", buf.Bytes())
+	//fmt.Println("encode: basic.cancel-ok 60 31", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1504,6 +1660,10 @@ func (me BasicCancelOk) HasContent() bool {
 
 func (me BasicCancelOk) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicCancelOk) Method() uint16 {
+	return 31
 }
 
 func (me BasicCancelOk) Class() uint16 {
@@ -1534,7 +1694,7 @@ func (me BasicPublish) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.Mandatory, 0)
 	buf.PutBit(me.Immediate, 1)
 
-	fmt.Println("encode: basic.publish 60 40", buf.Bytes())
+	//fmt.Println("encode: basic.publish 60 40", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1545,6 +1705,10 @@ func (me BasicPublish) HasContent() bool {
 
 func (me BasicPublish) IsSynchronous() bool {
 	return false
+}
+
+func (me BasicPublish) Method() uint16 {
+	return 40
 }
 
 func (me BasicPublish) Class() uint16 {
@@ -1573,7 +1737,7 @@ func (me BasicReturn) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShortstr(me.Exchange)
 	buf.PutShortstr(me.RoutingKey)
 
-	fmt.Println("encode: basic.return 60 50", buf.Bytes())
+	//fmt.Println("encode: basic.return 60 50", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1584,6 +1748,10 @@ func (me BasicReturn) HasContent() bool {
 
 func (me BasicReturn) IsSynchronous() bool {
 	return false
+}
+
+func (me BasicReturn) Method() uint16 {
+	return 50
 }
 
 func (me BasicReturn) Class() uint16 {
@@ -1615,7 +1783,7 @@ func (me BasicDeliver) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShortstr(me.Exchange)
 	buf.PutShortstr(me.RoutingKey)
 
-	fmt.Println("encode: basic.deliver 60 60", buf.Bytes())
+	//fmt.Println("encode: basic.deliver 60 60", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1626,6 +1794,10 @@ func (me BasicDeliver) HasContent() bool {
 
 func (me BasicDeliver) IsSynchronous() bool {
 	return false
+}
+
+func (me BasicDeliver) Method() uint16 {
+	return 60
 }
 
 func (me BasicDeliver) Class() uint16 {
@@ -1652,7 +1824,7 @@ func (me BasicGet) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.NoAck, 0)
 
-	fmt.Println("encode: basic.get 60 70", buf.Bytes())
+	//fmt.Println("encode: basic.get 60 70", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1663,6 +1835,10 @@ func (me BasicGet) HasContent() bool {
 
 func (me BasicGet) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicGet) Method() uint16 {
+	return 70
 }
 
 func (me BasicGet) Class() uint16 {
@@ -1693,7 +1869,7 @@ func (me BasicGetOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShortstr(me.RoutingKey)
 	buf.PutLong(me.MessageCount)
 
-	fmt.Println("encode: basic.get-ok 60 71", buf.Bytes())
+	//fmt.Println("encode: basic.get-ok 60 71", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1704,6 +1880,10 @@ func (me BasicGetOk) HasContent() bool {
 
 func (me BasicGetOk) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicGetOk) Method() uint16 {
+	return 71
 }
 
 func (me BasicGetOk) Class() uint16 {
@@ -1724,7 +1904,7 @@ func (me BasicGetEmpty) WriteTo(w io.Writer) (int64, error) {
 	var Reserved1 string
 	buf.PutShortstr(Reserved1)
 
-	fmt.Println("encode: basic.get-empty 60 72", buf.Bytes())
+	//fmt.Println("encode: basic.get-empty 60 72", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1735,6 +1915,10 @@ func (me BasicGetEmpty) HasContent() bool {
 
 func (me BasicGetEmpty) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicGetEmpty) Method() uint16 {
+	return 72
 }
 
 func (me BasicGetEmpty) Class() uint16 {
@@ -1765,7 +1949,7 @@ func (me BasicAck) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.Multiple, 0)
 
-	fmt.Println("encode: basic.ack 60 80", buf.Bytes())
+	//fmt.Println("encode: basic.ack 60 80", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1776,6 +1960,10 @@ func (me BasicAck) HasContent() bool {
 
 func (me BasicAck) IsSynchronous() bool {
 	return false
+}
+
+func (me BasicAck) Method() uint16 {
+	return 80
 }
 
 func (me BasicAck) Class() uint16 {
@@ -1800,7 +1988,7 @@ func (me BasicReject) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.Requeue, 0)
 
-	fmt.Println("encode: basic.reject 60 90", buf.Bytes())
+	//fmt.Println("encode: basic.reject 60 90", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1811,6 +1999,10 @@ func (me BasicReject) HasContent() bool {
 
 func (me BasicReject) IsSynchronous() bool {
 	return false
+}
+
+func (me BasicReject) Method() uint16 {
+	return 90
 }
 
 func (me BasicReject) Class() uint16 {
@@ -1833,7 +2025,7 @@ func (me BasicRecoverAsync) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.Requeue, 0)
 
-	fmt.Println("encode: basic.recover-async 60 100", buf.Bytes())
+	//fmt.Println("encode: basic.recover-async 60 100", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1844,6 +2036,10 @@ func (me BasicRecoverAsync) HasContent() bool {
 
 func (me BasicRecoverAsync) IsSynchronous() bool {
 	return false
+}
+
+func (me BasicRecoverAsync) Method() uint16 {
+	return 100
 }
 
 func (me BasicRecoverAsync) Class() uint16 {
@@ -1866,7 +2062,7 @@ func (me BasicRecover) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.Requeue, 0)
 
-	fmt.Println("encode: basic.recover 60 110", buf.Bytes())
+	//fmt.Println("encode: basic.recover 60 110", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1877,6 +2073,10 @@ func (me BasicRecover) HasContent() bool {
 
 func (me BasicRecover) IsSynchronous() bool {
 	return false
+}
+
+func (me BasicRecover) Method() uint16 {
+	return 110
 }
 
 func (me BasicRecover) Class() uint16 {
@@ -1894,7 +2094,7 @@ func (me BasicRecoverOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(60)
 	buf.PutShort(111)
 
-	fmt.Println("encode: basic.recover-ok 60 111", buf.Bytes())
+	//fmt.Println("encode: basic.recover-ok 60 111", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1905,6 +2105,10 @@ func (me BasicRecoverOk) HasContent() bool {
 
 func (me BasicRecoverOk) IsSynchronous() bool {
 	return true
+}
+
+func (me BasicRecoverOk) Method() uint16 {
+	return 111
 }
 
 func (me BasicRecoverOk) Class() uint16 {
@@ -1935,7 +2139,7 @@ func (me BasicNack) WriteTo(w io.Writer) (int64, error) {
 	buf.PutBit(me.Multiple, 0)
 	buf.PutBit(me.Requeue, 1)
 
-	fmt.Println("encode: basic.nack 60 120", buf.Bytes())
+	//fmt.Println("encode: basic.nack 60 120", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1946,6 +2150,10 @@ func (me BasicNack) HasContent() bool {
 
 func (me BasicNack) IsSynchronous() bool {
 	return false
+}
+
+func (me BasicNack) Method() uint16 {
+	return 120
 }
 
 func (me BasicNack) Class() uint16 {
@@ -1964,7 +2172,7 @@ func (me TxSelect) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(90)
 	buf.PutShort(10)
 
-	fmt.Println("encode: tx.select 90 10", buf.Bytes())
+	//fmt.Println("encode: tx.select 90 10", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -1975,6 +2183,10 @@ func (me TxSelect) HasContent() bool {
 
 func (me TxSelect) IsSynchronous() bool {
 	return true
+}
+
+func (me TxSelect) Method() uint16 {
+	return 10
 }
 
 func (me TxSelect) Class() uint16 {
@@ -1993,7 +2205,7 @@ func (me TxSelectOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(90)
 	buf.PutShort(11)
 
-	fmt.Println("encode: tx.select-ok 90 11", buf.Bytes())
+	//fmt.Println("encode: tx.select-ok 90 11", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -2004,6 +2216,10 @@ func (me TxSelectOk) HasContent() bool {
 
 func (me TxSelectOk) IsSynchronous() bool {
 	return true
+}
+
+func (me TxSelectOk) Method() uint16 {
+	return 11
 }
 
 func (me TxSelectOk) Class() uint16 {
@@ -2022,7 +2238,7 @@ func (me TxCommit) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(90)
 	buf.PutShort(20)
 
-	fmt.Println("encode: tx.commit 90 20", buf.Bytes())
+	//fmt.Println("encode: tx.commit 90 20", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -2033,6 +2249,10 @@ func (me TxCommit) HasContent() bool {
 
 func (me TxCommit) IsSynchronous() bool {
 	return true
+}
+
+func (me TxCommit) Method() uint16 {
+	return 20
 }
 
 func (me TxCommit) Class() uint16 {
@@ -2051,7 +2271,7 @@ func (me TxCommitOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(90)
 	buf.PutShort(21)
 
-	fmt.Println("encode: tx.commit-ok 90 21", buf.Bytes())
+	//fmt.Println("encode: tx.commit-ok 90 21", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -2062,6 +2282,10 @@ func (me TxCommitOk) HasContent() bool {
 
 func (me TxCommitOk) IsSynchronous() bool {
 	return true
+}
+
+func (me TxCommitOk) Method() uint16 {
+	return 21
 }
 
 func (me TxCommitOk) Class() uint16 {
@@ -2082,7 +2306,7 @@ func (me TxRollback) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(90)
 	buf.PutShort(30)
 
-	fmt.Println("encode: tx.rollback 90 30", buf.Bytes())
+	//fmt.Println("encode: tx.rollback 90 30", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -2093,6 +2317,10 @@ func (me TxRollback) HasContent() bool {
 
 func (me TxRollback) IsSynchronous() bool {
 	return true
+}
+
+func (me TxRollback) Method() uint16 {
+	return 30
 }
 
 func (me TxRollback) Class() uint16 {
@@ -2111,7 +2339,7 @@ func (me TxRollbackOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(90)
 	buf.PutShort(31)
 
-	fmt.Println("encode: tx.rollback-ok 90 31", buf.Bytes())
+	//fmt.Println("encode: tx.rollback-ok 90 31", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -2122,6 +2350,10 @@ func (me TxRollbackOk) HasContent() bool {
 
 func (me TxRollbackOk) IsSynchronous() bool {
 	return true
+}
+
+func (me TxRollbackOk) Method() uint16 {
+	return 31
 }
 
 func (me TxRollbackOk) Class() uint16 {
@@ -2144,7 +2376,7 @@ func (me ConfirmSelect) WriteTo(w io.Writer) (int64, error) {
 	buf.PutOctet(0)
 	buf.PutBit(me.Nowait, 0)
 
-	fmt.Println("encode: confirm.select 85 10", buf.Bytes())
+	//fmt.Println("encode: confirm.select 85 10", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -2155,6 +2387,10 @@ func (me ConfirmSelect) HasContent() bool {
 
 func (me ConfirmSelect) IsSynchronous() bool {
 	return true
+}
+
+func (me ConfirmSelect) Method() uint16 {
+	return 10
 }
 
 func (me ConfirmSelect) Class() uint16 {
@@ -2173,7 +2409,7 @@ func (me ConfirmSelectOk) WriteTo(w io.Writer) (int64, error) {
 	buf.PutShort(85)
 	buf.PutShort(11)
 
-	fmt.Println("encode: confirm.select-ok 85 11", buf.Bytes())
+	//fmt.Println("encode: confirm.select-ok 85 11", buf.Bytes())
 	wn, err := w.Write(buf.Bytes())
 	return int64(wn), err
 }
@@ -2184,6 +2420,10 @@ func (me ConfirmSelectOk) HasContent() bool {
 
 func (me ConfirmSelectOk) IsSynchronous() bool {
 	return true
+}
+
+func (me ConfirmSelectOk) Method() uint16 {
+	return 11
 }
 
 func (me ConfirmSelectOk) Class() uint16 {
@@ -2200,7 +2440,7 @@ func (me *buffer) NextMethod() (value Method) {
 		switch method {
 
 		case 10: // connection start
-			fmt.Println("NextMethod: class:10 method:10")
+			//fmt.Println("NextMethod: class:10 method:10")
 			message := ConnectionStart{}
 			message.VersionMajor = me.NextOctet()
 			message.VersionMinor = me.NextOctet()
@@ -2211,7 +2451,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 11: // connection start-ok
-			fmt.Println("NextMethod: class:10 method:11")
+			//fmt.Println("NextMethod: class:10 method:11")
 			message := ConnectionStartOk{}
 			message.ClientProperties = me.NextTable()
 			message.Mechanism = me.NextShortstr()
@@ -2221,21 +2461,21 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 20: // connection secure
-			fmt.Println("NextMethod: class:10 method:20")
+			//fmt.Println("NextMethod: class:10 method:20")
 			message := ConnectionSecure{}
 			message.Challenge = me.NextLongstr()
 
 			return message
 
 		case 21: // connection secure-ok
-			fmt.Println("NextMethod: class:10 method:21")
+			//fmt.Println("NextMethod: class:10 method:21")
 			message := ConnectionSecureOk{}
 			message.Response = me.NextLongstr()
 
 			return message
 
 		case 30: // connection tune
-			fmt.Println("NextMethod: class:10 method:30")
+			//fmt.Println("NextMethod: class:10 method:30")
 			message := ConnectionTune{}
 			message.ChannelMax = me.NextShort()
 			message.FrameMax = me.NextLong()
@@ -2244,7 +2484,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 31: // connection tune-ok
-			fmt.Println("NextMethod: class:10 method:31")
+			//fmt.Println("NextMethod: class:10 method:31")
 			message := ConnectionTuneOk{}
 			message.ChannelMax = me.NextShort()
 			message.FrameMax = me.NextLong()
@@ -2253,7 +2493,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 40: // connection open
-			fmt.Println("NextMethod: class:10 method:40")
+			//fmt.Println("NextMethod: class:10 method:40")
 			message := ConnectionOpen{}
 			message.VirtualHost = me.NextShortstr()
 			_ = me.NextShortstr()
@@ -2262,14 +2502,14 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 41: // connection open-ok
-			fmt.Println("NextMethod: class:10 method:41")
+			//fmt.Println("NextMethod: class:10 method:41")
 			message := ConnectionOpenOk{}
 			_ = me.NextShortstr()
 
 			return message
 
 		case 50: // connection close
-			fmt.Println("NextMethod: class:10 method:50")
+			//fmt.Println("NextMethod: class:10 method:50")
 			message := ConnectionClose{}
 			message.ReplyCode = me.NextShort()
 			message.ReplyText = me.NextShortstr()
@@ -2279,7 +2519,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 51: // connection close-ok
-			fmt.Println("NextMethod: class:10 method:51")
+			//fmt.Println("NextMethod: class:10 method:51")
 			message := ConnectionCloseOk{}
 
 			return message
@@ -2290,35 +2530,35 @@ func (me *buffer) NextMethod() (value Method) {
 		switch method {
 
 		case 10: // channel open
-			fmt.Println("NextMethod: class:20 method:10")
+			//fmt.Println("NextMethod: class:20 method:10")
 			message := ChannelOpen{}
 			_ = me.NextShortstr()
 
 			return message
 
 		case 11: // channel open-ok
-			fmt.Println("NextMethod: class:20 method:11")
+			//fmt.Println("NextMethod: class:20 method:11")
 			message := ChannelOpenOk{}
 			_ = me.NextLongstr()
 
 			return message
 
 		case 20: // channel flow
-			fmt.Println("NextMethod: class:20 method:20")
+			//fmt.Println("NextMethod: class:20 method:20")
 			message := ChannelFlow{}
 			message.Active = me.NextBit(0)
 			me.NextOctet()
 			return message
 
 		case 21: // channel flow-ok
-			fmt.Println("NextMethod: class:20 method:21")
+			//fmt.Println("NextMethod: class:20 method:21")
 			message := ChannelFlowOk{}
 			message.Active = me.NextBit(0)
 			me.NextOctet()
 			return message
 
 		case 40: // channel close
-			fmt.Println("NextMethod: class:20 method:40")
+			//fmt.Println("NextMethod: class:20 method:40")
 			message := ChannelClose{}
 			message.ReplyCode = me.NextShort()
 			message.ReplyText = me.NextShortstr()
@@ -2328,7 +2568,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 41: // channel close-ok
-			fmt.Println("NextMethod: class:20 method:41")
+			//fmt.Println("NextMethod: class:20 method:41")
 			message := ChannelCloseOk{}
 
 			return message
@@ -2339,7 +2579,7 @@ func (me *buffer) NextMethod() (value Method) {
 		switch method {
 
 		case 10: // exchange declare
-			fmt.Println("NextMethod: class:40 method:10")
+			//fmt.Println("NextMethod: class:40 method:10")
 			message := ExchangeDeclare{}
 			_ = me.NextShort()
 			message.Exchange = me.NextShortstr()
@@ -2355,13 +2595,13 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 11: // exchange declare-ok
-			fmt.Println("NextMethod: class:40 method:11")
+			//fmt.Println("NextMethod: class:40 method:11")
 			message := ExchangeDeclareOk{}
 
 			return message
 
 		case 20: // exchange delete
-			fmt.Println("NextMethod: class:40 method:20")
+			//fmt.Println("NextMethod: class:40 method:20")
 			message := ExchangeDelete{}
 			_ = me.NextShort()
 			message.Exchange = me.NextShortstr()
@@ -2371,13 +2611,13 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 21: // exchange delete-ok
-			fmt.Println("NextMethod: class:40 method:21")
+			//fmt.Println("NextMethod: class:40 method:21")
 			message := ExchangeDeleteOk{}
 
 			return message
 
 		case 30: // exchange bind
-			fmt.Println("NextMethod: class:40 method:30")
+			//fmt.Println("NextMethod: class:40 method:30")
 			message := ExchangeBind{}
 			_ = me.NextShort()
 			message.Destination = me.NextShortstr()
@@ -2390,13 +2630,13 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 31: // exchange bind-ok
-			fmt.Println("NextMethod: class:40 method:31")
+			//fmt.Println("NextMethod: class:40 method:31")
 			message := ExchangeBindOk{}
 
 			return message
 
 		case 40: // exchange unbind
-			fmt.Println("NextMethod: class:40 method:40")
+			//fmt.Println("NextMethod: class:40 method:40")
 			message := ExchangeUnbind{}
 			_ = me.NextShort()
 			message.Destination = me.NextShortstr()
@@ -2409,7 +2649,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 51: // exchange unbind-ok
-			fmt.Println("NextMethod: class:40 method:51")
+			//fmt.Println("NextMethod: class:40 method:51")
 			message := ExchangeUnbindOk{}
 
 			return message
@@ -2420,7 +2660,7 @@ func (me *buffer) NextMethod() (value Method) {
 		switch method {
 
 		case 10: // queue declare
-			fmt.Println("NextMethod: class:50 method:10")
+			//fmt.Println("NextMethod: class:50 method:10")
 			message := QueueDeclare{}
 			_ = me.NextShort()
 			message.Queue = me.NextShortstr()
@@ -2435,7 +2675,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 11: // queue declare-ok
-			fmt.Println("NextMethod: class:50 method:11")
+			//fmt.Println("NextMethod: class:50 method:11")
 			message := QueueDeclareOk{}
 			message.Queue = me.NextShortstr()
 			message.MessageCount = me.NextLong()
@@ -2444,7 +2684,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 20: // queue bind
-			fmt.Println("NextMethod: class:50 method:20")
+			//fmt.Println("NextMethod: class:50 method:20")
 			message := QueueBind{}
 			_ = me.NextShort()
 			message.Queue = me.NextShortstr()
@@ -2457,13 +2697,13 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 21: // queue bind-ok
-			fmt.Println("NextMethod: class:50 method:21")
+			//fmt.Println("NextMethod: class:50 method:21")
 			message := QueueBindOk{}
 
 			return message
 
 		case 50: // queue unbind
-			fmt.Println("NextMethod: class:50 method:50")
+			//fmt.Println("NextMethod: class:50 method:50")
 			message := QueueUnbind{}
 			_ = me.NextShort()
 			message.Queue = me.NextShortstr()
@@ -2474,13 +2714,13 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 51: // queue unbind-ok
-			fmt.Println("NextMethod: class:50 method:51")
+			//fmt.Println("NextMethod: class:50 method:51")
 			message := QueueUnbindOk{}
 
 			return message
 
 		case 30: // queue purge
-			fmt.Println("NextMethod: class:50 method:30")
+			//fmt.Println("NextMethod: class:50 method:30")
 			message := QueuePurge{}
 			_ = me.NextShort()
 			message.Queue = me.NextShortstr()
@@ -2489,14 +2729,14 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 31: // queue purge-ok
-			fmt.Println("NextMethod: class:50 method:31")
+			//fmt.Println("NextMethod: class:50 method:31")
 			message := QueuePurgeOk{}
 			message.MessageCount = me.NextLong()
 
 			return message
 
 		case 40: // queue delete
-			fmt.Println("NextMethod: class:50 method:40")
+			//fmt.Println("NextMethod: class:50 method:40")
 			message := QueueDelete{}
 			_ = me.NextShort()
 			message.Queue = me.NextShortstr()
@@ -2507,7 +2747,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 41: // queue delete-ok
-			fmt.Println("NextMethod: class:50 method:41")
+			//fmt.Println("NextMethod: class:50 method:41")
 			message := QueueDeleteOk{}
 			message.MessageCount = me.NextLong()
 
@@ -2519,7 +2759,7 @@ func (me *buffer) NextMethod() (value Method) {
 		switch method {
 
 		case 10: // basic qos
-			fmt.Println("NextMethod: class:60 method:10")
+			//fmt.Println("NextMethod: class:60 method:10")
 			message := BasicQos{}
 			message.PrefetchSize = me.NextLong()
 			message.PrefetchCount = me.NextShort()
@@ -2528,13 +2768,13 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 11: // basic qos-ok
-			fmt.Println("NextMethod: class:60 method:11")
+			//fmt.Println("NextMethod: class:60 method:11")
 			message := BasicQosOk{}
 
 			return message
 
 		case 20: // basic consume
-			fmt.Println("NextMethod: class:60 method:20")
+			//fmt.Println("NextMethod: class:60 method:20")
 			message := BasicConsume{}
 			_ = me.NextShort()
 			message.Queue = me.NextShortstr()
@@ -2549,14 +2789,14 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 21: // basic consume-ok
-			fmt.Println("NextMethod: class:60 method:21")
+			//fmt.Println("NextMethod: class:60 method:21")
 			message := BasicConsumeOk{}
 			message.ConsumerTag = me.NextShortstr()
 
 			return message
 
 		case 30: // basic cancel
-			fmt.Println("NextMethod: class:60 method:30")
+			//fmt.Println("NextMethod: class:60 method:30")
 			message := BasicCancel{}
 			message.ConsumerTag = me.NextShortstr()
 			message.NoWait = me.NextBit(0)
@@ -2564,14 +2804,14 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 31: // basic cancel-ok
-			fmt.Println("NextMethod: class:60 method:31")
+			//fmt.Println("NextMethod: class:60 method:31")
 			message := BasicCancelOk{}
 			message.ConsumerTag = me.NextShortstr()
 
 			return message
 
 		case 40: // basic publish
-			fmt.Println("NextMethod: class:60 method:40")
+			//fmt.Println("NextMethod: class:60 method:40")
 			message := BasicPublish{}
 			_ = me.NextShort()
 			message.Exchange = me.NextShortstr()
@@ -2582,7 +2822,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 50: // basic return
-			fmt.Println("NextMethod: class:60 method:50")
+			//fmt.Println("NextMethod: class:60 method:50")
 			message := BasicReturn{}
 			message.ReplyCode = me.NextShort()
 			message.ReplyText = me.NextShortstr()
@@ -2592,7 +2832,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 60: // basic deliver
-			fmt.Println("NextMethod: class:60 method:60")
+			//fmt.Println("NextMethod: class:60 method:60")
 			message := BasicDeliver{}
 			message.ConsumerTag = me.NextShortstr()
 			message.DeliveryTag = me.NextLonglong()
@@ -2604,7 +2844,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 70: // basic get
-			fmt.Println("NextMethod: class:60 method:70")
+			//fmt.Println("NextMethod: class:60 method:70")
 			message := BasicGet{}
 			_ = me.NextShort()
 			message.Queue = me.NextShortstr()
@@ -2613,7 +2853,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 71: // basic get-ok
-			fmt.Println("NextMethod: class:60 method:71")
+			//fmt.Println("NextMethod: class:60 method:71")
 			message := BasicGetOk{}
 			message.DeliveryTag = me.NextLonglong()
 			message.Redelivered = me.NextBit(0)
@@ -2625,14 +2865,14 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 72: // basic get-empty
-			fmt.Println("NextMethod: class:60 method:72")
+			//fmt.Println("NextMethod: class:60 method:72")
 			message := BasicGetEmpty{}
 			_ = me.NextShortstr()
 
 			return message
 
 		case 80: // basic ack
-			fmt.Println("NextMethod: class:60 method:80")
+			//fmt.Println("NextMethod: class:60 method:80")
 			message := BasicAck{}
 			message.DeliveryTag = me.NextLonglong()
 			message.Multiple = me.NextBit(0)
@@ -2640,7 +2880,7 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 90: // basic reject
-			fmt.Println("NextMethod: class:60 method:90")
+			//fmt.Println("NextMethod: class:60 method:90")
 			message := BasicReject{}
 			message.DeliveryTag = me.NextLonglong()
 			message.Requeue = me.NextBit(0)
@@ -2648,27 +2888,27 @@ func (me *buffer) NextMethod() (value Method) {
 			return message
 
 		case 100: // basic recover-async
-			fmt.Println("NextMethod: class:60 method:100")
+			//fmt.Println("NextMethod: class:60 method:100")
 			message := BasicRecoverAsync{}
 			message.Requeue = me.NextBit(0)
 			me.NextOctet()
 			return message
 
 		case 110: // basic recover
-			fmt.Println("NextMethod: class:60 method:110")
+			//fmt.Println("NextMethod: class:60 method:110")
 			message := BasicRecover{}
 			message.Requeue = me.NextBit(0)
 			me.NextOctet()
 			return message
 
 		case 111: // basic recover-ok
-			fmt.Println("NextMethod: class:60 method:111")
+			//fmt.Println("NextMethod: class:60 method:111")
 			message := BasicRecoverOk{}
 
 			return message
 
 		case 120: // basic nack
-			fmt.Println("NextMethod: class:60 method:120")
+			//fmt.Println("NextMethod: class:60 method:120")
 			message := BasicNack{}
 			message.DeliveryTag = me.NextLonglong()
 			message.Multiple = me.NextBit(0)
@@ -2682,37 +2922,37 @@ func (me *buffer) NextMethod() (value Method) {
 		switch method {
 
 		case 10: // tx select
-			fmt.Println("NextMethod: class:90 method:10")
+			//fmt.Println("NextMethod: class:90 method:10")
 			message := TxSelect{}
 
 			return message
 
 		case 11: // tx select-ok
-			fmt.Println("NextMethod: class:90 method:11")
+			//fmt.Println("NextMethod: class:90 method:11")
 			message := TxSelectOk{}
 
 			return message
 
 		case 20: // tx commit
-			fmt.Println("NextMethod: class:90 method:20")
+			//fmt.Println("NextMethod: class:90 method:20")
 			message := TxCommit{}
 
 			return message
 
 		case 21: // tx commit-ok
-			fmt.Println("NextMethod: class:90 method:21")
+			//fmt.Println("NextMethod: class:90 method:21")
 			message := TxCommitOk{}
 
 			return message
 
 		case 30: // tx rollback
-			fmt.Println("NextMethod: class:90 method:30")
+			//fmt.Println("NextMethod: class:90 method:30")
 			message := TxRollback{}
 
 			return message
 
 		case 31: // tx rollback-ok
-			fmt.Println("NextMethod: class:90 method:31")
+			//fmt.Println("NextMethod: class:90 method:31")
 			message := TxRollbackOk{}
 
 			return message
@@ -2723,14 +2963,14 @@ func (me *buffer) NextMethod() (value Method) {
 		switch method {
 
 		case 10: // confirm select
-			fmt.Println("NextMethod: class:85 method:10")
+			//fmt.Println("NextMethod: class:85 method:10")
 			message := ConfirmSelect{}
 			message.Nowait = me.NextBit(0)
 			me.NextOctet()
 			return message
 
 		case 11: // confirm select-ok
-			fmt.Println("NextMethod: class:85 method:11")
+			//fmt.Println("NextMethod: class:85 method:11")
 			message := ConfirmSelectOk{}
 
 			return message

@@ -23,6 +23,7 @@ type Method interface {
 	HasContent() bool
 	IsSynchronous() bool
 	Class() uint16
+	Method() uint16
 }
 
 type Unit struct{}

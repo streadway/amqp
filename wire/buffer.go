@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io" // for io.ErrShortBuffer
 	"math"
 )
@@ -30,7 +29,6 @@ func newBuffer(data []byte) *buffer {
 // Overrides bytes.Buffer to do checked reads, will panic with
 // io.ErrShortBuffer if there are not enough bytes to satisfy this call
 func (me *buffer) Next(n int) []byte {
-	fmt.Println("next: ", n)
 	next := me.Buffer.Next(n)
 	if len(next) < n {
 		panic(io.ErrShortBuffer)

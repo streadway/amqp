@@ -9,9 +9,21 @@ import (
 
 func TestNewClientHandshake(t *testing.T) {
 	done := make(chan bool)
-	server, client := interPipes()
+	server, client := interPipes(t)
 
 	go func() {
+		var f wire.Frame
+		var err error
+		var ok bool
+
+		handshake := make([]byte, 8)
+		server.Read(handshake)
+		if bytes.Compare(handshake, []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}) != 0 {
+			t.Error("bad protocol handshake", handshake)
+		}
+
+		r := wire.NewFrameReader(server)
+
 		wire.MethodFrame{
 			Channel: 0,
 			Method: wire.ConnectionStart{
@@ -22,6 +34,14 @@ func TestNewClientHandshake(t *testing.T) {
 			},
 		}.WriteTo(server)
 
+		if f, err = r.NextFrame(); err != nil {
+			t.Error("bad read", err)
+		}
+
+		if _, ok = f.(wire.MethodFrame).Method.(wire.ConnectionStartOk); !ok {
+			t.Error("expected ConnectionStartOk")
+		}
+
 		wire.MethodFrame{
 			Channel: 0,
 			Method: wire.ConnectionTune{
@@ -30,38 +50,6 @@ func TestNewClientHandshake(t *testing.T) {
 				Heartbeat:  10,
 			},
 		}.WriteTo(server)
-
-		wire.MethodFrame{
-			Channel: 0,
-			Method:  wire.ConnectionOpenOk{},
-		}.WriteTo(server)
-
-		wire.MethodFrame{
-			Channel: 1,
-			Method:  wire.ChannelOpenOk{},
-		}.WriteTo(server)
-	}()
-
-	go func() {
-		handshake := make([]byte, 8)
-		server.Read(handshake)
-		if bytes.Compare(handshake, []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}) != 0 {
-			t.Error("bad protocol handshake", handshake)
-		}
-
-		r := wire.NewFrameReader(server)
-
-		var f wire.Frame
-		var err error
-		var ok bool
-
-		if f, err = r.NextFrame(); err != nil {
-			t.Error("bad read", err)
-		}
-
-		if _, ok = f.(wire.MethodFrame).Method.(wire.ConnectionStartOk); !ok {
-			t.Error("expected ConnectionStartOk")
-		}
 
 		if f, err = r.NextFrame(); err != nil {
 			t.Error("bad read", err)
@@ -77,8 +65,12 @@ func TestNewClientHandshake(t *testing.T) {
 
 		if _, ok = f.(wire.MethodFrame).Method.(wire.ConnectionOpen); !ok {
 			t.Error("expected ConnectionOpen")
-
 		}
+
+		wire.MethodFrame{
+			Channel: 0,
+			Method:  wire.ConnectionOpenOk{},
+		}.WriteTo(server)
 
 		if f, err = r.NextFrame(); err != nil {
 			t.Error("bad read", err)
@@ -92,6 +84,11 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Error("expected ChannelOpen on channel 1")
 		}
 
+		wire.MethodFrame{
+			Channel: 1,
+			Method:  wire.ChannelOpenOk{},
+		}.WriteTo(server)
+
 		server.Close()
 		done <- true
 	}()
@@ -101,6 +98,5 @@ func TestNewClientHandshake(t *testing.T) {
 		t.Error("could not create client:", c, err)
 	}
 
-	println("X X X X X X X X X X X X X X X X X X X X Ohai")
 	<-done
 }
