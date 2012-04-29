@@ -12,7 +12,7 @@ import (
 
 // Returns a conneciton to the AMQP if the AMQP_URL environment
 // variable is set and a connnection can be established.
-func integrationClient(t *testing.T) *amqp.Client {
+func integrationConnection(t *testing.T) *amqp.Connection {
 	u, err := url.Parse(os.Getenv("AMQP_URL"))
 	if err != nil {
 		t.Log("Skipping integration tests, AMQP_URL not found in the environment")
@@ -39,7 +39,7 @@ func integrationClient(t *testing.T) *amqp.Client {
 		return nil
 	}
 
-	c, err := amqp.NewClient(&logIO{t, "integration", conn}, username, password, vhost)
+	c, err := amqp.NewConnection(&logIO{t, "integration", conn}, &amqp.PlainAuth{username, password}, vhost)
 	if err != nil {
 		t.Error("Failed to create client against integration server:", err)
 		return nil
@@ -55,14 +55,16 @@ func assertMessageBody(t *testing.T, msg *amqp.Delivery, body []byte) {
 }
 
 func TestIntegrationConnect(t *testing.T) {
-	if c := integrationClient(t); c != nil {
+	if c := integrationConnection(t); c != nil {
 		t.Log("have client")
 	}
 }
 
 func TestIntegrationPublishConsume(t *testing.T) {
 	queue := "test.integration.publish.consume"
-	pub, sub := integrationClient(t), integrationClient(t)
+
+	pub, _ := integrationConnection(t).OpenChannel()
+	sub, _ := integrationConnection(t).OpenChannel()
 
 	if pub != nil && sub != nil {
 		sub.DeclareQueue(amqp.UntilUnused, queue)

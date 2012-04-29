@@ -8,7 +8,6 @@ import (
 )
 
 func TestNewClientHandshake(t *testing.T) {
-	done := make(chan bool)
 	server, client := interPipes(t)
 
 	go func() {
@@ -19,7 +18,7 @@ func TestNewClientHandshake(t *testing.T) {
 		handshake := make([]byte, 8)
 		server.Read(handshake)
 		if bytes.Compare(handshake, []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}) != 0 {
-			t.Error("bad protocol handshake", handshake)
+			t.Fatal("bad protocol handshake", handshake)
 		}
 
 		r := wire.NewFrameReader(server)
@@ -35,11 +34,11 @@ func TestNewClientHandshake(t *testing.T) {
 		}.WriteTo(server)
 
 		if f, err = r.NextFrame(); err != nil {
-			t.Error("bad read", err)
+			t.Fatal("bad read", err)
 		}
 
 		if _, ok = f.(wire.MethodFrame).Method.(wire.ConnectionStartOk); !ok {
-			t.Error("expected ConnectionStartOk")
+			t.Fatal("expected ConnectionStartOk")
 		}
 
 		wire.MethodFrame{
@@ -52,19 +51,19 @@ func TestNewClientHandshake(t *testing.T) {
 		}.WriteTo(server)
 
 		if f, err = r.NextFrame(); err != nil {
-			t.Error("bad read", err)
+			t.Fatal("bad read", err)
 		}
 
 		if _, ok = f.(wire.MethodFrame).Method.(wire.ConnectionTuneOk); !ok {
-			t.Error("expected ConnectionTuneOk")
+			t.Fatal("expected ConnectionTuneOk")
 		}
 
 		if f, err = r.NextFrame(); err != nil {
-			t.Error("bad read", err)
+			t.Fatal("bad read", err)
 		}
 
 		if _, ok = f.(wire.MethodFrame).Method.(wire.ConnectionOpen); !ok {
-			t.Error("expected ConnectionOpen")
+			t.Fatal("expected ConnectionOpen")
 		}
 
 		wire.MethodFrame{
@@ -73,15 +72,15 @@ func TestNewClientHandshake(t *testing.T) {
 		}.WriteTo(server)
 
 		if f, err = r.NextFrame(); err != nil {
-			t.Error("bad read", err)
+			t.Fatal("bad read", err)
 		}
 
 		if _, ok = f.(wire.MethodFrame).Method.(wire.ChannelOpen); !ok {
-			t.Error("expected ChannelOpen")
+			t.Fatal("expected ChannelOpen")
 		}
 
 		if f.ChannelID() != 1 {
-			t.Error("expected ChannelOpen on channel 1")
+			t.Fatal("expected ChannelOpen on channel 1")
 		}
 
 		wire.MethodFrame{
@@ -90,13 +89,15 @@ func TestNewClientHandshake(t *testing.T) {
 		}.WriteTo(server)
 
 		server.Close()
-		done <- true
 	}()
 
-	c, err := amqp.NewClient(client, "guest", "guest", "/")
+	c, err := amqp.NewConnection(client, &amqp.PlainAuth{"guest", "guest"}, "/")
 	if err != nil {
-		t.Error("could not create client:", c, err)
+		t.Fatal("could not create connection:", c, err)
 	}
 
-	<-done
+	ch, err := c.OpenChannel()
+	if err != nil {
+		t.Fatal("could not open channel:", ch, err)
+	}
 }
