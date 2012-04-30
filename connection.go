@@ -1,7 +1,6 @@
 package amqp
 
 import (
-	"amqp/wire"
 	"fmt"
 	"io"
 )
@@ -9,8 +8,8 @@ import (
 // Manages the serialization and deserialization of frames from IO and dispatches the frames to the appropriate channel.
 type Connection struct {
 	conn    io.ReadWriteCloser
-	c2s     chan wire.Frame
-	methods chan wire.Method
+	c2s     chan Frame
+	methods chan Method
 
 	major      int
 	minor      int
@@ -38,8 +37,8 @@ func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *
 
 	me = &Connection{
 		conn:     conn,
-		methods:  make(chan wire.Method), // incoming synchronous connection methods (Channel == 0)
-		c2s:      make(chan wire.Frame),  // shared chan that muxes all frames
+		methods:  make(chan Method), // incoming synchronous connection methods (Channel == 0)
+		c2s:      make(chan Frame),  // shared chan that muxes all frames
 		seq:      seq,
 		channels: make(map[uint16]*Channel),
 	}
@@ -54,11 +53,11 @@ func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *
 
 // All methods sent to the connection channel should be synchronous so we
 // can handle them directly without a framing component
-func (me *Connection) demux(frame wire.Frame) {
+func (me *Connection) demux(frame Frame) {
 	if frame.ChannelID() == 0 {
 		// TODO send hard error if any content frames/async frames are sent here
 		switch mf := frame.(type) {
-		case wire.MethodFrame:
+		case MethodFrame:
 			me.methods <- mf.Method
 		default:
 			panic("TODO close with hard-error")
@@ -79,7 +78,7 @@ func (me *Connection) demux(frame wire.Frame) {
 // will demux the streams and dispatch to one of the opened channels or
 // handle on channel 0 (the connection channel).
 func (me *Connection) reader() {
-	frames := wire.NewFrameReader(me.conn)
+	frames := NewFrameReader(me.conn)
 
 	for {
 		frame, err := frames.NextFrame()
@@ -114,7 +113,7 @@ func (me *Connection) writer() {
 func (me *Connection) OpenChannel() (channel *Channel, err error) {
 	id := uint16(<-me.seq)
 
-	framing := newFraming(id, me.maxFrameSize, make(chan wire.Frame), me.c2s)
+	framing := newFraming(id, me.maxFrameSize, make(chan Frame), me.c2s)
 
 	if channel, err = newChannel(framing); err != nil {
 		return
@@ -136,19 +135,19 @@ func (me *Connection) OpenChannel() (channel *Channel, err error) {
 //    close-Connection    = C:CLOSE S:CLOSE-OK
 //                        / S:CLOSE C:CLOSE-OK
 func (me *Connection) open(username, password, vhost string) (err error) {
-	if _, err = me.conn.Write(wire.ProtocolHeader); err != nil {
+	if _, err = me.conn.Write(ProtocolHeader); err != nil {
 		return
 	}
 
 	switch start := (<-me.methods).(type) {
-	case wire.ConnectionStart:
+	case ConnectionStart:
 		me.major = int(start.VersionMajor)
 		me.minor = int(start.VersionMinor)
 		me.properties = Table(start.ServerProperties)
 
-		me.c2s <- wire.MethodFrame{
+		me.c2s <- MethodFrame{
 			Channel: 0,
-			Method: wire.ConnectionStartOk{
+			Method: ConnectionStartOk{
 				Mechanism: "PLAIN",
 				Response:  fmt.Sprintf("\000%s\000%s", username, password),
 			},
@@ -156,29 +155,29 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 
 		switch tune := (<-me.methods).(type) {
 		// TODO SECURE HANDSHAKE
-		case wire.ConnectionTune:
+		case ConnectionTune:
 			me.maxChannels = int(tune.ChannelMax)
 			me.heartbeatInterval = int(tune.Heartbeat)
 			me.maxFrameSize = int(tune.FrameMax)
 
-			me.c2s <- wire.MethodFrame{
+			me.c2s <- MethodFrame{
 				Channel: 0,
-				Method: wire.ConnectionTuneOk{
+				Method: ConnectionTuneOk{
 					ChannelMax: 10,
-					FrameMax:   wire.FrameMinSize,
+					FrameMax:   FrameMinSize,
 					Heartbeat:  0,
 				},
 			}
 
-			me.c2s <- wire.MethodFrame{
+			me.c2s <- MethodFrame{
 				Channel: 0,
-				Method: wire.ConnectionOpen{
+				Method: ConnectionOpen{
 					VirtualHost: vhost,
 				},
 			}
 
 			switch (<-me.methods).(type) {
-			case wire.ConnectionOpenOk:
+			case ConnectionOpenOk:
 				return nil
 			}
 		}

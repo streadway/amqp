@@ -124,7 +124,7 @@ var (
 	/* Rebuild from the protocol/gen.go tool */
 
 	{{with .Root}}
-	package wire
+	package amqp
 
 	import (
 		//"fmt"

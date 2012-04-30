@@ -1,7 +1,7 @@
 /* GENERATED FILE - DO NOT EDIT */
 /* Rebuild from the protocol/gen.go tool */
 
-package wire
+package amqp
 
 import (
 	//"fmt"

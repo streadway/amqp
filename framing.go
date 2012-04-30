@@ -1,14 +1,10 @@
 package amqp
 
-import (
-	"amqp/wire"
-)
-
 // Struct that contains the method and any content if the method HasContent
 // intended to be used by higher level APIs like Client/Channel/Connection
 type Message struct {
-	Method     wire.Method
-	Properties wire.ContentProperties
+	Method     Method
+	Properties ContentProperties
 	Body       []byte
 }
 
@@ -21,27 +17,27 @@ type Framing struct {
 	sync  chan Message
 	async chan Message
 
-	out chan chan wire.Frame
+	out chan chan Frame
 
-	c2s chan wire.Frame
-	s2c chan wire.Frame
+	c2s chan Frame
+	s2c chan Frame
 
 	channel uint16
 	maxSize int
 
 	// State machine that manages frame order
-	recv func(*Framing, wire.Frame) error
+	recv func(*Framing, Frame) error
 
-	method *wire.MethodFrame
-	header *wire.HeaderFrame
+	method *MethodFrame
+	header *HeaderFrame
 	body   []byte
 }
 
-func newFraming(channel uint16, maxSize int, s2c, c2s chan wire.Frame) *Framing {
+func newFraming(channel uint16, maxSize int, s2c, c2s chan Frame) *Framing {
 	me := &Framing{
 		sync:    make(chan Message),
 		async:   make(chan Message),
-		out:     make(chan chan wire.Frame),
+		out:     make(chan chan Frame),
 		c2s:     c2s,
 		s2c:     s2c,
 		recv:    (*Framing).recvMethod,
@@ -61,10 +57,10 @@ func (me *Framing) loop() {
 			}
 		case f := <-me.s2c:
 			switch frame := f.(type) {
-			case wire.MethodFrame, wire.HeaderFrame, wire.BodyFrame:
+			case MethodFrame, HeaderFrame, BodyFrame:
 				// run the state machine
 				me.recv(me, frame)
-			case wire.HeartbeatFrame:
+			case HeartbeatFrame:
 				// meh drop for now
 			default:
 				// protocol error
@@ -75,24 +71,24 @@ func (me *Framing) loop() {
 }
 
 // Frames and sends a method that should not have a payload
-func (me *Framing) SendMethod(method wire.Method) {
+func (me *Framing) SendMethod(method Method) {
 	me.Send(Message{Method: method})
 }
 
 // Frames and sends a method that may or may not have payload
 func (me *Framing) Send(msg Message) {
-	set := make(chan wire.Frame)
+	set := make(chan Frame)
 	me.out <- set
 
-	set <- wire.MethodFrame{
+	set <- MethodFrame{
 		Channel: me.channel,
 		Method:  msg.Method,
 	}
 
 	if msg.Method.HasContent() {
-		set <- wire.HeaderFrame{
+		set <- HeaderFrame{
 			Channel: me.channel,
-			Header: wire.ContentHeader{
+			Header: ContentHeader{
 				Class:      msg.Method.Class(),
 				Size:       uint64(len(msg.Body)),
 				Properties: msg.Properties,
@@ -105,7 +101,7 @@ func (me *Framing) Send(msg Message) {
 				j = len(msg.Body)
 			}
 
-			set <- wire.BodyFrame{
+			set <- BodyFrame{
 				Channel: me.channel,
 				Payload: msg.Body[i:j],
 			}
@@ -119,7 +115,7 @@ func (me *Framing) Recv() Message {
 	return <-me.sync
 }
 
-func (me *Framing) transition(f func(*Framing, wire.Frame) error) error {
+func (me *Framing) transition(f func(*Framing, Frame) error) error {
 	me.recv = f
 	return nil
 }
@@ -127,9 +123,9 @@ func (me *Framing) transition(f func(*Framing, wire.Frame) error) error {
 // readMethod
 // hasContent
 
-func (me *Framing) recvMethod(f wire.Frame) error {
+func (me *Framing) recvMethod(f Frame) error {
 	switch frame := f.(type) {
-	case wire.MethodFrame:
+	case MethodFrame:
 		me.method = &frame
 
 		if frame.Method.HasContent() {
@@ -149,11 +145,11 @@ func (me *Framing) recvMethod(f wire.Frame) error {
 			return me.transition((*Framing).recvMethod)
 		}
 
-	case wire.HeaderFrame:
+	case HeaderFrame:
 		// drop
 		return me.transition((*Framing).recvMethod)
 
-	case wire.BodyFrame:
+	case BodyFrame:
 		// drop
 		return me.transition((*Framing).recvMethod)
 	}
@@ -161,18 +157,18 @@ func (me *Framing) recvMethod(f wire.Frame) error {
 	panic("unreachable")
 }
 
-func (me *Framing) recvHeader(f wire.Frame) error {
+func (me *Framing) recvHeader(f Frame) error {
 	switch frame := f.(type) {
-	case wire.MethodFrame:
+	case MethodFrame:
 		// interrupt content and handle method
 		return me.recvMethod(f)
 
-	case wire.HeaderFrame:
+	case HeaderFrame:
 		// start collecting
 		me.header = &frame
 		return me.transition((*Framing).recvContent)
 
-	case wire.BodyFrame:
+	case BodyFrame:
 		// drop and reset
 		return me.transition((*Framing).recvMethod)
 	}
@@ -182,17 +178,17 @@ func (me *Framing) recvHeader(f wire.Frame) error {
 
 // state after method + header and before the length
 // defined by the header has been reached
-func (me *Framing) recvContent(f wire.Frame) error {
+func (me *Framing) recvContent(f Frame) error {
 	switch frame := f.(type) {
-	case wire.MethodFrame:
+	case MethodFrame:
 		// interrupt content and handle method
 		return me.recvMethod(f)
 
-	case wire.HeaderFrame:
+	case HeaderFrame:
 		// drop and reset
 		return me.transition((*Framing).recvMethod)
 
-	case wire.BodyFrame:
+	case BodyFrame:
 		me.body = append(me.body, frame.Payload...)
 
 		if uint64(len(me.body)) >= me.header.Header.Size {

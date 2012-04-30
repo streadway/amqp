@@ -1,9 +1,5 @@
 package amqp
 
-import (
-	"amqp/wire"
-)
-
 // Contains a delivered message on a single channel as a result
 // from a Consume or Get.  The methods invokable on this struct
 // control the behavior of the channel
@@ -12,11 +8,11 @@ import (
 // channel, and the fields in Properties relate to the content itself.
 type Delivery struct {
 	channel     *Channel
-	method      *wire.BasicDeliver
+	method      *BasicDeliver
 	Exchange    string
 	RoutingKey  string
 	Redelivered bool
-	Properties  Properties
+	Properties  ContentProperties
 	Body        []byte
 }
 

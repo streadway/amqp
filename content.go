@@ -1,4 +1,4 @@
-package wire
+package amqp
 
 import (
 	"io"
@@ -28,9 +28,6 @@ type ContentProperties struct {
 	// Reserved1 shortstr     // was cluster-id - process for buffer consumption
 }
 
-// DeliveryMode enum - this isn't a well typed enum because the ContentProperties
-// struct is within the wire package so all fields are assume to have
-// encoders/decoders.  Promote a new enum type in the client usage instead.
 const (
 	TransientDelivery  uint8 = 1
 	PersistentDelivery uint8 = 2

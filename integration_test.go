@@ -69,9 +69,9 @@ func TestIntegrationPublishConsume(t *testing.T) {
 	if pub != nil && sub != nil {
 		sub.QueueDeclare(queue, false, true, false, nil)
 
-		pub.BasicPublish("", queue, false, false, []byte("1"), amqp.Properties{})
-		pub.BasicPublish("", queue, false, false, []byte("2"), amqp.Properties{})
-		pub.BasicPublish("", queue, false, false, []byte("3"), amqp.Properties{})
+		pub.BasicPublish("", queue, false, false, []byte("1"), amqp.ContentProperties{})
+		pub.BasicPublish("", queue, false, false, []byte("2"), amqp.ContentProperties{})
+		pub.BasicPublish("", queue, false, false, []byte("3"), amqp.ContentProperties{})
 
 		messages, _ := sub.BasicConsume(queue, "", false, false, false, nil)
 

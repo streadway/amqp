@@ -1,133 +1,132 @@
 package amqp
 
 import (
-	"amqp/wire"
 	"bytes"
 	"reflect"
 	"testing"
 )
 
-func newTestFraming() (*Framing, chan wire.Frame, chan wire.Frame) {
-	c2s := make(chan wire.Frame)
-	s2c := make(chan wire.Frame)
+func newTestFraming() (*Framing, chan Frame, chan Frame) {
+	c2s := make(chan Frame)
+	s2c := make(chan Frame)
 
 	return newFraming(1, 1024, s2c, c2s), s2c, c2s
 }
 
 func TestRecvMethod(t *testing.T) {
 	f, s2c, _ := newTestFraming()
-	frame := wire.MethodFrame{
+	frame := MethodFrame{
 		Channel: 1,
-		Method:  wire.ConnectionOpenOk{},
+		Method:  ConnectionOpenOk{},
 	}
 
 	go func() {
 		s2c <- frame
 	}()
 
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.ConnectionOpenOk{}})
+	assertEqualMessage(t, f.Recv(), Message{Method: ConnectionOpenOk{}})
 }
 
 func TestRecvMethodMethod(t *testing.T) {
 	f, s2c, _ := newTestFraming()
 
 	go func() {
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.ConnectionOpenOk{}}
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.ConnectionTuneOk{}}
+		s2c <- MethodFrame{Channel: 1, Method: ConnectionOpenOk{}}
+		s2c <- MethodFrame{Channel: 1, Method: ConnectionTuneOk{}}
 	}()
 
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.ConnectionOpenOk{}})
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.ConnectionTuneOk{}})
+	assertEqualMessage(t, f.Recv(), Message{Method: ConnectionOpenOk{}})
+	assertEqualMessage(t, f.Recv(), Message{Method: ConnectionTuneOk{}})
 }
 
 func TestRecvContentMethodContent(t *testing.T) {
 	f, s2c, _ := newTestFraming()
 
 	go func() {
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.ConnectionOpenOk{}}
+		s2c <- MethodFrame{Channel: 1, Method: ConnectionOpenOk{}}
 
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicDeliver{}}
-		s2c <- wire.HeaderFrame{Channel: 1, Header: wire.ContentHeader{Size: 4, Class: 60}}
-		s2c <- wire.BodyFrame{Channel: 1, Payload: []byte("oh")}
-		s2c <- wire.BodyFrame{Channel: 1, Payload: []byte("ai")}
+		s2c <- MethodFrame{Channel: 1, Method: BasicDeliver{}}
+		s2c <- HeaderFrame{Channel: 1, Header: ContentHeader{Size: 4, Class: 60}}
+		s2c <- BodyFrame{Channel: 1, Payload: []byte("oh")}
+		s2c <- BodyFrame{Channel: 1, Payload: []byte("ai")}
 
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.ConnectionTuneOk{}}
+		s2c <- MethodFrame{Channel: 1, Method: ConnectionTuneOk{}}
 
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicDeliver{}}
-		s2c <- wire.HeaderFrame{Channel: 1, Header: wire.ContentHeader{Size: 3, Class: 60}}
-		s2c <- wire.BodyFrame{Channel: 1, Payload: []byte("lol")}
+		s2c <- MethodFrame{Channel: 1, Method: BasicDeliver{}}
+		s2c <- HeaderFrame{Channel: 1, Header: ContentHeader{Size: 3, Class: 60}}
+		s2c <- BodyFrame{Channel: 1, Payload: []byte("lol")}
 	}()
 
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.ConnectionOpenOk{}})
-	assertEqualMessage(t, <-f.async, Message{Method: wire.BasicDeliver{}, Body: []byte("ohai")})
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.ConnectionTuneOk{}})
-	assertEqualMessage(t, <-f.async, Message{Method: wire.BasicDeliver{}, Body: []byte("lol")})
+	assertEqualMessage(t, f.Recv(), Message{Method: ConnectionOpenOk{}})
+	assertEqualMessage(t, <-f.async, Message{Method: BasicDeliver{}, Body: []byte("ohai")})
+	assertEqualMessage(t, f.Recv(), Message{Method: ConnectionTuneOk{}})
+	assertEqualMessage(t, <-f.async, Message{Method: BasicDeliver{}, Body: []byte("lol")})
 }
 
 func TestRecvContent(t *testing.T) {
 	f, s2c, _ := newTestFraming()
 
 	go func() {
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicDeliver{}}
-		s2c <- wire.HeaderFrame{Channel: 1, Header: wire.ContentHeader{Size: 4}}
-		s2c <- wire.BodyFrame{Channel: 1, Payload: []byte("ohai")}
+		s2c <- MethodFrame{Channel: 1, Method: BasicDeliver{}}
+		s2c <- HeaderFrame{Channel: 1, Header: ContentHeader{Size: 4}}
+		s2c <- BodyFrame{Channel: 1, Payload: []byte("ohai")}
 	}()
 
-	assertEqualMessage(t, <-f.async, Message{Method: wire.BasicDeliver{}, Body: []byte("ohai")})
+	assertEqualMessage(t, <-f.async, Message{Method: BasicDeliver{}, Body: []byte("ohai")})
 }
 
 func TestRecvInterruptedContent(t *testing.T) {
 	f, s2c, _ := newTestFraming()
 
 	go func() {
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicDeliver{}}
-		s2c <- wire.HeaderFrame{Channel: 1, Header: wire.ContentHeader{Size: 4}}
-		s2c <- wire.BodyFrame{Channel: 1, Payload: []byte("oh")}
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicCancelOk{}}
-		s2c <- wire.BodyFrame{Channel: 1, Payload: []byte("ai")}
+		s2c <- MethodFrame{Channel: 1, Method: BasicDeliver{}}
+		s2c <- HeaderFrame{Channel: 1, Header: ContentHeader{Size: 4}}
+		s2c <- BodyFrame{Channel: 1, Payload: []byte("oh")}
+		s2c <- MethodFrame{Channel: 1, Method: BasicCancelOk{}}
+		s2c <- BodyFrame{Channel: 1, Payload: []byte("ai")}
 	}()
 
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.BasicCancelOk{}})
+	assertEqualMessage(t, f.Recv(), Message{Method: BasicCancelOk{}})
 }
 
 func TestRecvMethodContentMethod(t *testing.T) {
 	f, s2c, _ := newTestFraming()
 
 	go func() {
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicDeliver{}}
-		s2c <- wire.HeaderFrame{Channel: 1, Header: wire.ContentHeader{Size: 4}}
-		s2c <- wire.BodyFrame{Channel: 1, Payload: []byte("ohai")}
-		s2c <- wire.MethodFrame{Channel: 1, Method: wire.BasicCancelOk{}}
+		s2c <- MethodFrame{Channel: 1, Method: BasicDeliver{}}
+		s2c <- HeaderFrame{Channel: 1, Header: ContentHeader{Size: 4}}
+		s2c <- BodyFrame{Channel: 1, Payload: []byte("ohai")}
+		s2c <- MethodFrame{Channel: 1, Method: BasicCancelOk{}}
 	}()
 
-	assertEqualMessage(t, <-f.async, Message{Method: wire.BasicDeliver{}, Body: []byte("ohai")})
-	assertEqualMessage(t, f.Recv(), Message{Method: wire.BasicCancelOk{}})
+	assertEqualMessage(t, <-f.async, Message{Method: BasicDeliver{}, Body: []byte("ohai")})
+	assertEqualMessage(t, f.Recv(), Message{Method: BasicCancelOk{}})
 }
 
 func TestSendMethod(t *testing.T) {
 	f, _, c2s := newTestFraming()
 
 	go func() {
-		f.Send(Message{Method: wire.BasicCancel{}})
-		f.Send(Message{Method: wire.BasicConsume{}})
+		f.Send(Message{Method: BasicCancel{}})
+		f.Send(Message{Method: BasicConsume{}})
 	}()
 
-	assertEqualFrame(t, <-c2s, wire.MethodFrame{Channel: 1, Method: wire.BasicCancel{}})
-	assertEqualFrame(t, <-c2s, wire.MethodFrame{Channel: 1, Method: wire.BasicConsume{}})
+	assertEqualFrame(t, <-c2s, MethodFrame{Channel: 1, Method: BasicCancel{}})
+	assertEqualFrame(t, <-c2s, MethodFrame{Channel: 1, Method: BasicConsume{}})
 }
 
 func TestSendMethodThenContent(t *testing.T) {
 	f, _, c2s := newTestFraming()
 
 	go func() {
-		f.Send(Message{Method: wire.BasicConsumeOk{}})
-		f.Send(Message{Method: wire.BasicPublish{}, Body: []byte("ohai")})
+		f.Send(Message{Method: BasicConsumeOk{}})
+		f.Send(Message{Method: BasicPublish{}, Body: []byte("ohai")})
 	}()
 
-	assertEqualFrame(t, <-c2s, wire.MethodFrame{Channel: 1, Method: wire.BasicConsumeOk{}})
-	assertEqualFrame(t, <-c2s, wire.MethodFrame{Channel: 1, Method: wire.BasicPublish{}})
-	assertEqualFrame(t, <-c2s, wire.HeaderFrame{Channel: 1, Header: wire.ContentHeader{Size: 4, Class: 60}})
-	assertEqualFrame(t, <-c2s, wire.BodyFrame{Channel: 1, Payload: []byte("ohai")})
+	assertEqualFrame(t, <-c2s, MethodFrame{Channel: 1, Method: BasicConsumeOk{}})
+	assertEqualFrame(t, <-c2s, MethodFrame{Channel: 1, Method: BasicPublish{}})
+	assertEqualFrame(t, <-c2s, HeaderFrame{Channel: 1, Header: ContentHeader{Size: 4, Class: 60}})
+	assertEqualFrame(t, <-c2s, BodyFrame{Channel: 1, Payload: []byte("ohai")})
 }
 
 func assertEqualMessage(t *testing.T, received Message, expected Message) {
@@ -144,7 +143,7 @@ func assertEqualMessage(t *testing.T, received Message, expected Message) {
 	}
 }
 
-func assertEqualFrame(t *testing.T, received wire.Frame, expected wire.Frame) {
+func assertEqualFrame(t *testing.T, received Frame, expected Frame) {
 	if !reflect.DeepEqual(received, expected) {
 		t.Errorf("different frame method expected: %v received: %v", received, expected)
 	}

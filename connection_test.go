@@ -2,7 +2,6 @@ package amqp_test
 
 import (
 	"amqp"
-	"amqp/wire"
 	"bytes"
 	"testing"
 )
@@ -11,7 +10,7 @@ func TestNewClientHandshake(t *testing.T) {
 	server, client := interPipes(t)
 
 	go func() {
-		var f wire.Frame
+		var f amqp.Frame
 		var err error
 		var ok bool
 
@@ -21,11 +20,11 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("bad protocol handshake", handshake)
 		}
 
-		r := wire.NewFrameReader(server)
+		r := amqp.NewFrameReader(server)
 
-		wire.MethodFrame{
+		amqp.MethodFrame{
 			Channel: 0,
-			Method: wire.ConnectionStart{
+			Method: amqp.ConnectionStart{
 				VersionMajor: 0,
 				VersionMinor: 9,
 				Mechanisms:   "PLAIN",
@@ -37,13 +36,13 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("bad read", err)
 		}
 
-		if _, ok = f.(wire.MethodFrame).Method.(wire.ConnectionStartOk); !ok {
+		if _, ok = f.(amqp.MethodFrame).Method.(amqp.ConnectionStartOk); !ok {
 			t.Fatal("expected ConnectionStartOk")
 		}
 
-		wire.MethodFrame{
+		amqp.MethodFrame{
 			Channel: 0,
-			Method: wire.ConnectionTune{
+			Method: amqp.ConnectionTune{
 				ChannelMax: 11,
 				FrameMax:   20000,
 				Heartbeat:  10,
@@ -54,7 +53,7 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("bad read", err)
 		}
 
-		if _, ok = f.(wire.MethodFrame).Method.(wire.ConnectionTuneOk); !ok {
+		if _, ok = f.(amqp.MethodFrame).Method.(amqp.ConnectionTuneOk); !ok {
 			t.Fatal("expected ConnectionTuneOk")
 		}
 
@@ -62,20 +61,20 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("bad read", err)
 		}
 
-		if _, ok = f.(wire.MethodFrame).Method.(wire.ConnectionOpen); !ok {
+		if _, ok = f.(amqp.MethodFrame).Method.(amqp.ConnectionOpen); !ok {
 			t.Fatal("expected ConnectionOpen")
 		}
 
-		wire.MethodFrame{
+		amqp.MethodFrame{
 			Channel: 0,
-			Method:  wire.ConnectionOpenOk{},
+			Method:  amqp.ConnectionOpenOk{},
 		}.WriteTo(server)
 
 		if f, err = r.NextFrame(); err != nil {
 			t.Fatal("bad read", err)
 		}
 
-		if _, ok = f.(wire.MethodFrame).Method.(wire.ChannelOpen); !ok {
+		if _, ok = f.(amqp.MethodFrame).Method.(amqp.ChannelOpen); !ok {
 			t.Fatal("expected ChannelOpen")
 		}
 
@@ -83,9 +82,9 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("expected ChannelOpen on channel 1")
 		}
 
-		wire.MethodFrame{
+		amqp.MethodFrame{
 			Channel: 1,
-			Method:  wire.ChannelOpenOk{},
+			Method:  amqp.ChannelOpenOk{},
 		}.WriteTo(server)
 
 		server.Close()

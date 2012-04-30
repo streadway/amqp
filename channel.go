@@ -1,7 +1,6 @@
 package amqp
 
 import (
-	"amqp/wire"
 	"fmt"
 	"sync"
 )
@@ -49,7 +48,7 @@ func (me *Channel) handleAsync() {
 			return
 		}
 		switch method := msg.Method.(type) {
-		case wire.BasicDeliver:
+		case BasicDeliver:
 			consumer, ok := me.consumers[method.ConsumerTag]
 			if !ok {
 				// TODO handle missing consumer
@@ -60,7 +59,7 @@ func (me *Channel) handleAsync() {
 					Exchange:    method.Exchange,
 					Redelivered: method.Redelivered,
 					RoutingKey:  method.RoutingKey,
-					Properties:  Properties(msg.Properties),
+					Properties:  msg.Properties,
 					Body:        msg.Body,
 				}
 			}
@@ -78,10 +77,10 @@ func (me *Channel) handleAsync() {
 //    close-channel       = C:CLOSE S:CLOSE-OK
 //                        / S:CLOSE C:CLOSE-OK
 func (me *Channel) open() error {
-	me.framing.SendMethod(wire.ChannelOpen{})
+	me.framing.SendMethod(ChannelOpen{})
 
 	switch me.framing.Recv().Method.(type) {
-	case wire.ChannelOpenOk:
+	case ChannelOpenOk:
 		return nil
 	}
 
@@ -89,7 +88,7 @@ func (me *Channel) open() error {
 	return ErrBadProtocol
 }
 
-func newQueueState(msg *wire.QueueDeclareOk) *QueueState {
+func newQueueState(msg *QueueDeclareOk) *QueueState {
 	return &QueueState{
 		Name:      msg.Queue,
 		Consumers: int(msg.ConsumerCount),
@@ -97,7 +96,7 @@ func newQueueState(msg *wire.QueueDeclareOk) *QueueState {
 	}
 }
 
-func (me *Channel) unhandled(msg wire.Method) error {
+func (me *Channel) unhandled(msg Method) error {
 	// TODO CLOSE/CLOSE-OK/ERROR
 	fmt.Println("UNHANDLED", msg)
 	panic("UNHANDLED")
@@ -105,7 +104,7 @@ func (me *Channel) unhandled(msg wire.Method) error {
 }
 
 func (me *Channel) ExchangeDeclare(typ string, name string, durable bool, autoDelete bool, internal bool, args Table) error {
-	msg := wire.ExchangeDeclare{
+	msg := ExchangeDeclare{
 		Exchange:   name,
 		Type:       typ,
 		Passive:    false,
@@ -113,14 +112,14 @@ func (me *Channel) ExchangeDeclare(typ string, name string, durable bool, autoDe
 		AutoDelete: autoDelete,
 		Internal:   internal,
 		NoWait:     me.noWait,
-		Arguments:  wire.Table(args),
+		Arguments:  Table(args),
 	}
 
 	me.framing.SendMethod(msg)
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case wire.ExchangeDeclareOk:
+		case ExchangeDeclareOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -132,7 +131,7 @@ func (me *Channel) ExchangeDeclare(typ string, name string, durable bool, autoDe
 }
 
 func (me *Channel) ExchangeDelete(name string, ifUnused bool) error {
-	msg := wire.ExchangeDelete{
+	msg := ExchangeDelete{
 		Exchange: name,
 		IfUnused: ifUnused,
 		NoWait:   me.noWait,
@@ -142,7 +141,7 @@ func (me *Channel) ExchangeDelete(name string, ifUnused bool) error {
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case wire.ExchangeDeleteOk:
+		case ExchangeDeleteOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -153,19 +152,19 @@ func (me *Channel) ExchangeDelete(name string, ifUnused bool) error {
 }
 
 func (me *Channel) ExchangeBind(destination string, source string, routingKey string, arguments Table) error {
-	msg := wire.ExchangeBind{
+	msg := ExchangeBind{
 		Destination: destination,
 		Source:      source,
 		RoutingKey:  routingKey,
 		NoWait:      me.noWait,
-		Arguments:   wire.Table(arguments),
+		Arguments:   Table(arguments),
 	}
 
 	me.framing.SendMethod(msg)
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case wire.ExchangeBindOk:
+		case ExchangeBindOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -176,19 +175,19 @@ func (me *Channel) ExchangeBind(destination string, source string, routingKey st
 }
 
 func (me *Channel) ExchangeUnbind(destination string, source string, routingKey string, arguments Table) error {
-	msg := wire.ExchangeUnbind{
+	msg := ExchangeUnbind{
 		Destination: destination,
 		Source:      source,
 		RoutingKey:  routingKey,
 		NoWait:      me.noWait,
-		Arguments:   wire.Table(arguments),
+		Arguments:   Table(arguments),
 	}
 
 	me.framing.SendMethod(msg)
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case wire.ExchangeUnbindOk:
+		case ExchangeUnbindOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -199,21 +198,21 @@ func (me *Channel) ExchangeUnbind(destination string, source string, routingKey 
 }
 
 func (me *Channel) QueueDeclare(name string, durable bool, autoDelete bool, exclusive bool, arguments Table) (*QueueState, error) {
-	msg := wire.QueueDeclare{
+	msg := QueueDeclare{
 		Queue:      name,
 		Passive:    false,
 		Durable:    durable,
 		Exclusive:  exclusive,
 		AutoDelete: autoDelete,
 		NoWait:     me.noWait,
-		Arguments:  wire.Table(arguments),
+		Arguments:  Table(arguments),
 	}
 
 	me.framing.SendMethod(msg)
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case wire.QueueDeclareOk:
+		case QueueDeclareOk:
 			return newQueueState(&res), nil
 		default:
 			return nil, me.unhandled(res)
@@ -224,19 +223,19 @@ func (me *Channel) QueueDeclare(name string, durable bool, autoDelete bool, excl
 }
 
 func (me *Channel) QueueBind(exchange string, queue string, routingKey string, arguments Table) error {
-	msg := wire.QueueBind{
+	msg := QueueBind{
 		Queue:      queue,
 		Exchange:   exchange,
 		RoutingKey: routingKey,
 		NoWait:     me.noWait,
-		Arguments:  wire.Table(arguments),
+		Arguments:  Table(arguments),
 	}
 
 	me.framing.SendMethod(msg)
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case wire.QueueBindOk:
+		case QueueBindOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -247,17 +246,17 @@ func (me *Channel) QueueBind(exchange string, queue string, routingKey string, a
 }
 
 func (me *Channel) QueueUnbind(exchange string, queue string, routingKey string, arguments Table) error {
-	msg := wire.QueueUnbind{
+	msg := QueueUnbind{
 		Queue:      queue,
 		Exchange:   exchange,
 		RoutingKey: routingKey,
-		Arguments:  wire.Table(arguments),
+		Arguments:  Table(arguments),
 	}
 
 	me.framing.SendMethod(msg)
 
 	switch res := me.framing.Recv().Method.(type) {
-	case wire.QueueUnbindOk:
+	case QueueUnbindOk:
 		return nil
 	default:
 		return me.unhandled(res)
@@ -267,7 +266,7 @@ func (me *Channel) QueueUnbind(exchange string, queue string, routingKey string,
 }
 
 func (me *Channel) QueuePurge(name string) error {
-	msg := wire.QueuePurge{
+	msg := QueuePurge{
 		Queue:  name,
 		NoWait: me.noWait,
 	}
@@ -276,7 +275,7 @@ func (me *Channel) QueuePurge(name string) error {
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case wire.QueuePurgeOk:
+		case QueuePurgeOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -287,7 +286,7 @@ func (me *Channel) QueuePurge(name string) error {
 }
 
 func (me *Channel) QueueDelete(name string, ifUnused bool, ifEmpty bool) error {
-	msg := wire.QueueDelete{
+	msg := QueueDelete{
 		Queue:    name,
 		IfUnused: ifUnused,
 		IfEmpty:  ifEmpty,
@@ -298,7 +297,7 @@ func (me *Channel) QueueDelete(name string, ifUnused bool, ifEmpty bool) error {
 
 	if !msg.NoWait {
 		switch res := me.framing.Recv().Method.(type) {
-		case wire.QueueDeleteOk:
+		case QueueDeleteOk:
 			return nil
 		default:
 			return me.unhandled(res)
@@ -310,7 +309,7 @@ func (me *Channel) QueueDelete(name string, ifUnused bool, ifEmpty bool) error {
 
 // Only applies to this Channel
 func (me *Channel) BasicQos(prefetchMessageCount int, prefetchWindowByteSize int) error {
-	msg := wire.BasicQos{
+	msg := BasicQos{
 		PrefetchCount: uint16(prefetchMessageCount),
 		PrefetchSize:  uint32(prefetchWindowByteSize),
 		Global:        false, // connection global change from a channel message, durr...
@@ -319,7 +318,7 @@ func (me *Channel) BasicQos(prefetchMessageCount int, prefetchWindowByteSize int
 	me.framing.SendMethod(msg)
 
 	switch res := me.framing.Recv().Method.(type) {
-	case wire.BasicQosOk:
+	case BasicQosOk:
 		return nil
 	default:
 		return me.unhandled(res)
@@ -328,15 +327,15 @@ func (me *Channel) BasicQos(prefetchMessageCount int, prefetchWindowByteSize int
 	panic("unreachable")
 }
 
-func (me *Channel) BasicPublish(exchange string, routingKey string, mandatory bool, immediate bool, body []byte, properties Properties) {
+func (me *Channel) BasicPublish(exchange string, routingKey string, mandatory bool, immediate bool, body []byte, properties ContentProperties) {
 	me.framing.Send(Message{
-		Method: wire.BasicPublish{
+		Method: BasicPublish{
 			Exchange:   exchange,
 			RoutingKey: routingKey,
 			Mandatory:  mandatory,
 			Immediate:  immediate,
 		},
-		Properties: wire.ContentProperties(properties),
+		Properties: ContentProperties(properties),
 		Body:       body,
 	})
 }
@@ -369,20 +368,20 @@ func (me *Channel) BasicConsume(queue string, consumerTag string, noLocal bool, 
 	me.consumersMutex.Lock()
 	defer me.consumersMutex.Unlock()
 
-	msg := wire.BasicConsume{
+	msg := BasicConsume{
 		Queue:       queue,
 		ConsumerTag: consumerTag,
 		NoLocal:     false,
 		NoAck:       false,
 		Exclusive:   false,
 		NoWait:      me.noWait,
-		Arguments:   wire.Table(arguments),
+		Arguments:   Table(arguments),
 	}
 
 	me.framing.SendMethod(msg)
 
 	switch res := me.framing.Recv().Method.(type) {
-	case wire.BasicConsumeOk:
+	case BasicConsumeOk:
 		consumer := make(chan *Delivery)
 		me.consumers[res.ConsumerTag] = consumer
 		return consumer, nil
@@ -401,7 +400,7 @@ func (me *Channel) BasicCancel(consumerTag string) error {
 
 	consumer, ok := me.consumers[consumerTag]
 	if ok {
-		msg := wire.BasicCancel{
+		msg := BasicCancel{
 			ConsumerTag: consumerTag,
 			NoWait:      me.noWait,
 		}
@@ -413,7 +412,7 @@ func (me *Channel) BasicCancel(consumerTag string) error {
 			close(consumer)
 		} else {
 			switch res := me.framing.Recv().Method.(type) {
-			case wire.BasicCancelOk:
+			case BasicCancelOk:
 				if res.ConsumerTag == consumerTag {
 					delete(me.consumers, consumerTag)
 					close(consumer)
@@ -431,7 +430,7 @@ func (me *Channel) BasicCancel(consumerTag string) error {
 }
 
 func (me *Channel) BasicAck(deliveryTag uint64, multiple bool) {
-	me.framing.SendMethod(wire.BasicAck{
+	me.framing.SendMethod(BasicAck{
 		DeliveryTag: deliveryTag,
 		Multiple:    multiple,
 	})
