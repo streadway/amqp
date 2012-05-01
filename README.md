@@ -26,6 +26,7 @@ exposing methods specific to the 0.9.1 specification.
 # Non-goals
 
   * Reconnect and re-establishment of state
+	* Multiple consumers on a single channel
 
 # Low level
 

@@ -4,7 +4,8 @@
 package amqp
 
 import (
-	//"fmt"
+	"encoding/binary"
+	"fmt"
 	"io"
 )
 
@@ -135,82 +136,105 @@ const (
    which the client can use for authentication.
 */
 type ConnectionStart struct {
-	VersionMajor     byte   // protocol major version 
-	VersionMinor     byte   // protocol minor version 
-	ServerProperties Table  // server properties 
-	Mechanisms       string // available security mechanisms 
+	VersionMajor     byte   // protocol major version
+	VersionMinor     byte   // protocol minor version
+	ServerProperties Table  // server properties
+	Mechanisms       string // available security mechanisms
 	Locales          string // available message locales
+
 }
 
-func (me ConnectionStart) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(10)
-	buf.PutOctet(me.VersionMajor)
-	buf.PutOctet(me.VersionMinor)
-	buf.PutTable(me.ServerProperties)
-	buf.PutLongstr(me.Mechanisms)
-	buf.PutLongstr(me.Locales)
-
-	//fmt.Println("encode: connection.start 10 10", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionStart) id() (uint16, uint16) {
+	return 10, 10
 }
 
-func (me ConnectionStart) HasContent() bool {
-	return false
-}
-
-func (me ConnectionStart) IsSynchronous() bool {
+func (me *ConnectionStart) wait() bool {
 	return true
 }
 
-func (me ConnectionStart) Method() uint16 {
-	return 10
+func (me *ConnectionStart) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.VersionMajor); err != nil {
+		return
+	}
+	if err = binary.Write(w, binary.BigEndian, me.VersionMinor); err != nil {
+		return
+	}
+
+	if err = writeTable(w, me.ServerProperties); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ConnectionStart) Class() uint16 {
-	return 10
+func (me *ConnectionStart) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.VersionMajor); err != nil {
+		return
+	}
+	if err = binary.Read(r, binary.BigEndian, &me.VersionMinor); err != nil {
+		return
+	}
+
+	if me.ServerProperties, err = readTable(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
    This method selects a SASL security mechanism.
 */
 type ConnectionStartOk struct {
-	ClientProperties Table  // client properties 
-	Mechanism        string // selected security mechanism 
-	Response         string // security response data 
+	ClientProperties Table  // client properties
+	Mechanism        string // selected security mechanism
+	Response         string // security response data
 	Locale           string // selected message locale
+
 }
 
-func (me ConnectionStartOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(11)
-	buf.PutTable(me.ClientProperties)
-	buf.PutShortstr(me.Mechanism)
-	buf.PutLongstr(me.Response)
-	buf.PutShortstr(me.Locale)
-
-	//fmt.Println("encode: connection.start-ok 10 11", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionStartOk) id() (uint16, uint16) {
+	return 10, 11
 }
 
-func (me ConnectionStartOk) HasContent() bool {
-	return false
-}
-
-func (me ConnectionStartOk) IsSynchronous() bool {
+func (me *ConnectionStartOk) wait() bool {
 	return true
 }
 
-func (me ConnectionStartOk) Method() uint16 {
-	return 11
+func (me *ConnectionStartOk) write(w io.Writer) (err error) {
+
+	if err = writeTable(w, me.ClientProperties); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Mechanism); err != nil {
+		return
+	}
+
+	if err = writeLongstr(w, me.Response); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ConnectionStartOk) Class() uint16 {
-	return 10
+func (me *ConnectionStartOk) read(r io.Reader) (err error) {
+
+	if me.ClientProperties, err = readTable(r); err != nil {
+		return
+	}
+
+	if me.Mechanism, err = readShortstr(r); err != nil {
+		return
+	}
+
+	if me.Response, err = readLongstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -220,33 +244,25 @@ func (me ConnectionStartOk) Class() uint16 {
 */
 type ConnectionSecure struct {
 	Challenge string // security challenge data
+
 }
 
-func (me ConnectionSecure) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(20)
-	buf.PutLongstr(me.Challenge)
-
-	//fmt.Println("encode: connection.secure 10 20", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionSecure) id() (uint16, uint16) {
+	return 10, 20
 }
 
-func (me ConnectionSecure) HasContent() bool {
-	return false
-}
-
-func (me ConnectionSecure) IsSynchronous() bool {
+func (me *ConnectionSecure) wait() bool {
 	return true
 }
 
-func (me ConnectionSecure) Method() uint16 {
-	return 20
+func (me *ConnectionSecure) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ConnectionSecure) Class() uint16 {
-	return 10
+func (me *ConnectionSecure) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -255,33 +271,25 @@ func (me ConnectionSecure) Class() uint16 {
 */
 type ConnectionSecureOk struct {
 	Response string // security response data
+
 }
 
-func (me ConnectionSecureOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(21)
-	buf.PutLongstr(me.Response)
-
-	//fmt.Println("encode: connection.secure-ok 10 21", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionSecureOk) id() (uint16, uint16) {
+	return 10, 21
 }
 
-func (me ConnectionSecureOk) HasContent() bool {
-	return false
-}
-
-func (me ConnectionSecureOk) IsSynchronous() bool {
+func (me *ConnectionSecureOk) wait() bool {
 	return true
 }
 
-func (me ConnectionSecureOk) Method() uint16 {
-	return 21
+func (me *ConnectionSecureOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ConnectionSecureOk) Class() uint16 {
-	return 10
+func (me *ConnectionSecureOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -289,38 +297,44 @@ func (me ConnectionSecureOk) Class() uint16 {
    client can accept and/or adjust these.
 */
 type ConnectionTune struct {
-	ChannelMax uint16 // proposed maximum channels 
-	FrameMax   uint32 // proposed maximum frame size 
+	ChannelMax uint16 // proposed maximum channels
+	FrameMax   uint32 // proposed maximum frame size
 	Heartbeat  uint16 // desired heartbeat delay
+
 }
 
-func (me ConnectionTune) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(30)
-	buf.PutShort(me.ChannelMax)
-	buf.PutLong(me.FrameMax)
-	buf.PutShort(me.Heartbeat)
-
-	//fmt.Println("encode: connection.tune 10 30", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionTune) id() (uint16, uint16) {
+	return 10, 30
 }
 
-func (me ConnectionTune) HasContent() bool {
-	return false
-}
-
-func (me ConnectionTune) IsSynchronous() bool {
+func (me *ConnectionTune) wait() bool {
 	return true
 }
 
-func (me ConnectionTune) Method() uint16 {
-	return 30
+func (me *ConnectionTune) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.ChannelMax); err != nil {
+		return
+	}
+
+	if err = binary.Write(w, binary.BigEndian, me.FrameMax); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ConnectionTune) Class() uint16 {
-	return 10
+func (me *ConnectionTune) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.ChannelMax); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.FrameMax); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -328,38 +342,44 @@ func (me ConnectionTune) Class() uint16 {
    Certain fields are negotiated, others provide capability information.
 */
 type ConnectionTuneOk struct {
-	ChannelMax uint16 // negotiated maximum channels 
-	FrameMax   uint32 // negotiated maximum frame size 
+	ChannelMax uint16 // negotiated maximum channels
+	FrameMax   uint32 // negotiated maximum frame size
 	Heartbeat  uint16 // desired heartbeat delay
+
 }
 
-func (me ConnectionTuneOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(31)
-	buf.PutShort(me.ChannelMax)
-	buf.PutLong(me.FrameMax)
-	buf.PutShort(me.Heartbeat)
-
-	//fmt.Println("encode: connection.tune-ok 10 31", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionTuneOk) id() (uint16, uint16) {
+	return 10, 31
 }
 
-func (me ConnectionTuneOk) HasContent() bool {
-	return false
-}
-
-func (me ConnectionTuneOk) IsSynchronous() bool {
+func (me *ConnectionTuneOk) wait() bool {
 	return true
 }
 
-func (me ConnectionTuneOk) Method() uint16 {
-	return 31
+func (me *ConnectionTuneOk) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.ChannelMax); err != nil {
+		return
+	}
+
+	if err = binary.Write(w, binary.BigEndian, me.FrameMax); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ConnectionTuneOk) Class() uint16 {
-	return 10
+func (me *ConnectionTuneOk) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.ChannelMax); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.FrameMax); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -369,73 +389,66 @@ func (me ConnectionTuneOk) Class() uint16 {
    of each type of entity that may be used, per connection and/or in total.
 */
 type ConnectionOpen struct {
-	VirtualHost string // virtual host name    
+	VirtualHost string // virtual host name
+	reserved1   string
+	reserved2   bool
 }
 
-func (me ConnectionOpen) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(40)
-	buf.PutShortstr(me.VirtualHost)
-	var Reserved1 string
-	buf.PutShortstr(Reserved1)
-	var Reserved2 bool
-	buf.PutOctet(0)
-	buf.PutBit(Reserved2, 0)
-
-	//fmt.Println("encode: connection.open 10 40", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionOpen) id() (uint16, uint16) {
+	return 10, 40
 }
 
-func (me ConnectionOpen) HasContent() bool {
-	return false
-}
-
-func (me ConnectionOpen) IsSynchronous() bool {
+func (me *ConnectionOpen) wait() bool {
 	return true
 }
 
-func (me ConnectionOpen) Method() uint16 {
-	return 40
+func (me *ConnectionOpen) write(w io.Writer) (err error) {
+
+	if err = writeShortstr(w, me.VirtualHost); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.reserved1); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ConnectionOpen) Class() uint16 {
-	return 10
+func (me *ConnectionOpen) read(r io.Reader) (err error) {
+
+	if me.VirtualHost, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.reserved1, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
    This method signals to the client that the connection is ready for use.
 */
 type ConnectionOpenOk struct {
+	reserved1 string
 }
 
-func (me ConnectionOpenOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(41)
-	var Reserved1 string
-	buf.PutShortstr(Reserved1)
-
-	//fmt.Println("encode: connection.open-ok 10 41", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionOpenOk) id() (uint16, uint16) {
+	return 10, 41
 }
 
-func (me ConnectionOpenOk) HasContent() bool {
-	return false
-}
-
-func (me ConnectionOpenOk) IsSynchronous() bool {
+func (me *ConnectionOpenOk) wait() bool {
 	return true
 }
 
-func (me ConnectionOpenOk) Method() uint16 {
-	return 41
+func (me *ConnectionOpenOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ConnectionOpenOk) Class() uint16 {
-	return 10
+func (me *ConnectionOpenOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -447,38 +460,43 @@ func (me ConnectionOpenOk) Class() uint16 {
 type ConnectionClose struct {
 	ReplyCode uint16
 	ReplyText string
-	ClassId   uint16 // failing method class 
+	ClassId   uint16 // failing method class
 	MethodId  uint16 // failing method ID
+
 }
 
-func (me ConnectionClose) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(50)
-	buf.PutShort(me.ReplyCode)
-	buf.PutShortstr(me.ReplyText)
-	buf.PutShort(me.ClassId)
-	buf.PutShort(me.MethodId)
-
-	//fmt.Println("encode: connection.close 10 50", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionClose) id() (uint16, uint16) {
+	return 10, 50
 }
 
-func (me ConnectionClose) HasContent() bool {
-	return false
-}
-
-func (me ConnectionClose) IsSynchronous() bool {
+func (me *ConnectionClose) wait() bool {
 	return true
 }
 
-func (me ConnectionClose) Method() uint16 {
-	return 50
+func (me *ConnectionClose) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.ReplyCode); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.ReplyText); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ConnectionClose) Class() uint16 {
-	return 10
+func (me *ConnectionClose) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.ReplyCode); err != nil {
+		return
+	}
+
+	if me.ReplyText, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -488,98 +506,72 @@ func (me ConnectionClose) Class() uint16 {
 type ConnectionCloseOk struct {
 }
 
-func (me ConnectionCloseOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(10)
-	buf.PutShort(51)
-
-	//fmt.Println("encode: connection.close-ok 10 51", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConnectionCloseOk) id() (uint16, uint16) {
+	return 10, 51
 }
 
-func (me ConnectionCloseOk) HasContent() bool {
-	return false
-}
-
-func (me ConnectionCloseOk) IsSynchronous() bool {
+func (me *ConnectionCloseOk) wait() bool {
 	return true
 }
 
-func (me ConnectionCloseOk) Method() uint16 {
-	return 51
+func (me *ConnectionCloseOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ConnectionCloseOk) Class() uint16 {
-	return 10
+func (me *ConnectionCloseOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
    This method opens a channel to the server.
 */
 type ChannelOpen struct {
+	reserved1 string
 }
 
-func (me ChannelOpen) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(20)
-	buf.PutShort(10)
-	var Reserved1 string
-	buf.PutShortstr(Reserved1)
-
-	//fmt.Println("encode: channel.open 20 10", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ChannelOpen) id() (uint16, uint16) {
+	return 20, 10
 }
 
-func (me ChannelOpen) HasContent() bool {
-	return false
-}
-
-func (me ChannelOpen) IsSynchronous() bool {
+func (me *ChannelOpen) wait() bool {
 	return true
 }
 
-func (me ChannelOpen) Method() uint16 {
-	return 10
+func (me *ChannelOpen) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ChannelOpen) Class() uint16 {
-	return 20
+func (me *ChannelOpen) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
    This method signals to the client that the channel is ready for use.
 */
 type ChannelOpenOk struct {
+	reserved1 string
 }
 
-func (me ChannelOpenOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(20)
-	buf.PutShort(11)
-	var Reserved1 string
-	buf.PutLongstr(Reserved1)
-
-	//fmt.Println("encode: channel.open-ok 20 11", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ChannelOpenOk) id() (uint16, uint16) {
+	return 20, 11
 }
 
-func (me ChannelOpenOk) HasContent() bool {
-	return false
-}
-
-func (me ChannelOpenOk) IsSynchronous() bool {
+func (me *ChannelOpenOk) wait() bool {
 	return true
 }
 
-func (me ChannelOpenOk) Method() uint16 {
-	return 11
+func (me *ChannelOpenOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ChannelOpenOk) Class() uint16 {
-	return 20
+func (me *ChannelOpenOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -591,34 +583,25 @@ func (me ChannelOpenOk) Class() uint16 {
 */
 type ChannelFlow struct {
 	Active bool // start/stop content frames
+
 }
 
-func (me ChannelFlow) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(20)
-	buf.PutShort(20)
-	buf.PutOctet(0)
-	buf.PutBit(me.Active, 0)
-
-	//fmt.Println("encode: channel.flow 20 20", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ChannelFlow) id() (uint16, uint16) {
+	return 20, 20
 }
 
-func (me ChannelFlow) HasContent() bool {
-	return false
-}
-
-func (me ChannelFlow) IsSynchronous() bool {
+func (me *ChannelFlow) wait() bool {
 	return true
 }
 
-func (me ChannelFlow) Method() uint16 {
-	return 20
+func (me *ChannelFlow) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ChannelFlow) Class() uint16 {
-	return 20
+func (me *ChannelFlow) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -626,34 +609,25 @@ func (me ChannelFlow) Class() uint16 {
 */
 type ChannelFlowOk struct {
 	Active bool // current flow setting
+
 }
 
-func (me ChannelFlowOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(20)
-	buf.PutShort(21)
-	buf.PutOctet(0)
-	buf.PutBit(me.Active, 0)
-
-	//fmt.Println("encode: channel.flow-ok 20 21", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ChannelFlowOk) id() (uint16, uint16) {
+	return 20, 21
 }
 
-func (me ChannelFlowOk) HasContent() bool {
+func (me *ChannelFlowOk) wait() bool {
 	return false
 }
 
-func (me ChannelFlowOk) IsSynchronous() bool {
-	return false
+func (me *ChannelFlowOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ChannelFlowOk) Method() uint16 {
-	return 21
-}
+func (me *ChannelFlowOk) read(r io.Reader) (err error) {
 
-func (me ChannelFlowOk) Class() uint16 {
-	return 20
+	return
 }
 
 /*  
@@ -665,38 +639,43 @@ func (me ChannelFlowOk) Class() uint16 {
 type ChannelClose struct {
 	ReplyCode uint16
 	ReplyText string
-	ClassId   uint16 // failing method class 
+	ClassId   uint16 // failing method class
 	MethodId  uint16 // failing method ID
+
 }
 
-func (me ChannelClose) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(20)
-	buf.PutShort(40)
-	buf.PutShort(me.ReplyCode)
-	buf.PutShortstr(me.ReplyText)
-	buf.PutShort(me.ClassId)
-	buf.PutShort(me.MethodId)
-
-	//fmt.Println("encode: channel.close 20 40", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ChannelClose) id() (uint16, uint16) {
+	return 20, 40
 }
 
-func (me ChannelClose) HasContent() bool {
-	return false
-}
-
-func (me ChannelClose) IsSynchronous() bool {
+func (me *ChannelClose) wait() bool {
 	return true
 }
 
-func (me ChannelClose) Method() uint16 {
-	return 40
+func (me *ChannelClose) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.ReplyCode); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.ReplyText); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ChannelClose) Class() uint16 {
-	return 20
+func (me *ChannelClose) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.ReplyCode); err != nil {
+		return
+	}
+
+	if me.ReplyText, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -706,30 +685,22 @@ func (me ChannelClose) Class() uint16 {
 type ChannelCloseOk struct {
 }
 
-func (me ChannelCloseOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(20)
-	buf.PutShort(41)
-
-	//fmt.Println("encode: channel.close-ok 20 41", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ChannelCloseOk) id() (uint16, uint16) {
+	return 20, 41
 }
 
-func (me ChannelCloseOk) HasContent() bool {
-	return false
-}
-
-func (me ChannelCloseOk) IsSynchronous() bool {
+func (me *ChannelCloseOk) wait() bool {
 	return true
 }
 
-func (me ChannelCloseOk) Method() uint16 {
-	return 41
+func (me *ChannelCloseOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ChannelCloseOk) Class() uint16 {
-	return 20
+func (me *ChannelCloseOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -737,51 +708,92 @@ func (me ChannelCloseOk) Class() uint16 {
    exists, verifies that it is of the correct and expected class.
 */
 type ExchangeDeclare struct {
+	reserved1  uint16
 	Exchange   string
-	Type       string // exchange type 
-	Passive    bool   // do not create exchange 
-	Durable    bool   // request a durable exchange 
-	AutoDelete bool   // auto-delete when unused 
-	Internal   bool   // create internal exchange 
+	Type       string // exchange type
+	Passive    bool   // do not create exchange
+	Durable    bool   // request a durable exchange
+	AutoDelete bool   // auto-delete when unused
+	Internal   bool   // create internal exchange
 	NoWait     bool
 	Arguments  Table // arguments for declaration
+
 }
 
-func (me ExchangeDeclare) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(40)
-	buf.PutShort(10)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Exchange)
-	buf.PutShortstr(me.Type)
-	buf.PutOctet(0)
-	buf.PutBit(me.Passive, 0)
-	buf.PutBit(me.Durable, 1)
-	buf.PutBit(me.AutoDelete, 2)
-	buf.PutBit(me.Internal, 3)
-	buf.PutBit(me.NoWait, 4)
-	buf.PutTable(me.Arguments)
-
-	//fmt.Println("encode: exchange.declare 40 10", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ExchangeDeclare) id() (uint16, uint16) {
+	return 40, 10
 }
 
-func (me ExchangeDeclare) HasContent() bool {
-	return false
+func (me *ExchangeDeclare) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me ExchangeDeclare) IsSynchronous() bool {
-	return true
+func (me *ExchangeDeclare) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Exchange); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.Type); err != nil {
+		return
+	}
+
+	var bits byte
+
+	if me.Passive {
+		bits |= 1 << 0
+	}
+
+	if me.Durable {
+		bits |= 1 << 1
+	}
+
+	if me.AutoDelete {
+		bits |= 1 << 2
+	}
+
+	if me.Internal {
+		bits |= 1 << 3
+	}
+
+	if me.NoWait {
+		bits |= 1 << 4
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ExchangeDeclare) Method() uint16 {
-	return 10
-}
+func (me *ExchangeDeclare) read(r io.Reader) (err error) {
 
-func (me ExchangeDeclare) Class() uint16 {
-	return 40
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Exchange, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.Type, err = readShortstr(r); err != nil {
+		return
+	}
+
+	var bits byte
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Passive = (bits&(1<<0) > 0)
+	me.Durable = (bits&(1<<1) > 0)
+	me.AutoDelete = (bits&(1<<2) > 0)
+	me.Internal = (bits&(1<<3) > 0)
+	me.NoWait = (bits&(1<<4) > 0)
+
+	return
 }
 
 /*  
@@ -791,30 +803,22 @@ func (me ExchangeDeclare) Class() uint16 {
 type ExchangeDeclareOk struct {
 }
 
-func (me ExchangeDeclareOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(40)
-	buf.PutShort(11)
-
-	//fmt.Println("encode: exchange.declare-ok 40 11", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ExchangeDeclareOk) id() (uint16, uint16) {
+	return 40, 11
 }
 
-func (me ExchangeDeclareOk) HasContent() bool {
-	return false
-}
-
-func (me ExchangeDeclareOk) IsSynchronous() bool {
+func (me *ExchangeDeclareOk) wait() bool {
 	return true
 }
 
-func (me ExchangeDeclareOk) Method() uint16 {
-	return 11
+func (me *ExchangeDeclareOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ExchangeDeclareOk) Class() uint16 {
-	return 40
+func (me *ExchangeDeclareOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -822,217 +826,256 @@ func (me ExchangeDeclareOk) Class() uint16 {
    the exchange are cancelled.
 */
 type ExchangeDelete struct {
-	Exchange string
-	IfUnused bool // delete only if unused 
-	NoWait   bool
+	reserved1 uint16
+	Exchange  string
+	IfUnused  bool // delete only if unused
+	NoWait    bool
 }
 
-func (me ExchangeDelete) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(40)
-	buf.PutShort(20)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Exchange)
-	buf.PutOctet(0)
-	buf.PutBit(me.IfUnused, 0)
-	buf.PutBit(me.NoWait, 1)
-
-	//fmt.Println("encode: exchange.delete 40 20", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ExchangeDelete) id() (uint16, uint16) {
+	return 40, 20
 }
 
-func (me ExchangeDelete) HasContent() bool {
-	return false
+func (me *ExchangeDelete) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me ExchangeDelete) IsSynchronous() bool {
-	return true
+func (me *ExchangeDelete) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Exchange); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ExchangeDelete) Method() uint16 {
-	return 20
-}
+func (me *ExchangeDelete) read(r io.Reader) (err error) {
 
-func (me ExchangeDelete) Class() uint16 {
-	return 40
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Exchange, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  This method confirms the deletion of an exchange.  */
 type ExchangeDeleteOk struct {
 }
 
-func (me ExchangeDeleteOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(40)
-	buf.PutShort(21)
-
-	//fmt.Println("encode: exchange.delete-ok 40 21", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ExchangeDeleteOk) id() (uint16, uint16) {
+	return 40, 21
 }
 
-func (me ExchangeDeleteOk) HasContent() bool {
-	return false
-}
-
-func (me ExchangeDeleteOk) IsSynchronous() bool {
+func (me *ExchangeDeleteOk) wait() bool {
 	return true
 }
 
-func (me ExchangeDeleteOk) Method() uint16 {
-	return 21
+func (me *ExchangeDeleteOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ExchangeDeleteOk) Class() uint16 {
-	return 40
+func (me *ExchangeDeleteOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  This method binds an exchange to an exchange.  */
 type ExchangeBind struct {
-	Destination string // name of the destination exchange to bind to 
-	Source      string // name of the source exchange to bind to 
-	RoutingKey  string // message routing key 
+	reserved1   uint16
+	Destination string // name of the destination exchange to bind to
+	Source      string // name of the source exchange to bind to
+	RoutingKey  string // message routing key
 	NoWait      bool
 	Arguments   Table // arguments for binding
+
 }
 
-func (me ExchangeBind) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(40)
-	buf.PutShort(30)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Destination)
-	buf.PutShortstr(me.Source)
-	buf.PutShortstr(me.RoutingKey)
-	buf.PutOctet(0)
-	buf.PutBit(me.NoWait, 0)
-	buf.PutTable(me.Arguments)
-
-	//fmt.Println("encode: exchange.bind 40 30", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ExchangeBind) id() (uint16, uint16) {
+	return 40, 30
 }
 
-func (me ExchangeBind) HasContent() bool {
-	return false
+func (me *ExchangeBind) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me ExchangeBind) IsSynchronous() bool {
-	return true
+func (me *ExchangeBind) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Destination); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.Source); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.RoutingKey); err != nil {
+		return
+	}
+
+	var bits byte
+
+	if me.NoWait {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ExchangeBind) Method() uint16 {
-	return 30
-}
+func (me *ExchangeBind) read(r io.Reader) (err error) {
 
-func (me ExchangeBind) Class() uint16 {
-	return 40
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Destination, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.Source, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.RoutingKey, err = readShortstr(r); err != nil {
+		return
+	}
+
+	var bits byte
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.NoWait = (bits&(1<<0) > 0)
+
+	return
 }
 
 /*  This method confirms that the bind was successful.  */
 type ExchangeBindOk struct {
 }
 
-func (me ExchangeBindOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(40)
-	buf.PutShort(31)
-
-	//fmt.Println("encode: exchange.bind-ok 40 31", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ExchangeBindOk) id() (uint16, uint16) {
+	return 40, 31
 }
 
-func (me ExchangeBindOk) HasContent() bool {
-	return false
-}
-
-func (me ExchangeBindOk) IsSynchronous() bool {
+func (me *ExchangeBindOk) wait() bool {
 	return true
 }
 
-func (me ExchangeBindOk) Method() uint16 {
-	return 31
+func (me *ExchangeBindOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ExchangeBindOk) Class() uint16 {
-	return 40
+func (me *ExchangeBindOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  This method unbinds an exchange from an exchange.  */
 type ExchangeUnbind struct {
+	reserved1   uint16
 	Destination string
 	Source      string
-	RoutingKey  string // routing key of binding 
+	RoutingKey  string // routing key of binding
 	NoWait      bool
 	Arguments   Table // arguments of binding
+
 }
 
-func (me ExchangeUnbind) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(40)
-	buf.PutShort(40)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Destination)
-	buf.PutShortstr(me.Source)
-	buf.PutShortstr(me.RoutingKey)
-	buf.PutOctet(0)
-	buf.PutBit(me.NoWait, 0)
-	buf.PutTable(me.Arguments)
-
-	//fmt.Println("encode: exchange.unbind 40 40", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ExchangeUnbind) id() (uint16, uint16) {
+	return 40, 40
 }
 
-func (me ExchangeUnbind) HasContent() bool {
-	return false
+func (me *ExchangeUnbind) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me ExchangeUnbind) IsSynchronous() bool {
-	return true
+func (me *ExchangeUnbind) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Destination); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.Source); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.RoutingKey); err != nil {
+		return
+	}
+
+	var bits byte
+
+	if me.NoWait {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me ExchangeUnbind) Method() uint16 {
-	return 40
-}
+func (me *ExchangeUnbind) read(r io.Reader) (err error) {
 
-func (me ExchangeUnbind) Class() uint16 {
-	return 40
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Destination, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.Source, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.RoutingKey, err = readShortstr(r); err != nil {
+		return
+	}
+
+	var bits byte
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.NoWait = (bits&(1<<0) > 0)
+
+	return
 }
 
 /*  This method confirms that the unbind was successful.  */
 type ExchangeUnbindOk struct {
 }
 
-func (me ExchangeUnbindOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(40)
-	buf.PutShort(51)
-
-	//fmt.Println("encode: exchange.unbind-ok 40 51", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ExchangeUnbindOk) id() (uint16, uint16) {
+	return 40, 51
 }
 
-func (me ExchangeUnbindOk) HasContent() bool {
-	return false
-}
-
-func (me ExchangeUnbindOk) IsSynchronous() bool {
+func (me *ExchangeUnbindOk) wait() bool {
 	return true
 }
 
-func (me ExchangeUnbindOk) Method() uint16 {
-	return 51
+func (me *ExchangeUnbindOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ExchangeUnbindOk) Class() uint16 {
-	return 40
+func (me *ExchangeUnbindOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -1041,49 +1084,85 @@ func (me ExchangeUnbindOk) Class() uint16 {
    contents, and the level of sharing for the queue.
 */
 type QueueDeclare struct {
+	reserved1  uint16
 	Queue      string
-	Passive    bool // do not create queue 
-	Durable    bool // request a durable queue 
-	Exclusive  bool // request an exclusive queue 
-	AutoDelete bool // auto-delete queue when unused 
+	Passive    bool // do not create queue
+	Durable    bool // request a durable queue
+	Exclusive  bool // request an exclusive queue
+	AutoDelete bool // auto-delete queue when unused
 	NoWait     bool
 	Arguments  Table // arguments for declaration
+
 }
 
-func (me QueueDeclare) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(10)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Queue)
-	buf.PutOctet(0)
-	buf.PutBit(me.Passive, 0)
-	buf.PutBit(me.Durable, 1)
-	buf.PutBit(me.Exclusive, 2)
-	buf.PutBit(me.AutoDelete, 3)
-	buf.PutBit(me.NoWait, 4)
-	buf.PutTable(me.Arguments)
-
-	//fmt.Println("encode: queue.declare 50 10", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueueDeclare) id() (uint16, uint16) {
+	return 50, 10
 }
 
-func (me QueueDeclare) HasContent() bool {
-	return false
+func (me *QueueDeclare) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me QueueDeclare) IsSynchronous() bool {
-	return true
+func (me *QueueDeclare) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Queue); err != nil {
+		return
+	}
+
+	var bits byte
+
+	if me.Passive {
+		bits |= 1 << 0
+	}
+
+	if me.Durable {
+		bits |= 1 << 1
+	}
+
+	if me.Exclusive {
+		bits |= 1 << 2
+	}
+
+	if me.AutoDelete {
+		bits |= 1 << 3
+	}
+
+	if me.NoWait {
+		bits |= 1 << 4
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me QueueDeclare) Method() uint16 {
-	return 10
-}
+func (me *QueueDeclare) read(r io.Reader) (err error) {
 
-func (me QueueDeclare) Class() uint16 {
-	return 50
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Queue, err = readShortstr(r); err != nil {
+		return
+	}
+
+	var bits byte
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Passive = (bits&(1<<0) > 0)
+	me.Durable = (bits&(1<<1) > 0)
+	me.Exclusive = (bits&(1<<2) > 0)
+	me.AutoDelete = (bits&(1<<3) > 0)
+	me.NoWait = (bits&(1<<4) > 0)
+
+	return
 }
 
 /*  
@@ -1094,35 +1173,33 @@ type QueueDeclareOk struct {
 	Queue         string
 	MessageCount  uint32
 	ConsumerCount uint32 // number of consumers
+
 }
 
-func (me QueueDeclareOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(11)
-	buf.PutShortstr(me.Queue)
-	buf.PutLong(me.MessageCount)
-	buf.PutLong(me.ConsumerCount)
-
-	//fmt.Println("encode: queue.declare-ok 50 11", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueueDeclareOk) id() (uint16, uint16) {
+	return 50, 11
 }
 
-func (me QueueDeclareOk) HasContent() bool {
-	return false
-}
-
-func (me QueueDeclareOk) IsSynchronous() bool {
+func (me *QueueDeclareOk) wait() bool {
 	return true
 }
 
-func (me QueueDeclareOk) Method() uint16 {
-	return 11
+func (me *QueueDeclareOk) write(w io.Writer) (err error) {
+
+	if err = writeShortstr(w, me.Queue); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me QueueDeclareOk) Class() uint16 {
-	return 50
+func (me *QueueDeclareOk) read(r io.Reader) (err error) {
+
+	if me.Queue, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -1132,145 +1209,175 @@ func (me QueueDeclareOk) Class() uint16 {
    exchange.
 */
 type QueueBind struct {
+	reserved1  uint16
 	Queue      string
-	Exchange   string // name of the exchange to bind to 
-	RoutingKey string // message routing key 
+	Exchange   string // name of the exchange to bind to
+	RoutingKey string // message routing key
 	NoWait     bool
 	Arguments  Table // arguments for binding
+
 }
 
-func (me QueueBind) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(20)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Queue)
-	buf.PutShortstr(me.Exchange)
-	buf.PutShortstr(me.RoutingKey)
-	buf.PutOctet(0)
-	buf.PutBit(me.NoWait, 0)
-	buf.PutTable(me.Arguments)
-
-	//fmt.Println("encode: queue.bind 50 20", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueueBind) id() (uint16, uint16) {
+	return 50, 20
 }
 
-func (me QueueBind) HasContent() bool {
-	return false
+func (me *QueueBind) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me QueueBind) IsSynchronous() bool {
-	return true
+func (me *QueueBind) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Queue); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.Exchange); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.RoutingKey); err != nil {
+		return
+	}
+
+	var bits byte
+
+	if me.NoWait {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me QueueBind) Method() uint16 {
-	return 20
-}
+func (me *QueueBind) read(r io.Reader) (err error) {
 
-func (me QueueBind) Class() uint16 {
-	return 50
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Queue, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.Exchange, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.RoutingKey, err = readShortstr(r); err != nil {
+		return
+	}
+
+	var bits byte
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.NoWait = (bits&(1<<0) > 0)
+
+	return
 }
 
 /*  This method confirms that the bind was successful.  */
 type QueueBindOk struct {
 }
 
-func (me QueueBindOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(21)
-
-	//fmt.Println("encode: queue.bind-ok 50 21", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueueBindOk) id() (uint16, uint16) {
+	return 50, 21
 }
 
-func (me QueueBindOk) HasContent() bool {
-	return false
-}
-
-func (me QueueBindOk) IsSynchronous() bool {
+func (me *QueueBindOk) wait() bool {
 	return true
 }
 
-func (me QueueBindOk) Method() uint16 {
-	return 21
+func (me *QueueBindOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me QueueBindOk) Class() uint16 {
-	return 50
+func (me *QueueBindOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  This method unbinds a queue from an exchange.  */
 type QueueUnbind struct {
+	reserved1  uint16
 	Queue      string
 	Exchange   string
-	RoutingKey string // routing key of binding 
+	RoutingKey string // routing key of binding
 	Arguments  Table  // arguments of binding
+
 }
 
-func (me QueueUnbind) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(50)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Queue)
-	buf.PutShortstr(me.Exchange)
-	buf.PutShortstr(me.RoutingKey)
-	buf.PutTable(me.Arguments)
-
-	//fmt.Println("encode: queue.unbind 50 50", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueueUnbind) id() (uint16, uint16) {
+	return 50, 50
 }
 
-func (me QueueUnbind) HasContent() bool {
-	return false
-}
-
-func (me QueueUnbind) IsSynchronous() bool {
+func (me *QueueUnbind) wait() bool {
 	return true
 }
 
-func (me QueueUnbind) Method() uint16 {
-	return 50
+func (me *QueueUnbind) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Queue); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.Exchange); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.RoutingKey); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me QueueUnbind) Class() uint16 {
-	return 50
+func (me *QueueUnbind) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Queue, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.Exchange, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.RoutingKey, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  This method confirms that the unbind was successful.  */
 type QueueUnbindOk struct {
 }
 
-func (me QueueUnbindOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(51)
-
-	//fmt.Println("encode: queue.unbind-ok 50 51", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueueUnbindOk) id() (uint16, uint16) {
+	return 50, 51
 }
 
-func (me QueueUnbindOk) HasContent() bool {
-	return false
-}
-
-func (me QueueUnbindOk) IsSynchronous() bool {
+func (me *QueueUnbindOk) wait() bool {
 	return true
 }
 
-func (me QueueUnbindOk) Method() uint16 {
-	return 51
+func (me *QueueUnbindOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me QueueUnbindOk) Class() uint16 {
-	return 50
+func (me *QueueUnbindOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -1278,39 +1385,43 @@ func (me QueueUnbindOk) Class() uint16 {
    acknowledgment.
 */
 type QueuePurge struct {
-	Queue  string
-	NoWait bool
+	reserved1 uint16
+	Queue     string
+	NoWait    bool
 }
 
-func (me QueuePurge) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(30)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Queue)
-	buf.PutOctet(0)
-	buf.PutBit(me.NoWait, 0)
-
-	//fmt.Println("encode: queue.purge 50 30", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueuePurge) id() (uint16, uint16) {
+	return 50, 30
 }
 
-func (me QueuePurge) HasContent() bool {
-	return false
+func (me *QueuePurge) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me QueuePurge) IsSynchronous() bool {
-	return true
+func (me *QueuePurge) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Queue); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me QueuePurge) Method() uint16 {
-	return 30
-}
+func (me *QueuePurge) read(r io.Reader) (err error) {
 
-func (me QueuePurge) Class() uint16 {
-	return 50
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Queue, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  This method confirms the purge of a queue.  */
@@ -1318,31 +1429,22 @@ type QueuePurgeOk struct {
 	MessageCount uint32
 }
 
-func (me QueuePurgeOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(31)
-	buf.PutLong(me.MessageCount)
-
-	//fmt.Println("encode: queue.purge-ok 50 31", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueuePurgeOk) id() (uint16, uint16) {
+	return 50, 31
 }
 
-func (me QueuePurgeOk) HasContent() bool {
-	return false
-}
-
-func (me QueuePurgeOk) IsSynchronous() bool {
+func (me *QueuePurgeOk) wait() bool {
 	return true
 }
 
-func (me QueuePurgeOk) Method() uint16 {
-	return 31
+func (me *QueuePurgeOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me QueuePurgeOk) Class() uint16 {
-	return 50
+func (me *QueuePurgeOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -1351,43 +1453,45 @@ func (me QueuePurgeOk) Class() uint16 {
    consumers on the queue are cancelled.
 */
 type QueueDelete struct {
-	Queue    string
-	IfUnused bool // delete only if unused 
-	IfEmpty  bool // delete only if empty 
-	NoWait   bool
+	reserved1 uint16
+	Queue     string
+	IfUnused  bool // delete only if unused
+	IfEmpty   bool // delete only if empty
+	NoWait    bool
 }
 
-func (me QueueDelete) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(40)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Queue)
-	buf.PutOctet(0)
-	buf.PutBit(me.IfUnused, 0)
-	buf.PutBit(me.IfEmpty, 1)
-	buf.PutBit(me.NoWait, 2)
-
-	//fmt.Println("encode: queue.delete 50 40", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueueDelete) id() (uint16, uint16) {
+	return 50, 40
 }
 
-func (me QueueDelete) HasContent() bool {
-	return false
+func (me *QueueDelete) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me QueueDelete) IsSynchronous() bool {
-	return true
+func (me *QueueDelete) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Queue); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me QueueDelete) Method() uint16 {
-	return 40
-}
+func (me *QueueDelete) read(r io.Reader) (err error) {
 
-func (me QueueDelete) Class() uint16 {
-	return 50
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Queue, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  This method confirms the deletion of a queue.  */
@@ -1395,31 +1499,22 @@ type QueueDeleteOk struct {
 	MessageCount uint32
 }
 
-func (me QueueDeleteOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(50)
-	buf.PutShort(41)
-	buf.PutLong(me.MessageCount)
-
-	//fmt.Println("encode: queue.delete-ok 50 41", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *QueueDeleteOk) id() (uint16, uint16) {
+	return 50, 41
 }
 
-func (me QueueDeleteOk) HasContent() bool {
-	return false
-}
-
-func (me QueueDeleteOk) IsSynchronous() bool {
+func (me *QueueDeleteOk) wait() bool {
 	return true
 }
 
-func (me QueueDeleteOk) Method() uint16 {
-	return 41
+func (me *QueueDeleteOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me QueueDeleteOk) Class() uint16 {
-	return 50
+func (me *QueueDeleteOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -1430,39 +1525,44 @@ func (me QueueDeleteOk) Class() uint16 {
    for the server.
 */
 type BasicQos struct {
-	PrefetchSize  uint32 // prefetch window in octets 
-	PrefetchCount uint16 // prefetch window in messages 
+	PrefetchSize  uint32 // prefetch window in octets
+	PrefetchCount uint16 // prefetch window in messages
 	Global        bool   // apply to entire connection
+
 }
 
-func (me BasicQos) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(10)
-	buf.PutLong(me.PrefetchSize)
-	buf.PutShort(me.PrefetchCount)
-	buf.PutOctet(0)
-	buf.PutBit(me.Global, 0)
-
-	//fmt.Println("encode: basic.qos 60 10", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicQos) id() (uint16, uint16) {
+	return 60, 10
 }
 
-func (me BasicQos) HasContent() bool {
-	return false
-}
-
-func (me BasicQos) IsSynchronous() bool {
+func (me *BasicQos) wait() bool {
 	return true
 }
 
-func (me BasicQos) Method() uint16 {
-	return 10
+func (me *BasicQos) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.PrefetchSize); err != nil {
+		return
+	}
+
+	if err = binary.Write(w, binary.BigEndian, me.PrefetchCount); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me BasicQos) Class() uint16 {
-	return 60
+func (me *BasicQos) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.PrefetchSize); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.PrefetchCount); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -1473,30 +1573,22 @@ func (me BasicQos) Class() uint16 {
 type BasicQosOk struct {
 }
 
-func (me BasicQosOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(11)
-
-	//fmt.Println("encode: basic.qos-ok 60 11", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicQosOk) id() (uint16, uint16) {
+	return 60, 11
 }
 
-func (me BasicQosOk) HasContent() bool {
-	return false
-}
-
-func (me BasicQosOk) IsSynchronous() bool {
+func (me *BasicQosOk) wait() bool {
 	return true
 }
 
-func (me BasicQosOk) Method() uint16 {
-	return 11
+func (me *BasicQosOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me BasicQosOk) Class() uint16 {
-	return 60
+func (me *BasicQosOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -1505,49 +1597,86 @@ func (me BasicQosOk) Class() uint16 {
    declared on, or until the client cancels them.
 */
 type BasicConsume struct {
+	reserved1   uint16
 	Queue       string
 	ConsumerTag string
 	NoLocal     bool
 	NoAck       bool
-	Exclusive   bool // request exclusive access 
+	Exclusive   bool // request exclusive access
 	NoWait      bool
 	Arguments   Table // arguments for declaration
+
 }
 
-func (me BasicConsume) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(20)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Queue)
-	buf.PutShortstr(me.ConsumerTag)
-	buf.PutOctet(0)
-	buf.PutBit(me.NoLocal, 0)
-	buf.PutBit(me.NoAck, 1)
-	buf.PutBit(me.Exclusive, 2)
-	buf.PutBit(me.NoWait, 3)
-	buf.PutTable(me.Arguments)
-
-	//fmt.Println("encode: basic.consume 60 20", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicConsume) id() (uint16, uint16) {
+	return 60, 20
 }
 
-func (me BasicConsume) HasContent() bool {
-	return false
+func (me *BasicConsume) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me BasicConsume) IsSynchronous() bool {
-	return true
+func (me *BasicConsume) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Queue); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.ConsumerTag); err != nil {
+		return
+	}
+
+	var bits byte
+
+	if me.NoLocal {
+		bits |= 1 << 0
+	}
+
+	if me.NoAck {
+		bits |= 1 << 1
+	}
+
+	if me.Exclusive {
+		bits |= 1 << 2
+	}
+
+	if me.NoWait {
+		bits |= 1 << 3
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me BasicConsume) Method() uint16 {
-	return 20
-}
+func (me *BasicConsume) read(r io.Reader) (err error) {
 
-func (me BasicConsume) Class() uint16 {
-	return 60
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Queue, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.ConsumerTag, err = readShortstr(r); err != nil {
+		return
+	}
+
+	var bits byte
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.NoLocal = (bits&(1<<0) > 0)
+	me.NoAck = (bits&(1<<1) > 0)
+	me.Exclusive = (bits&(1<<2) > 0)
+	me.NoWait = (bits&(1<<3) > 0)
+
+	return
 }
 
 /*  
@@ -1558,31 +1687,22 @@ type BasicConsumeOk struct {
 	ConsumerTag string
 }
 
-func (me BasicConsumeOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(21)
-	buf.PutShortstr(me.ConsumerTag)
-
-	//fmt.Println("encode: basic.consume-ok 60 21", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicConsumeOk) id() (uint16, uint16) {
+	return 60, 21
 }
 
-func (me BasicConsumeOk) HasContent() bool {
-	return false
-}
-
-func (me BasicConsumeOk) IsSynchronous() bool {
+func (me *BasicConsumeOk) wait() bool {
 	return true
 }
 
-func (me BasicConsumeOk) Method() uint16 {
-	return 21
+func (me *BasicConsumeOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me BasicConsumeOk) Class() uint16 {
-	return 60
+func (me *BasicConsumeOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -1607,33 +1727,30 @@ type BasicCancel struct {
 	NoWait      bool
 }
 
-func (me BasicCancel) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(30)
-	buf.PutShortstr(me.ConsumerTag)
-	buf.PutOctet(0)
-	buf.PutBit(me.NoWait, 0)
-
-	//fmt.Println("encode: basic.cancel 60 30", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicCancel) id() (uint16, uint16) {
+	return 60, 30
 }
 
-func (me BasicCancel) HasContent() bool {
-	return false
+func (me *BasicCancel) wait() bool {
+	return true && !me.NoWait
 }
 
-func (me BasicCancel) IsSynchronous() bool {
-	return true
+func (me *BasicCancel) write(w io.Writer) (err error) {
+
+	if err = writeShortstr(w, me.ConsumerTag); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me BasicCancel) Method() uint16 {
-	return 30
-}
+func (me *BasicCancel) read(r io.Reader) (err error) {
 
-func (me BasicCancel) Class() uint16 {
-	return 60
+	if me.ConsumerTag, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -1643,31 +1760,22 @@ type BasicCancelOk struct {
 	ConsumerTag string
 }
 
-func (me BasicCancelOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(31)
-	buf.PutShortstr(me.ConsumerTag)
-
-	//fmt.Println("encode: basic.cancel-ok 60 31", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicCancelOk) id() (uint16, uint16) {
+	return 60, 31
 }
 
-func (me BasicCancelOk) HasContent() bool {
-	return false
-}
-
-func (me BasicCancelOk) IsSynchronous() bool {
+func (me *BasicCancelOk) wait() bool {
 	return true
 }
 
-func (me BasicCancelOk) Method() uint16 {
-	return 31
+func (me *BasicCancelOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me BasicCancelOk) Class() uint16 {
-	return 60
+func (me *BasicCancelOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -1676,43 +1784,61 @@ func (me BasicCancelOk) Class() uint16 {
    consumers when the transaction, if any, is committed.
 */
 type BasicPublish struct {
+	reserved1  uint16
 	Exchange   string
-	RoutingKey string // Message routing key 
-	Mandatory  bool   // indicate mandatory routing 
+	RoutingKey string // Message routing key
+	Mandatory  bool   // indicate mandatory routing
 	Immediate  bool   // request immediate delivery
+	Properties Properties
+	Body       []byte
 }
 
-func (me BasicPublish) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(40)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Exchange)
-	buf.PutShortstr(me.RoutingKey)
-	buf.PutOctet(0)
-	buf.PutBit(me.Mandatory, 0)
-	buf.PutBit(me.Immediate, 1)
-
-	//fmt.Println("encode: basic.publish 60 40", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicPublish) id() (uint16, uint16) {
+	return 60, 40
 }
 
-func (me BasicPublish) HasContent() bool {
-	return true
-}
-
-func (me BasicPublish) IsSynchronous() bool {
+func (me *BasicPublish) wait() bool {
 	return false
 }
 
-func (me BasicPublish) Method() uint16 {
-	return 40
+func (me *BasicPublish) GetContent() (Properties, []byte) {
+	return me.Properties, me.Body
 }
 
-func (me BasicPublish) Class() uint16 {
-	return 60
+func (me *BasicPublish) SetContent(properties Properties, body []byte) {
+	me.Properties, me.Body = properties, body
+}
+
+func (me *BasicPublish) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Exchange); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.RoutingKey); err != nil {
+		return
+	}
+
+	return
+}
+
+func (me *BasicPublish) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Exchange, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.RoutingKey, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -1726,36 +1852,42 @@ type BasicReturn struct {
 	ReplyText  string
 	Exchange   string
 	RoutingKey string // Message routing key
+	Properties Properties
+	Body       []byte
 }
 
-func (me BasicReturn) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(50)
-	buf.PutShort(me.ReplyCode)
-	buf.PutShortstr(me.ReplyText)
-	buf.PutShortstr(me.Exchange)
-	buf.PutShortstr(me.RoutingKey)
-
-	//fmt.Println("encode: basic.return 60 50", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicReturn) id() (uint16, uint16) {
+	return 60, 50
 }
 
-func (me BasicReturn) HasContent() bool {
-	return true
-}
-
-func (me BasicReturn) IsSynchronous() bool {
+func (me *BasicReturn) wait() bool {
 	return false
 }
 
-func (me BasicReturn) Method() uint16 {
-	return 50
+func (me *BasicReturn) GetContent() (Properties, []byte) {
+	return me.Properties, me.Body
 }
 
-func (me BasicReturn) Class() uint16 {
-	return 60
+func (me *BasicReturn) SetContent(properties Properties, body []byte) {
+	me.Properties, me.Body = properties, body
+}
+
+func (me *BasicReturn) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.ReplyCode); err != nil {
+		return
+	}
+
+	return
+}
+
+func (me *BasicReturn) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.ReplyCode); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -1770,38 +1902,66 @@ type BasicDeliver struct {
 	Redelivered bool
 	Exchange    string
 	RoutingKey  string // Message routing key
+	Properties  Properties
+	Body        []byte
 }
 
-func (me BasicDeliver) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(60)
-	buf.PutShortstr(me.ConsumerTag)
-	buf.PutLonglong(me.DeliveryTag)
-	buf.PutOctet(0)
-	buf.PutBit(me.Redelivered, 0)
-	buf.PutShortstr(me.Exchange)
-	buf.PutShortstr(me.RoutingKey)
-
-	//fmt.Println("encode: basic.deliver 60 60", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicDeliver) id() (uint16, uint16) {
+	return 60, 60
 }
 
-func (me BasicDeliver) HasContent() bool {
-	return true
-}
-
-func (me BasicDeliver) IsSynchronous() bool {
+func (me *BasicDeliver) wait() bool {
 	return false
 }
 
-func (me BasicDeliver) Method() uint16 {
-	return 60
+func (me *BasicDeliver) GetContent() (Properties, []byte) {
+	return me.Properties, me.Body
 }
 
-func (me BasicDeliver) Class() uint16 {
-	return 60
+func (me *BasicDeliver) SetContent(properties Properties, body []byte) {
+	me.Properties, me.Body = properties, body
+}
+
+func (me *BasicDeliver) write(w io.Writer) (err error) {
+
+	if err = writeShortstr(w, me.ConsumerTag); err != nil {
+		return
+	}
+
+	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
+		return
+	}
+
+	var bits byte
+
+	if me.Redelivered {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
+	return
+}
+
+func (me *BasicDeliver) read(r io.Reader) (err error) {
+
+	if me.ConsumerTag, err = readShortstr(r); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
+		return
+	}
+
+	var bits byte
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Redelivered = (bits&(1<<0) > 0)
+
+	return
 }
 
 /*  
@@ -1810,39 +1970,43 @@ func (me BasicDeliver) Class() uint16 {
    functionality is more important than performance.
 */
 type BasicGet struct {
-	Queue string
-	NoAck bool
+	reserved1 uint16
+	Queue     string
+	NoAck     bool
 }
 
-func (me BasicGet) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(70)
-	var Reserved1 uint16
-	buf.PutShort(Reserved1)
-	buf.PutShortstr(me.Queue)
-	buf.PutOctet(0)
-	buf.PutBit(me.NoAck, 0)
-
-	//fmt.Println("encode: basic.get 60 70", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicGet) id() (uint16, uint16) {
+	return 60, 70
 }
 
-func (me BasicGet) HasContent() bool {
-	return false
-}
-
-func (me BasicGet) IsSynchronous() bool {
+func (me *BasicGet) wait() bool {
 	return true
 }
 
-func (me BasicGet) Method() uint16 {
-	return 70
+func (me *BasicGet) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Queue); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me BasicGet) Class() uint16 {
-	return 60
+func (me *BasicGet) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
+		return
+	}
+
+	if me.Queue, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -1854,40 +2018,74 @@ type BasicGetOk struct {
 	DeliveryTag  uint64
 	Redelivered  bool
 	Exchange     string
-	RoutingKey   string // Message routing key 
+	RoutingKey   string // Message routing key
 	MessageCount uint32
+	Properties   Properties
+	Body         []byte
 }
 
-func (me BasicGetOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(71)
-	buf.PutLonglong(me.DeliveryTag)
-	buf.PutOctet(0)
-	buf.PutBit(me.Redelivered, 0)
-	buf.PutShortstr(me.Exchange)
-	buf.PutShortstr(me.RoutingKey)
-	buf.PutLong(me.MessageCount)
-
-	//fmt.Println("encode: basic.get-ok 60 71", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicGetOk) id() (uint16, uint16) {
+	return 60, 71
 }
 
-func (me BasicGetOk) HasContent() bool {
+func (me *BasicGetOk) wait() bool {
 	return true
 }
 
-func (me BasicGetOk) IsSynchronous() bool {
-	return true
+func (me *BasicGetOk) GetContent() (Properties, []byte) {
+	return me.Properties, me.Body
 }
 
-func (me BasicGetOk) Method() uint16 {
-	return 71
+func (me *BasicGetOk) SetContent(properties Properties, body []byte) {
+	me.Properties, me.Body = properties, body
 }
 
-func (me BasicGetOk) Class() uint16 {
-	return 60
+func (me *BasicGetOk) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
+		return
+	}
+
+	var bits byte
+
+	if me.Redelivered {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
+	if err = writeShortstr(w, me.Exchange); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.RoutingKey); err != nil {
+		return
+	}
+
+	return
+}
+
+func (me *BasicGetOk) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
+		return
+	}
+
+	var bits byte
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Redelivered = (bits&(1<<0) > 0)
+
+	if me.Exchange, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.RoutingKey, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -1895,34 +2093,25 @@ func (me BasicGetOk) Class() uint16 {
    client.
 */
 type BasicGetEmpty struct {
+	reserved1 string
 }
 
-func (me BasicGetEmpty) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(72)
-	var Reserved1 string
-	buf.PutShortstr(Reserved1)
-
-	//fmt.Println("encode: basic.get-empty 60 72", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicGetEmpty) id() (uint16, uint16) {
+	return 60, 72
 }
 
-func (me BasicGetEmpty) HasContent() bool {
-	return false
-}
-
-func (me BasicGetEmpty) IsSynchronous() bool {
+func (me *BasicGetEmpty) wait() bool {
 	return true
 }
 
-func (me BasicGetEmpty) Method() uint16 {
-	return 72
+func (me *BasicGetEmpty) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me BasicGetEmpty) Class() uint16 {
-	return 60
+func (me *BasicGetEmpty) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -1939,35 +2128,33 @@ func (me BasicGetEmpty) Class() uint16 {
 type BasicAck struct {
 	DeliveryTag uint64
 	Multiple    bool // acknowledge multiple messages
+
 }
 
-func (me BasicAck) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(80)
-	buf.PutLonglong(me.DeliveryTag)
-	buf.PutOctet(0)
-	buf.PutBit(me.Multiple, 0)
-
-	//fmt.Println("encode: basic.ack 60 80", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicAck) id() (uint16, uint16) {
+	return 60, 80
 }
 
-func (me BasicAck) HasContent() bool {
+func (me *BasicAck) wait() bool {
 	return false
 }
 
-func (me BasicAck) IsSynchronous() bool {
-	return false
+func (me *BasicAck) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me BasicAck) Method() uint16 {
-	return 80
-}
+func (me *BasicAck) read(r io.Reader) (err error) {
 
-func (me BasicAck) Class() uint16 {
-	return 60
+	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -1978,35 +2165,33 @@ func (me BasicAck) Class() uint16 {
 type BasicReject struct {
 	DeliveryTag uint64
 	Requeue     bool // requeue the message
+
 }
 
-func (me BasicReject) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(90)
-	buf.PutLonglong(me.DeliveryTag)
-	buf.PutOctet(0)
-	buf.PutBit(me.Requeue, 0)
-
-	//fmt.Println("encode: basic.reject 60 90", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicReject) id() (uint16, uint16) {
+	return 60, 90
 }
 
-func (me BasicReject) HasContent() bool {
+func (me *BasicReject) wait() bool {
 	return false
 }
 
-func (me BasicReject) IsSynchronous() bool {
-	return false
+func (me *BasicReject) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me BasicReject) Method() uint16 {
-	return 90
-}
+func (me *BasicReject) read(r io.Reader) (err error) {
 
-func (me BasicReject) Class() uint16 {
-	return 60
+	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -2016,34 +2201,25 @@ func (me BasicReject) Class() uint16 {
 */
 type BasicRecoverAsync struct {
 	Requeue bool // requeue the message
+
 }
 
-func (me BasicRecoverAsync) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(100)
-	buf.PutOctet(0)
-	buf.PutBit(me.Requeue, 0)
-
-	//fmt.Println("encode: basic.recover-async 60 100", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicRecoverAsync) id() (uint16, uint16) {
+	return 60, 100
 }
 
-func (me BasicRecoverAsync) HasContent() bool {
+func (me *BasicRecoverAsync) wait() bool {
 	return false
 }
 
-func (me BasicRecoverAsync) IsSynchronous() bool {
-	return false
+func (me *BasicRecoverAsync) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me BasicRecoverAsync) Method() uint16 {
-	return 100
-}
+func (me *BasicRecoverAsync) read(r io.Reader) (err error) {
 
-func (me BasicRecoverAsync) Class() uint16 {
-	return 60
+	return
 }
 
 /*  
@@ -2053,34 +2229,25 @@ func (me BasicRecoverAsync) Class() uint16 {
 */
 type BasicRecover struct {
 	Requeue bool // requeue the message
+
 }
 
-func (me BasicRecover) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(110)
-	buf.PutOctet(0)
-	buf.PutBit(me.Requeue, 0)
-
-	//fmt.Println("encode: basic.recover 60 110", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicRecover) id() (uint16, uint16) {
+	return 60, 110
 }
 
-func (me BasicRecover) HasContent() bool {
+func (me *BasicRecover) wait() bool {
 	return false
 }
 
-func (me BasicRecover) IsSynchronous() bool {
-	return false
+func (me *BasicRecover) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me BasicRecover) Method() uint16 {
-	return 110
-}
+func (me *BasicRecover) read(r io.Reader) (err error) {
 
-func (me BasicRecover) Class() uint16 {
-	return 60
+	return
 }
 
 /*  
@@ -2089,30 +2256,22 @@ func (me BasicRecover) Class() uint16 {
 type BasicRecoverOk struct {
 }
 
-func (me BasicRecoverOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(111)
-
-	//fmt.Println("encode: basic.recover-ok 60 111", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicRecoverOk) id() (uint16, uint16) {
+	return 60, 111
 }
 
-func (me BasicRecoverOk) HasContent() bool {
-	return false
-}
-
-func (me BasicRecoverOk) IsSynchronous() bool {
+func (me *BasicRecoverOk) wait() bool {
 	return true
 }
 
-func (me BasicRecoverOk) Method() uint16 {
-	return 111
+func (me *BasicRecoverOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me BasicRecoverOk) Class() uint16 {
-	return 60
+func (me *BasicRecoverOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -2126,38 +2285,35 @@ func (me BasicRecoverOk) Class() uint16 {
 */
 type BasicNack struct {
 	DeliveryTag uint64
-	Multiple    bool // reject multiple messages 
+	Multiple    bool // reject multiple messages
 	Requeue     bool // requeue the message
+
 }
 
-func (me BasicNack) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(60)
-	buf.PutShort(120)
-	buf.PutLonglong(me.DeliveryTag)
-	buf.PutOctet(0)
-	buf.PutBit(me.Multiple, 0)
-	buf.PutBit(me.Requeue, 1)
-
-	//fmt.Println("encode: basic.nack 60 120", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *BasicNack) id() (uint16, uint16) {
+	return 60, 120
 }
 
-func (me BasicNack) HasContent() bool {
+func (me *BasicNack) wait() bool {
 	return false
 }
 
-func (me BasicNack) IsSynchronous() bool {
-	return false
+func (me *BasicNack) write(w io.Writer) (err error) {
+
+	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
+		return
+	}
+
+	return
 }
 
-func (me BasicNack) Method() uint16 {
-	return 120
-}
+func (me *BasicNack) read(r io.Reader) (err error) {
 
-func (me BasicNack) Class() uint16 {
-	return 60
+	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
+		return
+	}
+
+	return
 }
 
 /*  
@@ -2167,30 +2323,22 @@ func (me BasicNack) Class() uint16 {
 type TxSelect struct {
 }
 
-func (me TxSelect) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(90)
-	buf.PutShort(10)
-
-	//fmt.Println("encode: tx.select 90 10", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *TxSelect) id() (uint16, uint16) {
+	return 90, 10
 }
 
-func (me TxSelect) HasContent() bool {
-	return false
-}
-
-func (me TxSelect) IsSynchronous() bool {
+func (me *TxSelect) wait() bool {
 	return true
 }
 
-func (me TxSelect) Method() uint16 {
-	return 10
+func (me *TxSelect) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me TxSelect) Class() uint16 {
-	return 90
+func (me *TxSelect) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -2200,30 +2348,22 @@ func (me TxSelect) Class() uint16 {
 type TxSelectOk struct {
 }
 
-func (me TxSelectOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(90)
-	buf.PutShort(11)
-
-	//fmt.Println("encode: tx.select-ok 90 11", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *TxSelectOk) id() (uint16, uint16) {
+	return 90, 11
 }
 
-func (me TxSelectOk) HasContent() bool {
-	return false
-}
-
-func (me TxSelectOk) IsSynchronous() bool {
+func (me *TxSelectOk) wait() bool {
 	return true
 }
 
-func (me TxSelectOk) Method() uint16 {
-	return 11
+func (me *TxSelectOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me TxSelectOk) Class() uint16 {
-	return 90
+func (me *TxSelectOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -2233,30 +2373,22 @@ func (me TxSelectOk) Class() uint16 {
 type TxCommit struct {
 }
 
-func (me TxCommit) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(90)
-	buf.PutShort(20)
-
-	//fmt.Println("encode: tx.commit 90 20", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *TxCommit) id() (uint16, uint16) {
+	return 90, 20
 }
 
-func (me TxCommit) HasContent() bool {
-	return false
-}
-
-func (me TxCommit) IsSynchronous() bool {
+func (me *TxCommit) wait() bool {
 	return true
 }
 
-func (me TxCommit) Method() uint16 {
-	return 20
+func (me *TxCommit) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me TxCommit) Class() uint16 {
-	return 90
+func (me *TxCommit) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -2266,30 +2398,22 @@ func (me TxCommit) Class() uint16 {
 type TxCommitOk struct {
 }
 
-func (me TxCommitOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(90)
-	buf.PutShort(21)
-
-	//fmt.Println("encode: tx.commit-ok 90 21", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *TxCommitOk) id() (uint16, uint16) {
+	return 90, 21
 }
 
-func (me TxCommitOk) HasContent() bool {
-	return false
-}
-
-func (me TxCommitOk) IsSynchronous() bool {
+func (me *TxCommitOk) wait() bool {
 	return true
 }
 
-func (me TxCommitOk) Method() uint16 {
-	return 21
+func (me *TxCommitOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me TxCommitOk) Class() uint16 {
-	return 90
+func (me *TxCommitOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -2301,30 +2425,22 @@ func (me TxCommitOk) Class() uint16 {
 type TxRollback struct {
 }
 
-func (me TxRollback) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(90)
-	buf.PutShort(30)
-
-	//fmt.Println("encode: tx.rollback 90 30", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *TxRollback) id() (uint16, uint16) {
+	return 90, 30
 }
 
-func (me TxRollback) HasContent() bool {
-	return false
-}
-
-func (me TxRollback) IsSynchronous() bool {
+func (me *TxRollback) wait() bool {
 	return true
 }
 
-func (me TxRollback) Method() uint16 {
-	return 30
+func (me *TxRollback) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me TxRollback) Class() uint16 {
-	return 90
+func (me *TxRollback) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -2334,30 +2450,22 @@ func (me TxRollback) Class() uint16 {
 type TxRollbackOk struct {
 }
 
-func (me TxRollbackOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(90)
-	buf.PutShort(31)
-
-	//fmt.Println("encode: tx.rollback-ok 90 31", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *TxRollbackOk) id() (uint16, uint16) {
+	return 90, 31
 }
 
-func (me TxRollbackOk) HasContent() bool {
-	return false
-}
-
-func (me TxRollbackOk) IsSynchronous() bool {
+func (me *TxRollbackOk) wait() bool {
 	return true
 }
 
-func (me TxRollbackOk) Method() uint16 {
-	return 31
+func (me *TxRollbackOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me TxRollbackOk) Class() uint16 {
-	return 90
+func (me *TxRollbackOk) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -2369,32 +2477,22 @@ type ConfirmSelect struct {
 	Nowait bool
 }
 
-func (me ConfirmSelect) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(85)
-	buf.PutShort(10)
-	buf.PutOctet(0)
-	buf.PutBit(me.Nowait, 0)
-
-	//fmt.Println("encode: confirm.select 85 10", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConfirmSelect) id() (uint16, uint16) {
+	return 85, 10
 }
 
-func (me ConfirmSelect) HasContent() bool {
-	return false
-}
-
-func (me ConfirmSelect) IsSynchronous() bool {
+func (me *ConfirmSelect) wait() bool {
 	return true
 }
 
-func (me ConfirmSelect) Method() uint16 {
-	return 10
+func (me *ConfirmSelect) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ConfirmSelect) Class() uint16 {
-	return 85
+func (me *ConfirmSelect) read(r io.Reader) (err error) {
+
+	return
 }
 
 /*  
@@ -2404,580 +2502,571 @@ func (me ConfirmSelect) Class() uint16 {
 type ConfirmSelectOk struct {
 }
 
-func (me ConfirmSelectOk) WriteTo(w io.Writer) (int64, error) {
-	var buf buffer
-	buf.PutShort(85)
-	buf.PutShort(11)
-
-	//fmt.Println("encode: confirm.select-ok 85 11", buf.Bytes())
-	wn, err := w.Write(buf.Bytes())
-	return int64(wn), err
+func (me *ConfirmSelectOk) id() (uint16, uint16) {
+	return 85, 11
 }
 
-func (me ConfirmSelectOk) HasContent() bool {
-	return false
-}
-
-func (me ConfirmSelectOk) IsSynchronous() bool {
+func (me *ConfirmSelectOk) wait() bool {
 	return true
 }
 
-func (me ConfirmSelectOk) Method() uint16 {
-	return 11
+func (me *ConfirmSelectOk) write(w io.Writer) (err error) {
+
+	return
 }
 
-func (me ConfirmSelectOk) Class() uint16 {
-	return 85
+func (me *ConfirmSelectOk) read(r io.Reader) (err error) {
+
+	return
 }
 
-func (me *buffer) NextMethod() (value Method) {
-	class := me.NextShort()
-	method := me.NextShort()
+func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, err error) {
+	mf := &MethodFrame{
+		ChannelId: channel,
+	}
 
-	switch class {
+	if err = binary.Read(me.r, binary.BigEndian, &mf.ClassId); err != nil {
+		return
+	}
+
+	if err = binary.Read(me.r, binary.BigEndian, &mf.MethodId); err != nil {
+		return
+	}
+
+	switch mf.ClassId {
 
 	case 10: // connection
-		switch method {
+		switch mf.MethodId {
 
 		case 10: // connection start
 			//fmt.Println("NextMethod: class:10 method:10")
-			message := ConnectionStart{}
-			message.VersionMajor = me.NextOctet()
-			message.VersionMinor = me.NextOctet()
-			message.ServerProperties = me.NextTable()
-			message.Mechanisms = me.NextLongstr()
-			message.Locales = me.NextLongstr()
-
-			return message
+			method := &ConnectionStart{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 11: // connection start-ok
 			//fmt.Println("NextMethod: class:10 method:11")
-			message := ConnectionStartOk{}
-			message.ClientProperties = me.NextTable()
-			message.Mechanism = me.NextShortstr()
-			message.Response = me.NextLongstr()
-			message.Locale = me.NextShortstr()
-
-			return message
+			method := &ConnectionStartOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 20: // connection secure
 			//fmt.Println("NextMethod: class:10 method:20")
-			message := ConnectionSecure{}
-			message.Challenge = me.NextLongstr()
-
-			return message
+			method := &ConnectionSecure{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 21: // connection secure-ok
 			//fmt.Println("NextMethod: class:10 method:21")
-			message := ConnectionSecureOk{}
-			message.Response = me.NextLongstr()
-
-			return message
+			method := &ConnectionSecureOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 30: // connection tune
 			//fmt.Println("NextMethod: class:10 method:30")
-			message := ConnectionTune{}
-			message.ChannelMax = me.NextShort()
-			message.FrameMax = me.NextLong()
-			message.Heartbeat = me.NextShort()
-
-			return message
+			method := &ConnectionTune{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 31: // connection tune-ok
 			//fmt.Println("NextMethod: class:10 method:31")
-			message := ConnectionTuneOk{}
-			message.ChannelMax = me.NextShort()
-			message.FrameMax = me.NextLong()
-			message.Heartbeat = me.NextShort()
-
-			return message
+			method := &ConnectionTuneOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 40: // connection open
 			//fmt.Println("NextMethod: class:10 method:40")
-			message := ConnectionOpen{}
-			message.VirtualHost = me.NextShortstr()
-			_ = me.NextShortstr()
-			_ = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &ConnectionOpen{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 41: // connection open-ok
 			//fmt.Println("NextMethod: class:10 method:41")
-			message := ConnectionOpenOk{}
-			_ = me.NextShortstr()
-
-			return message
+			method := &ConnectionOpenOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 50: // connection close
 			//fmt.Println("NextMethod: class:10 method:50")
-			message := ConnectionClose{}
-			message.ReplyCode = me.NextShort()
-			message.ReplyText = me.NextShortstr()
-			message.ClassId = me.NextShort()
-			message.MethodId = me.NextShort()
-
-			return message
+			method := &ConnectionClose{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 51: // connection close-ok
 			//fmt.Println("NextMethod: class:10 method:51")
-			message := ConnectionCloseOk{}
+			method := &ConnectionCloseOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
-			return message
-
+		default:
+			return nil, fmt.Errorf("Bad method frame, unknown method %d for class %d", mf.MethodId, mf.ClassId)
 		}
 
 	case 20: // channel
-		switch method {
+		switch mf.MethodId {
 
 		case 10: // channel open
 			//fmt.Println("NextMethod: class:20 method:10")
-			message := ChannelOpen{}
-			_ = me.NextShortstr()
-
-			return message
+			method := &ChannelOpen{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 11: // channel open-ok
 			//fmt.Println("NextMethod: class:20 method:11")
-			message := ChannelOpenOk{}
-			_ = me.NextLongstr()
-
-			return message
+			method := &ChannelOpenOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 20: // channel flow
 			//fmt.Println("NextMethod: class:20 method:20")
-			message := ChannelFlow{}
-			message.Active = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &ChannelFlow{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 21: // channel flow-ok
 			//fmt.Println("NextMethod: class:20 method:21")
-			message := ChannelFlowOk{}
-			message.Active = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &ChannelFlowOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 40: // channel close
 			//fmt.Println("NextMethod: class:20 method:40")
-			message := ChannelClose{}
-			message.ReplyCode = me.NextShort()
-			message.ReplyText = me.NextShortstr()
-			message.ClassId = me.NextShort()
-			message.MethodId = me.NextShort()
-
-			return message
+			method := &ChannelClose{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 41: // channel close-ok
 			//fmt.Println("NextMethod: class:20 method:41")
-			message := ChannelCloseOk{}
+			method := &ChannelCloseOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
-			return message
-
+		default:
+			return nil, fmt.Errorf("Bad method frame, unknown method %d for class %d", mf.MethodId, mf.ClassId)
 		}
 
 	case 40: // exchange
-		switch method {
+		switch mf.MethodId {
 
 		case 10: // exchange declare
 			//fmt.Println("NextMethod: class:40 method:10")
-			message := ExchangeDeclare{}
-			_ = me.NextShort()
-			message.Exchange = me.NextShortstr()
-			message.Type = me.NextShortstr()
-			message.Passive = me.NextBit(0)
-			message.Durable = me.NextBit(1)
-			message.AutoDelete = me.NextBit(2)
-			message.Internal = me.NextBit(3)
-			message.NoWait = me.NextBit(4)
-			me.NextOctet() // reset
-			message.Arguments = me.NextTable()
-
-			return message
+			method := &ExchangeDeclare{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 11: // exchange declare-ok
 			//fmt.Println("NextMethod: class:40 method:11")
-			message := ExchangeDeclareOk{}
-
-			return message
+			method := &ExchangeDeclareOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 20: // exchange delete
 			//fmt.Println("NextMethod: class:40 method:20")
-			message := ExchangeDelete{}
-			_ = me.NextShort()
-			message.Exchange = me.NextShortstr()
-			message.IfUnused = me.NextBit(0)
-			message.NoWait = me.NextBit(1)
-			me.NextOctet()
-			return message
+			method := &ExchangeDelete{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 21: // exchange delete-ok
 			//fmt.Println("NextMethod: class:40 method:21")
-			message := ExchangeDeleteOk{}
-
-			return message
+			method := &ExchangeDeleteOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 30: // exchange bind
 			//fmt.Println("NextMethod: class:40 method:30")
-			message := ExchangeBind{}
-			_ = me.NextShort()
-			message.Destination = me.NextShortstr()
-			message.Source = me.NextShortstr()
-			message.RoutingKey = me.NextShortstr()
-			message.NoWait = me.NextBit(0)
-			me.NextOctet() // reset
-			message.Arguments = me.NextTable()
-
-			return message
+			method := &ExchangeBind{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 31: // exchange bind-ok
 			//fmt.Println("NextMethod: class:40 method:31")
-			message := ExchangeBindOk{}
-
-			return message
+			method := &ExchangeBindOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 40: // exchange unbind
 			//fmt.Println("NextMethod: class:40 method:40")
-			message := ExchangeUnbind{}
-			_ = me.NextShort()
-			message.Destination = me.NextShortstr()
-			message.Source = me.NextShortstr()
-			message.RoutingKey = me.NextShortstr()
-			message.NoWait = me.NextBit(0)
-			me.NextOctet() // reset
-			message.Arguments = me.NextTable()
-
-			return message
+			method := &ExchangeUnbind{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 51: // exchange unbind-ok
 			//fmt.Println("NextMethod: class:40 method:51")
-			message := ExchangeUnbindOk{}
+			method := &ExchangeUnbindOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
-			return message
-
+		default:
+			return nil, fmt.Errorf("Bad method frame, unknown method %d for class %d", mf.MethodId, mf.ClassId)
 		}
 
 	case 50: // queue
-		switch method {
+		switch mf.MethodId {
 
 		case 10: // queue declare
 			//fmt.Println("NextMethod: class:50 method:10")
-			message := QueueDeclare{}
-			_ = me.NextShort()
-			message.Queue = me.NextShortstr()
-			message.Passive = me.NextBit(0)
-			message.Durable = me.NextBit(1)
-			message.Exclusive = me.NextBit(2)
-			message.AutoDelete = me.NextBit(3)
-			message.NoWait = me.NextBit(4)
-			me.NextOctet() // reset
-			message.Arguments = me.NextTable()
-
-			return message
+			method := &QueueDeclare{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 11: // queue declare-ok
 			//fmt.Println("NextMethod: class:50 method:11")
-			message := QueueDeclareOk{}
-			message.Queue = me.NextShortstr()
-			message.MessageCount = me.NextLong()
-			message.ConsumerCount = me.NextLong()
-
-			return message
+			method := &QueueDeclareOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 20: // queue bind
 			//fmt.Println("NextMethod: class:50 method:20")
-			message := QueueBind{}
-			_ = me.NextShort()
-			message.Queue = me.NextShortstr()
-			message.Exchange = me.NextShortstr()
-			message.RoutingKey = me.NextShortstr()
-			message.NoWait = me.NextBit(0)
-			me.NextOctet() // reset
-			message.Arguments = me.NextTable()
-
-			return message
+			method := &QueueBind{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 21: // queue bind-ok
 			//fmt.Println("NextMethod: class:50 method:21")
-			message := QueueBindOk{}
-
-			return message
+			method := &QueueBindOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 50: // queue unbind
 			//fmt.Println("NextMethod: class:50 method:50")
-			message := QueueUnbind{}
-			_ = me.NextShort()
-			message.Queue = me.NextShortstr()
-			message.Exchange = me.NextShortstr()
-			message.RoutingKey = me.NextShortstr()
-			message.Arguments = me.NextTable()
-
-			return message
+			method := &QueueUnbind{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 51: // queue unbind-ok
 			//fmt.Println("NextMethod: class:50 method:51")
-			message := QueueUnbindOk{}
-
-			return message
+			method := &QueueUnbindOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 30: // queue purge
 			//fmt.Println("NextMethod: class:50 method:30")
-			message := QueuePurge{}
-			_ = me.NextShort()
-			message.Queue = me.NextShortstr()
-			message.NoWait = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &QueuePurge{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 31: // queue purge-ok
 			//fmt.Println("NextMethod: class:50 method:31")
-			message := QueuePurgeOk{}
-			message.MessageCount = me.NextLong()
-
-			return message
+			method := &QueuePurgeOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 40: // queue delete
 			//fmt.Println("NextMethod: class:50 method:40")
-			message := QueueDelete{}
-			_ = me.NextShort()
-			message.Queue = me.NextShortstr()
-			message.IfUnused = me.NextBit(0)
-			message.IfEmpty = me.NextBit(1)
-			message.NoWait = me.NextBit(2)
-			me.NextOctet()
-			return message
+			method := &QueueDelete{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 41: // queue delete-ok
 			//fmt.Println("NextMethod: class:50 method:41")
-			message := QueueDeleteOk{}
-			message.MessageCount = me.NextLong()
+			method := &QueueDeleteOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
-			return message
-
+		default:
+			return nil, fmt.Errorf("Bad method frame, unknown method %d for class %d", mf.MethodId, mf.ClassId)
 		}
 
 	case 60: // basic
-		switch method {
+		switch mf.MethodId {
 
 		case 10: // basic qos
 			//fmt.Println("NextMethod: class:60 method:10")
-			message := BasicQos{}
-			message.PrefetchSize = me.NextLong()
-			message.PrefetchCount = me.NextShort()
-			message.Global = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &BasicQos{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 11: // basic qos-ok
 			//fmt.Println("NextMethod: class:60 method:11")
-			message := BasicQosOk{}
-
-			return message
+			method := &BasicQosOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 20: // basic consume
 			//fmt.Println("NextMethod: class:60 method:20")
-			message := BasicConsume{}
-			_ = me.NextShort()
-			message.Queue = me.NextShortstr()
-			message.ConsumerTag = me.NextShortstr()
-			message.NoLocal = me.NextBit(0)
-			message.NoAck = me.NextBit(1)
-			message.Exclusive = me.NextBit(2)
-			message.NoWait = me.NextBit(3)
-			me.NextOctet() // reset
-			message.Arguments = me.NextTable()
-
-			return message
+			method := &BasicConsume{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 21: // basic consume-ok
 			//fmt.Println("NextMethod: class:60 method:21")
-			message := BasicConsumeOk{}
-			message.ConsumerTag = me.NextShortstr()
-
-			return message
+			method := &BasicConsumeOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 30: // basic cancel
 			//fmt.Println("NextMethod: class:60 method:30")
-			message := BasicCancel{}
-			message.ConsumerTag = me.NextShortstr()
-			message.NoWait = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &BasicCancel{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 31: // basic cancel-ok
 			//fmt.Println("NextMethod: class:60 method:31")
-			message := BasicCancelOk{}
-			message.ConsumerTag = me.NextShortstr()
-
-			return message
+			method := &BasicCancelOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 40: // basic publish
 			//fmt.Println("NextMethod: class:60 method:40")
-			message := BasicPublish{}
-			_ = me.NextShort()
-			message.Exchange = me.NextShortstr()
-			message.RoutingKey = me.NextShortstr()
-			message.Mandatory = me.NextBit(0)
-			message.Immediate = me.NextBit(1)
-			me.NextOctet()
-			return message
+			method := &BasicPublish{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 50: // basic return
 			//fmt.Println("NextMethod: class:60 method:50")
-			message := BasicReturn{}
-			message.ReplyCode = me.NextShort()
-			message.ReplyText = me.NextShortstr()
-			message.Exchange = me.NextShortstr()
-			message.RoutingKey = me.NextShortstr()
-
-			return message
+			method := &BasicReturn{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 60: // basic deliver
 			//fmt.Println("NextMethod: class:60 method:60")
-			message := BasicDeliver{}
-			message.ConsumerTag = me.NextShortstr()
-			message.DeliveryTag = me.NextLonglong()
-			message.Redelivered = me.NextBit(0)
-			me.NextOctet() // reset
-			message.Exchange = me.NextShortstr()
-			message.RoutingKey = me.NextShortstr()
-
-			return message
+			method := &BasicDeliver{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 70: // basic get
 			//fmt.Println("NextMethod: class:60 method:70")
-			message := BasicGet{}
-			_ = me.NextShort()
-			message.Queue = me.NextShortstr()
-			message.NoAck = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &BasicGet{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 71: // basic get-ok
 			//fmt.Println("NextMethod: class:60 method:71")
-			message := BasicGetOk{}
-			message.DeliveryTag = me.NextLonglong()
-			message.Redelivered = me.NextBit(0)
-			me.NextOctet() // reset
-			message.Exchange = me.NextShortstr()
-			message.RoutingKey = me.NextShortstr()
-			message.MessageCount = me.NextLong()
-
-			return message
+			method := &BasicGetOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 72: // basic get-empty
 			//fmt.Println("NextMethod: class:60 method:72")
-			message := BasicGetEmpty{}
-			_ = me.NextShortstr()
-
-			return message
+			method := &BasicGetEmpty{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 80: // basic ack
 			//fmt.Println("NextMethod: class:60 method:80")
-			message := BasicAck{}
-			message.DeliveryTag = me.NextLonglong()
-			message.Multiple = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &BasicAck{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 90: // basic reject
 			//fmt.Println("NextMethod: class:60 method:90")
-			message := BasicReject{}
-			message.DeliveryTag = me.NextLonglong()
-			message.Requeue = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &BasicReject{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 100: // basic recover-async
 			//fmt.Println("NextMethod: class:60 method:100")
-			message := BasicRecoverAsync{}
-			message.Requeue = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &BasicRecoverAsync{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 110: // basic recover
 			//fmt.Println("NextMethod: class:60 method:110")
-			message := BasicRecover{}
-			message.Requeue = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &BasicRecover{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 111: // basic recover-ok
 			//fmt.Println("NextMethod: class:60 method:111")
-			message := BasicRecoverOk{}
-
-			return message
+			method := &BasicRecoverOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 120: // basic nack
 			//fmt.Println("NextMethod: class:60 method:120")
-			message := BasicNack{}
-			message.DeliveryTag = me.NextLonglong()
-			message.Multiple = me.NextBit(0)
-			message.Requeue = me.NextBit(1)
-			me.NextOctet()
-			return message
+			method := &BasicNack{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
+		default:
+			return nil, fmt.Errorf("Bad method frame, unknown method %d for class %d", mf.MethodId, mf.ClassId)
 		}
 
 	case 90: // tx
-		switch method {
+		switch mf.MethodId {
 
 		case 10: // tx select
 			//fmt.Println("NextMethod: class:90 method:10")
-			message := TxSelect{}
-
-			return message
+			method := &TxSelect{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 11: // tx select-ok
 			//fmt.Println("NextMethod: class:90 method:11")
-			message := TxSelectOk{}
-
-			return message
+			method := &TxSelectOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 20: // tx commit
 			//fmt.Println("NextMethod: class:90 method:20")
-			message := TxCommit{}
-
-			return message
+			method := &TxCommit{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 21: // tx commit-ok
 			//fmt.Println("NextMethod: class:90 method:21")
-			message := TxCommitOk{}
-
-			return message
+			method := &TxCommitOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 30: // tx rollback
 			//fmt.Println("NextMethod: class:90 method:30")
-			message := TxRollback{}
-
-			return message
+			method := &TxRollback{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 31: // tx rollback-ok
 			//fmt.Println("NextMethod: class:90 method:31")
-			message := TxRollbackOk{}
+			method := &TxRollbackOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
-			return message
-
+		default:
+			return nil, fmt.Errorf("Bad method frame, unknown method %d for class %d", mf.MethodId, mf.ClassId)
 		}
 
 	case 85: // confirm
-		switch method {
+		switch mf.MethodId {
 
 		case 10: // confirm select
 			//fmt.Println("NextMethod: class:85 method:10")
-			message := ConfirmSelect{}
-			message.Nowait = me.NextBit(0)
-			me.NextOctet()
-			return message
+			method := &ConfirmSelect{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
 		case 11: // confirm select-ok
 			//fmt.Println("NextMethod: class:85 method:11")
-			message := ConfirmSelectOk{}
+			method := &ConfirmSelectOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
 
-			return message
-
+		default:
+			return nil, fmt.Errorf("Bad method frame, unknown method %d for class %d", mf.MethodId, mf.ClassId)
 		}
 
+	default:
+		return nil, fmt.Errorf("Bad method frame, unknown class %d", mf.ClassId)
 	}
 
-	return nil
+	return mf, nil
 }
