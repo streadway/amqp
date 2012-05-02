@@ -19,11 +19,13 @@ func (me *methodFrame) write(w io.Writer) (err error) {
 		return errors.New("malformed frame: missing method")
 	}
 
-	if err = binary.Write(w, binary.BigEndian, me.ClassId); err != nil {
+	class, method := me.Method.id()
+
+	if err = binary.Write(&payload, binary.BigEndian, class); err != nil {
 		return
 	}
 
-	if err = binary.Write(w, binary.BigEndian, me.MethodId); err != nil {
+	if err = binary.Write(&payload, binary.BigEndian, method); err != nil {
 		return
 	}
 
@@ -195,12 +197,12 @@ func writeFrame(w io.Writer, typ uint8, channel uint16, payload []byte) (err err
 
 	_, err = w.Write([]byte{
 		byte(typ),
-		byte(channel & 0xff00 >> 8),
-		byte(channel & 0x00ff >> 0),
-		byte(size & 0xff000000 >> 24),
-		byte(size & 0x00ff0000 >> 16),
-		byte(size & 0x0000ff00 >> 8),
-		byte(size & 0x000000ff >> 0),
+		byte((channel & 0xff00) >> 8),
+		byte((channel & 0x00ff) >> 0),
+		byte((size & 0xff000000) >> 24),
+		byte((size & 0x00ff0000) >> 16),
+		byte((size & 0x0000ff00) >> 8),
+		byte((size & 0x000000ff) >> 0),
 	})
 
 	if err != nil {

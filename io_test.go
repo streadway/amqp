@@ -1,6 +1,7 @@
-package amqp_test
+package amqp
 
 import (
+	"fmt"
 	"io"
 	"testing"
 )
@@ -27,22 +28,23 @@ type logIO struct {
 }
 
 func (me *logIO) Read(p []byte) (n int, err error) {
-	me.t.Logf("%s reading %d\n", me.prefix, len(p))
+	fmt.Printf("%s reading %d\n", me.prefix, len(p))
 	n, err = me.proxy.Read(p)
 	if err != nil {
-		me.t.Logf("%s read %x: %v\n", me.prefix, p[0:n], err)
+		fmt.Printf("%s read %x: %v\n", me.prefix, p[0:n], err)
 	} else {
-		me.t.Logf("%s read %x\n", me.prefix, p[0:n])
+		fmt.Printf("%s read %x\n", me.prefix, p[0:n])
 	}
 	return
 }
 
 func (me *logIO) Write(p []byte) (n int, err error) {
+	fmt.Printf("%s writing %d\n", me.prefix, len(p))
 	n, err = me.proxy.Write(p)
 	if err != nil {
-		me.t.Logf("%s write %d, %x: %v\n", me.prefix, len(p), p[0:n], err)
+		fmt.Printf("%s write %d, %x: %v\n", me.prefix, len(p), p[0:n], err)
 	} else {
-		me.t.Logf("%s write %d, %x\n", me.prefix, len(p), p[0:n])
+		fmt.Printf("%s write %d, %x\n", me.prefix, len(p), p[0:n])
 	}
 	return
 }
@@ -50,13 +52,13 @@ func (me *logIO) Write(p []byte) (n int, err error) {
 func (me *logIO) Close() (err error) {
 	err = me.proxy.Close()
 	if err != nil {
-		me.t.Logf("%s close : %v\n", me.prefix, err)
+		fmt.Printf("%s close : %v\n", me.prefix, err)
 	} else {
-		me.t.Logf("%s close\n", me.prefix, err)
+		fmt.Printf("%s close\n", me.prefix, err)
 	}
 	return
 }
 
 func (me *logIO) Test() {
-	me.t.Logf("test: %v\n", me)
+	fmt.Printf("test: %v\n", me)
 }

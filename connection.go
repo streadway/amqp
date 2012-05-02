@@ -1,6 +1,7 @@
 package amqp
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"sync"
@@ -10,8 +11,7 @@ import (
 type Connection struct {
 	conn io.ReadWriteCloser
 
-	messages chan message
-
+	in  chan message
 	out chan frame
 
 	VersionMajor int
@@ -30,9 +30,9 @@ type Connection struct {
 
 func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *Connection, err error) {
 	me = &Connection{
-		conn: conn,
-		//msgs:  make(chan message), // incoming synchronous connection methods (Channel == 0)
-		//out:      make(chan frame),  // shared chan that muxes all frames
+		conn:     conn,
+		out:      make(chan frame),
+		in:       make(chan message),
 		channels: make(map[uint16]*Channel),
 	}
 
@@ -61,7 +61,7 @@ func (me *Connection) demux(f frame) {
 		// TODO send hard error if any content frames/async frames are sent here
 		switch mf := f.(type) {
 		case *methodFrame:
-			me.messages <- mf.Method
+			me.in <- mf.Method
 		default:
 			panic("TODO close with hard-error")
 		}
@@ -81,7 +81,8 @@ func (me *Connection) demux(f frame) {
 // will demux the streams and dispatch to one of the opened channels or
 // handle on channel 0 (the connection channel).
 func (me *Connection) reader() {
-	frames := &reader{me.conn}
+	buf := bufio.NewReader(me.conn)
+	frames := &reader{buf}
 
 	for {
 		frame, err := frames.ReadFrame()
@@ -96,6 +97,11 @@ func (me *Connection) reader() {
 }
 
 func (me *Connection) writer() {
+	var err error
+
+	buf := bufio.NewWriter(me.conn)
+	frames := &writer{buf}
+
 	for {
 		frame := <-me.out
 		if frame == nil {
@@ -103,23 +109,23 @@ func (me *Connection) writer() {
 			return
 		}
 
-		err := frame.write(me.conn)
-
-		if err != nil {
+		if err = frames.WriteFrame(frame); err != nil {
 			// TODO handle write failure to cleanly shutdown the connection
+			panic("bad write")
+		}
+
+		if err = buf.Flush(); err != nil {
+			panic("bad write")
 		}
 	}
 }
 
-// Only needs to be called if you want to interleave multiple publishers or
-// multiple consumers on the same network Connection.  Each client comes with a
-// opened embedded channel and exposes all channel related interfaces directly.
-func (me *Connection) OpenChannel() (channel *Channel, err error) {
+// Constructs and opens a unique channel for concurrent operations
+func (me *Connection) Channel() (channel *Channel, err error) {
 	id := me.nextChannelId()
 	channel, err = newChannel(me, id)
 	me.channels[id] = channel
-	//return channel, channel.open()
-	return channel, nil
+	return channel, channel.open()
 }
 
 //    Connection          = open-Connection *use-Connection close-Connection
@@ -137,7 +143,7 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 		return
 	}
 
-	switch start := (<-me.messages).(type) {
+	switch start := (<-me.in).(type) {
 	case *connectionStart:
 		me.VersionMajor = int(start.VersionMajor)
 		me.VersionMinor = int(start.VersionMinor)
@@ -151,7 +157,7 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 			},
 		}
 
-		switch tune := (<-me.messages).(type) {
+		switch tune := (<-me.in).(type) {
 		// TODO SECURE HANDSHAKE
 		case *connectionTune:
 			me.MaxChannels = int(tune.ChannelMax)
@@ -174,7 +180,7 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 				},
 			}
 
-			switch (<-me.messages).(type) {
+			switch (<-me.in).(type) {
 			case *connectionOpenOk:
 				return nil
 			}

@@ -165,6 +165,13 @@ func (me *connectionStart) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeLongstr(w, me.Mechanisms); err != nil {
+		return
+	}
+	if err = writeLongstr(w, me.Locales); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -178,6 +185,13 @@ func (me *connectionStart) read(r io.Reader) (err error) {
 	}
 
 	if me.ServerProperties, err = readTable(r); err != nil {
+		return
+	}
+
+	if me.Mechanisms, err = readLongstr(r); err != nil {
+		return
+	}
+	if me.Locales, err = readLongstr(r); err != nil {
 		return
 	}
 
@@ -217,6 +231,10 @@ func (me *connectionStartOk) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeShortstr(w, me.Locale); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -231,6 +249,10 @@ func (me *connectionStartOk) read(r io.Reader) (err error) {
 	}
 
 	if me.Response, err = readLongstr(r); err != nil {
+		return
+	}
+
+	if me.Locale, err = readShortstr(r); err != nil {
 		return
 	}
 
@@ -257,10 +279,18 @@ func (me *connectionSecure) wait() bool {
 
 func (me *connectionSecure) write(w io.Writer) (err error) {
 
+	if err = writeLongstr(w, me.Challenge); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *connectionSecure) read(r io.Reader) (err error) {
+
+	if me.Challenge, err = readLongstr(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -284,10 +314,18 @@ func (me *connectionSecureOk) wait() bool {
 
 func (me *connectionSecureOk) write(w io.Writer) (err error) {
 
+	if err = writeLongstr(w, me.Response); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *connectionSecureOk) read(r io.Reader) (err error) {
+
+	if me.Response, err = readLongstr(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -321,6 +359,10 @@ func (me *connectionTune) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = binary.Write(w, binary.BigEndian, me.Heartbeat); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -331,6 +373,10 @@ func (me *connectionTune) read(r io.Reader) (err error) {
 	}
 
 	if err = binary.Read(r, binary.BigEndian, &me.FrameMax); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.Heartbeat); err != nil {
 		return
 	}
 
@@ -366,6 +412,10 @@ func (me *connectionTuneOk) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = binary.Write(w, binary.BigEndian, me.Heartbeat); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -376,6 +426,10 @@ func (me *connectionTuneOk) read(r io.Reader) (err error) {
 	}
 
 	if err = binary.Read(r, binary.BigEndian, &me.FrameMax); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.Heartbeat); err != nil {
 		return
 	}
 
@@ -403,6 +457,7 @@ func (me *connectionOpen) wait() bool {
 }
 
 func (me *connectionOpen) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = writeShortstr(w, me.VirtualHost); err != nil {
 		return
@@ -411,10 +466,19 @@ func (me *connectionOpen) write(w io.Writer) (err error) {
 		return
 	}
 
+	if me.reserved2 {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *connectionOpen) read(r io.Reader) (err error) {
+	var bits byte
 
 	if me.VirtualHost, err = readShortstr(r); err != nil {
 		return
@@ -422,6 +486,11 @@ func (me *connectionOpen) read(r io.Reader) (err error) {
 	if me.reserved1, err = readShortstr(r); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.reserved2 = (bits&(1<<0) > 0)
 
 	return
 }
@@ -443,10 +512,18 @@ func (me *connectionOpenOk) wait() bool {
 
 func (me *connectionOpenOk) write(w io.Writer) (err error) {
 
+	if err = writeShortstr(w, me.reserved1); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *connectionOpenOk) read(r io.Reader) (err error) {
+
+	if me.reserved1, err = readShortstr(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -483,6 +560,13 @@ func (me *connectionClose) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = binary.Write(w, binary.BigEndian, me.ClassId); err != nil {
+		return
+	}
+	if err = binary.Write(w, binary.BigEndian, me.MethodId); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -493,6 +577,13 @@ func (me *connectionClose) read(r io.Reader) (err error) {
 	}
 
 	if me.ReplyText, err = readShortstr(r); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.ClassId); err != nil {
+		return
+	}
+	if err = binary.Read(r, binary.BigEndian, &me.MethodId); err != nil {
 		return
 	}
 
@@ -541,10 +632,18 @@ func (me *channelOpen) wait() bool {
 
 func (me *channelOpen) write(w io.Writer) (err error) {
 
+	if err = writeShortstr(w, me.reserved1); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *channelOpen) read(r io.Reader) (err error) {
+
+	if me.reserved1, err = readShortstr(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -566,10 +665,18 @@ func (me *channelOpenOk) wait() bool {
 
 func (me *channelOpenOk) write(w io.Writer) (err error) {
 
+	if err = writeLongstr(w, me.reserved1); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *channelOpenOk) read(r io.Reader) (err error) {
+
+	if me.reserved1, err = readLongstr(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -595,11 +702,26 @@ func (me *channelFlow) wait() bool {
 }
 
 func (me *channelFlow) write(w io.Writer) (err error) {
+	var bits byte
+
+	if me.Active {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
 
 	return
 }
 
 func (me *channelFlow) read(r io.Reader) (err error) {
+	var bits byte
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Active = (bits&(1<<0) > 0)
 
 	return
 }
@@ -621,11 +743,26 @@ func (me *channelFlowOk) wait() bool {
 }
 
 func (me *channelFlowOk) write(w io.Writer) (err error) {
+	var bits byte
+
+	if me.Active {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
 
 	return
 }
 
 func (me *channelFlowOk) read(r io.Reader) (err error) {
+	var bits byte
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Active = (bits&(1<<0) > 0)
 
 	return
 }
@@ -662,6 +799,13 @@ func (me *channelClose) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = binary.Write(w, binary.BigEndian, me.ClassId); err != nil {
+		return
+	}
+	if err = binary.Write(w, binary.BigEndian, me.MethodId); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -672,6 +816,13 @@ func (me *channelClose) read(r io.Reader) (err error) {
 	}
 
 	if me.ReplyText, err = readShortstr(r); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.ClassId); err != nil {
+		return
+	}
+	if err = binary.Read(r, binary.BigEndian, &me.MethodId); err != nil {
 		return
 	}
 
@@ -729,6 +880,7 @@ func (me *exchangeDeclare) wait() bool {
 }
 
 func (me *exchangeDeclare) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -740,8 +892,6 @@ func (me *exchangeDeclare) write(w io.Writer) (err error) {
 	if err = writeShortstr(w, me.Type); err != nil {
 		return
 	}
-
-	var bits byte
 
 	if me.Passive {
 		bits |= 1 << 0
@@ -767,10 +917,15 @@ func (me *exchangeDeclare) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeTable(w, me.Arguments); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *exchangeDeclare) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -783,7 +938,6 @@ func (me *exchangeDeclare) read(r io.Reader) (err error) {
 		return
 	}
 
-	var bits byte
 	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
 		return
 	}
@@ -792,6 +946,10 @@ func (me *exchangeDeclare) read(r io.Reader) (err error) {
 	me.AutoDelete = (bits&(1<<2) > 0)
 	me.Internal = (bits&(1<<3) > 0)
 	me.NoWait = (bits&(1<<4) > 0)
+
+	if me.Arguments, err = readTable(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -841,6 +999,7 @@ func (me *exchangeDelete) wait() bool {
 }
 
 func (me *exchangeDelete) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -850,10 +1009,23 @@ func (me *exchangeDelete) write(w io.Writer) (err error) {
 		return
 	}
 
+	if me.IfUnused {
+		bits |= 1 << 0
+	}
+
+	if me.NoWait {
+		bits |= 1 << 1
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *exchangeDelete) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -862,6 +1034,12 @@ func (me *exchangeDelete) read(r io.Reader) (err error) {
 	if me.Exchange, err = readShortstr(r); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.IfUnused = (bits&(1<<0) > 0)
+	me.NoWait = (bits&(1<<1) > 0)
 
 	return
 }
@@ -908,6 +1086,7 @@ func (me *exchangeBind) wait() bool {
 }
 
 func (me *exchangeBind) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -923,8 +1102,6 @@ func (me *exchangeBind) write(w io.Writer) (err error) {
 		return
 	}
 
-	var bits byte
-
 	if me.NoWait {
 		bits |= 1 << 0
 	}
@@ -933,10 +1110,15 @@ func (me *exchangeBind) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeTable(w, me.Arguments); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *exchangeBind) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -952,11 +1134,14 @@ func (me *exchangeBind) read(r io.Reader) (err error) {
 		return
 	}
 
-	var bits byte
 	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
 		return
 	}
 	me.NoWait = (bits&(1<<0) > 0)
+
+	if me.Arguments, err = readTable(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -1003,6 +1188,7 @@ func (me *exchangeUnbind) wait() bool {
 }
 
 func (me *exchangeUnbind) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1018,8 +1204,6 @@ func (me *exchangeUnbind) write(w io.Writer) (err error) {
 		return
 	}
 
-	var bits byte
-
 	if me.NoWait {
 		bits |= 1 << 0
 	}
@@ -1028,10 +1212,15 @@ func (me *exchangeUnbind) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeTable(w, me.Arguments); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *exchangeUnbind) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1047,11 +1236,14 @@ func (me *exchangeUnbind) read(r io.Reader) (err error) {
 		return
 	}
 
-	var bits byte
 	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
 		return
 	}
 	me.NoWait = (bits&(1<<0) > 0)
+
+	if me.Arguments, err = readTable(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -1104,6 +1296,7 @@ func (me *queueDeclare) wait() bool {
 }
 
 func (me *queueDeclare) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1112,8 +1305,6 @@ func (me *queueDeclare) write(w io.Writer) (err error) {
 	if err = writeShortstr(w, me.Queue); err != nil {
 		return
 	}
-
-	var bits byte
 
 	if me.Passive {
 		bits |= 1 << 0
@@ -1139,10 +1330,15 @@ func (me *queueDeclare) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeTable(w, me.Arguments); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *queueDeclare) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1152,7 +1348,6 @@ func (me *queueDeclare) read(r io.Reader) (err error) {
 		return
 	}
 
-	var bits byte
 	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
 		return
 	}
@@ -1161,6 +1356,10 @@ func (me *queueDeclare) read(r io.Reader) (err error) {
 	me.Exclusive = (bits&(1<<2) > 0)
 	me.AutoDelete = (bits&(1<<3) > 0)
 	me.NoWait = (bits&(1<<4) > 0)
+
+	if me.Arguments, err = readTable(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -1190,12 +1389,26 @@ func (me *queueDeclareOk) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = binary.Write(w, binary.BigEndian, me.MessageCount); err != nil {
+		return
+	}
+	if err = binary.Write(w, binary.BigEndian, me.ConsumerCount); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *queueDeclareOk) read(r io.Reader) (err error) {
 
 	if me.Queue, err = readShortstr(r); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.MessageCount); err != nil {
+		return
+	}
+	if err = binary.Read(r, binary.BigEndian, &me.ConsumerCount); err != nil {
 		return
 	}
 
@@ -1227,6 +1440,7 @@ func (me *queueBind) wait() bool {
 }
 
 func (me *queueBind) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1242,8 +1456,6 @@ func (me *queueBind) write(w io.Writer) (err error) {
 		return
 	}
 
-	var bits byte
-
 	if me.NoWait {
 		bits |= 1 << 0
 	}
@@ -1252,10 +1464,15 @@ func (me *queueBind) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeTable(w, me.Arguments); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *queueBind) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1271,11 +1488,14 @@ func (me *queueBind) read(r io.Reader) (err error) {
 		return
 	}
 
-	var bits byte
 	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
 		return
 	}
 	me.NoWait = (bits&(1<<0) > 0)
+
+	if me.Arguments, err = readTable(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -1336,6 +1556,10 @@ func (me *queueUnbind) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeTable(w, me.Arguments); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -1352,6 +1576,10 @@ func (me *queueUnbind) read(r io.Reader) (err error) {
 		return
 	}
 	if me.RoutingKey, err = readShortstr(r); err != nil {
+		return
+	}
+
+	if me.Arguments, err = readTable(r); err != nil {
 		return
 	}
 
@@ -1399,6 +1627,7 @@ func (me *queuePurge) wait() bool {
 }
 
 func (me *queuePurge) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1408,10 +1637,19 @@ func (me *queuePurge) write(w io.Writer) (err error) {
 		return
 	}
 
+	if me.NoWait {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *queuePurge) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1420,6 +1658,11 @@ func (me *queuePurge) read(r io.Reader) (err error) {
 	if me.Queue, err = readShortstr(r); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.NoWait = (bits&(1<<0) > 0)
 
 	return
 }
@@ -1439,10 +1682,18 @@ func (me *queuePurgeOk) wait() bool {
 
 func (me *queuePurgeOk) write(w io.Writer) (err error) {
 
+	if err = binary.Write(w, binary.BigEndian, me.MessageCount); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *queuePurgeOk) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.MessageCount); err != nil {
+		return
+	}
 
 	return
 }
@@ -1469,6 +1720,7 @@ func (me *queueDelete) wait() bool {
 }
 
 func (me *queueDelete) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1478,10 +1730,27 @@ func (me *queueDelete) write(w io.Writer) (err error) {
 		return
 	}
 
+	if me.IfUnused {
+		bits |= 1 << 0
+	}
+
+	if me.IfEmpty {
+		bits |= 1 << 1
+	}
+
+	if me.NoWait {
+		bits |= 1 << 2
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *queueDelete) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1490,6 +1759,13 @@ func (me *queueDelete) read(r io.Reader) (err error) {
 	if me.Queue, err = readShortstr(r); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.IfUnused = (bits&(1<<0) > 0)
+	me.IfEmpty = (bits&(1<<1) > 0)
+	me.NoWait = (bits&(1<<2) > 0)
 
 	return
 }
@@ -1509,10 +1785,18 @@ func (me *queueDeleteOk) wait() bool {
 
 func (me *queueDeleteOk) write(w io.Writer) (err error) {
 
+	if err = binary.Write(w, binary.BigEndian, me.MessageCount); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *queueDeleteOk) read(r io.Reader) (err error) {
+
+	if err = binary.Read(r, binary.BigEndian, &me.MessageCount); err != nil {
+		return
+	}
 
 	return
 }
@@ -1540,6 +1824,7 @@ func (me *basicQos) wait() bool {
 }
 
 func (me *basicQos) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.PrefetchSize); err != nil {
 		return
@@ -1549,10 +1834,19 @@ func (me *basicQos) write(w io.Writer) (err error) {
 		return
 	}
 
+	if me.Global {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicQos) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.PrefetchSize); err != nil {
 		return
@@ -1561,6 +1855,11 @@ func (me *basicQos) read(r io.Reader) (err error) {
 	if err = binary.Read(r, binary.BigEndian, &me.PrefetchCount); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Global = (bits&(1<<0) > 0)
 
 	return
 }
@@ -1617,6 +1916,7 @@ func (me *basicConsume) wait() bool {
 }
 
 func (me *basicConsume) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1628,8 +1928,6 @@ func (me *basicConsume) write(w io.Writer) (err error) {
 	if err = writeShortstr(w, me.ConsumerTag); err != nil {
 		return
 	}
-
-	var bits byte
 
 	if me.NoLocal {
 		bits |= 1 << 0
@@ -1651,10 +1949,15 @@ func (me *basicConsume) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeTable(w, me.Arguments); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicConsume) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1667,7 +1970,6 @@ func (me *basicConsume) read(r io.Reader) (err error) {
 		return
 	}
 
-	var bits byte
 	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
 		return
 	}
@@ -1675,6 +1977,10 @@ func (me *basicConsume) read(r io.Reader) (err error) {
 	me.NoAck = (bits&(1<<1) > 0)
 	me.Exclusive = (bits&(1<<2) > 0)
 	me.NoWait = (bits&(1<<3) > 0)
+
+	if me.Arguments, err = readTable(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -1697,10 +2003,18 @@ func (me *basicConsumeOk) wait() bool {
 
 func (me *basicConsumeOk) write(w io.Writer) (err error) {
 
+	if err = writeShortstr(w, me.ConsumerTag); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicConsumeOk) read(r io.Reader) (err error) {
+
+	if me.ConsumerTag, err = readShortstr(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -1736,8 +2050,17 @@ func (me *basicCancel) wait() bool {
 }
 
 func (me *basicCancel) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = writeShortstr(w, me.ConsumerTag); err != nil {
+		return
+	}
+
+	if me.NoWait {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
 		return
 	}
 
@@ -1745,10 +2068,16 @@ func (me *basicCancel) write(w io.Writer) (err error) {
 }
 
 func (me *basicCancel) read(r io.Reader) (err error) {
+	var bits byte
 
 	if me.ConsumerTag, err = readShortstr(r); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.NoWait = (bits&(1<<0) > 0)
 
 	return
 }
@@ -1770,10 +2099,18 @@ func (me *basicCancelOk) wait() bool {
 
 func (me *basicCancelOk) write(w io.Writer) (err error) {
 
+	if err = writeShortstr(w, me.ConsumerTag); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicCancelOk) read(r io.Reader) (err error) {
+
+	if me.ConsumerTag, err = readShortstr(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -1810,6 +2147,7 @@ func (me *basicPublish) setContent(properties Properties, body []byte) {
 }
 
 func (me *basicPublish) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1822,10 +2160,23 @@ func (me *basicPublish) write(w io.Writer) (err error) {
 		return
 	}
 
+	if me.Mandatory {
+		bits |= 1 << 0
+	}
+
+	if me.Immediate {
+		bits |= 1 << 1
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicPublish) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1837,6 +2188,12 @@ func (me *basicPublish) read(r io.Reader) (err error) {
 	if me.RoutingKey, err = readShortstr(r); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Mandatory = (bits&(1<<0) > 0)
+	me.Immediate = (bits&(1<<1) > 0)
 
 	return
 }
@@ -1878,12 +2235,32 @@ func (me *basicReturn) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeShortstr(w, me.ReplyText); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.Exchange); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.RoutingKey); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicReturn) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.ReplyCode); err != nil {
+		return
+	}
+
+	if me.ReplyText, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.Exchange, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.RoutingKey, err = readShortstr(r); err != nil {
 		return
 	}
 
@@ -1923,6 +2300,7 @@ func (me *basicDeliver) setContent(properties Properties, body []byte) {
 }
 
 func (me *basicDeliver) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = writeShortstr(w, me.ConsumerTag); err != nil {
 		return
@@ -1932,8 +2310,6 @@ func (me *basicDeliver) write(w io.Writer) (err error) {
 		return
 	}
 
-	var bits byte
-
 	if me.Redelivered {
 		bits |= 1 << 0
 	}
@@ -1942,10 +2318,18 @@ func (me *basicDeliver) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = writeShortstr(w, me.Exchange); err != nil {
+		return
+	}
+	if err = writeShortstr(w, me.RoutingKey); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicDeliver) read(r io.Reader) (err error) {
+	var bits byte
 
 	if me.ConsumerTag, err = readShortstr(r); err != nil {
 		return
@@ -1955,11 +2339,17 @@ func (me *basicDeliver) read(r io.Reader) (err error) {
 		return
 	}
 
-	var bits byte
 	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
 		return
 	}
 	me.Redelivered = (bits&(1<<0) > 0)
+
+	if me.Exchange, err = readShortstr(r); err != nil {
+		return
+	}
+	if me.RoutingKey, err = readShortstr(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -1984,6 +2374,7 @@ func (me *basicGet) wait() bool {
 }
 
 func (me *basicGet) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1993,10 +2384,19 @@ func (me *basicGet) write(w io.Writer) (err error) {
 		return
 	}
 
+	if me.NoAck {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicGet) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -2005,6 +2405,11 @@ func (me *basicGet) read(r io.Reader) (err error) {
 	if me.Queue, err = readShortstr(r); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.NoAck = (bits&(1<<0) > 0)
 
 	return
 }
@@ -2041,12 +2446,11 @@ func (me *basicGetOk) setContent(properties Properties, body []byte) {
 }
 
 func (me *basicGetOk) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
 		return
 	}
-
-	var bits byte
 
 	if me.Redelivered {
 		bits |= 1 << 0
@@ -2063,16 +2467,20 @@ func (me *basicGetOk) write(w io.Writer) (err error) {
 		return
 	}
 
+	if err = binary.Write(w, binary.BigEndian, me.MessageCount); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicGetOk) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
 		return
 	}
 
-	var bits byte
 	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
 		return
 	}
@@ -2082,6 +2490,10 @@ func (me *basicGetOk) read(r io.Reader) (err error) {
 		return
 	}
 	if me.RoutingKey, err = readShortstr(r); err != nil {
+		return
+	}
+
+	if err = binary.Read(r, binary.BigEndian, &me.MessageCount); err != nil {
 		return
 	}
 
@@ -2106,10 +2518,18 @@ func (me *basicGetEmpty) wait() bool {
 
 func (me *basicGetEmpty) write(w io.Writer) (err error) {
 
+	if err = writeShortstr(w, me.reserved1); err != nil {
+		return
+	}
+
 	return
 }
 
 func (me *basicGetEmpty) read(r io.Reader) (err error) {
+
+	if me.reserved1, err = readShortstr(r); err != nil {
+		return
+	}
 
 	return
 }
@@ -2140,8 +2560,17 @@ func (me *basicAck) wait() bool {
 }
 
 func (me *basicAck) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
+		return
+	}
+
+	if me.Multiple {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
 		return
 	}
 
@@ -2149,10 +2578,16 @@ func (me *basicAck) write(w io.Writer) (err error) {
 }
 
 func (me *basicAck) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Multiple = (bits&(1<<0) > 0)
 
 	return
 }
@@ -2177,8 +2612,17 @@ func (me *basicReject) wait() bool {
 }
 
 func (me *basicReject) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
+		return
+	}
+
+	if me.Requeue {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
 		return
 	}
 
@@ -2186,10 +2630,16 @@ func (me *basicReject) write(w io.Writer) (err error) {
 }
 
 func (me *basicReject) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Requeue = (bits&(1<<0) > 0)
 
 	return
 }
@@ -2213,11 +2663,26 @@ func (me *basicRecoverAsync) wait() bool {
 }
 
 func (me *basicRecoverAsync) write(w io.Writer) (err error) {
+	var bits byte
+
+	if me.Requeue {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
 
 	return
 }
 
 func (me *basicRecoverAsync) read(r io.Reader) (err error) {
+	var bits byte
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Requeue = (bits&(1<<0) > 0)
 
 	return
 }
@@ -2241,11 +2706,26 @@ func (me *basicRecover) wait() bool {
 }
 
 func (me *basicRecover) write(w io.Writer) (err error) {
+	var bits byte
+
+	if me.Requeue {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
 
 	return
 }
 
 func (me *basicRecover) read(r io.Reader) (err error) {
+	var bits byte
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Requeue = (bits&(1<<0) > 0)
 
 	return
 }
@@ -2299,8 +2779,21 @@ func (me *basicNack) wait() bool {
 }
 
 func (me *basicNack) write(w io.Writer) (err error) {
+	var bits byte
 
 	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
+		return
+	}
+
+	if me.Multiple {
+		bits |= 1 << 0
+	}
+
+	if me.Requeue {
+		bits |= 1 << 1
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
 		return
 	}
 
@@ -2308,10 +2801,17 @@ func (me *basicNack) write(w io.Writer) (err error) {
 }
 
 func (me *basicNack) read(r io.Reader) (err error) {
+	var bits byte
 
 	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
 		return
 	}
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Multiple = (bits&(1<<0) > 0)
+	me.Requeue = (bits&(1<<1) > 0)
 
 	return
 }
@@ -2486,11 +2986,26 @@ func (me *confirmSelect) wait() bool {
 }
 
 func (me *confirmSelect) write(w io.Writer) (err error) {
+	var bits byte
+
+	if me.Nowait {
+		bits |= 1 << 0
+	}
+
+	if err = binary.Write(w, binary.BigEndian, bits); err != nil {
+		return
+	}
 
 	return
 }
 
 func (me *confirmSelect) read(r io.Reader) (err error) {
+	var bits byte
+
+	if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
+		return
+	}
+	me.Nowait = (bits&(1<<0) > 0)
 
 	return
 }

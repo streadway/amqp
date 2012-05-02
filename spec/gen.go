@@ -179,11 +179,13 @@ var (
       }
 			{{end}}
       func (me *{{$struct}}) write(w io.Writer) (err error) {
+				{{if $.HasType "bit" $method}}var bits byte{{end}}
         {{.Fields | $.Fieldsets | $.Partial "enc-"}}
         return
       }
 
       func (me *{{$struct}}) read(r io.Reader) (err error) {
+				{{if $.HasType "bit" $method}}var bits byte{{end}}
         {{.Fields | $.Fieldsets | $.Partial "dec-"}}
         return
       }
@@ -230,7 +232,6 @@ var (
   {{end}}
 
   {{define "enc-bit"}}
-    var bits byte
     {{range $off, $field := .Fields}}
     if me.{{$field | $.FieldName}} { bits |= 1 << {{$off}} }
     {{end}}
@@ -274,7 +275,6 @@ var (
   {{end}}
 
   {{define "dec-bit"}}
-    var bits byte
     if err = binary.Read(r, binary.BigEndian, &bits); err != nil {
       return
     }
@@ -338,40 +338,46 @@ func (me *renderer) Partial(prefix string, fields []fieldset) (s string, err err
 
 // Groups the fields so that the right encoder/decoder can be called
 func (me *renderer) Fieldsets(fields []Field) (f []fieldset, err error) {
-  var tmp []fieldset
+  if len(fields) > 0 {
+		for _, field := range fields {
+			cur := fieldset{}
+			cur.AmqpType, err = me.FieldType(field)
+			if err != nil {
+				return
+			}
 
-  for _, field := range fields {
-    cur := fieldset{}
-    cur.AmqpType, err = me.FieldType(field)
-    if err != nil {
-      return
-    }
+			cur.NativeType, err = me.NativeType(cur.AmqpType)
+			if err != nil {
+				return
+			}
+			cur.Fields = append(cur.Fields, field)
+			f = append(f, cur)
+		}
 
-    cur.NativeType, err = me.NativeType(cur.AmqpType)
-    if err != nil {
-      return
-    }
-
-    cur.Fields = append(cur.Fields, field)
-    tmp = append(tmp, cur)
-  }
-
-  if len(tmp) > 0 {
-    acc := tmp[0]
-    for i, cur := range tmp[1:] {
-      if acc.AmqpType == cur.AmqpType {
-        acc.Fields = append(acc.Fields, cur.Fields...)
-        if i == len(tmp) {
-          f = append(f, acc)
-        }
+		i, j := 0, 1
+		for j < len(f) {
+      if f[i].AmqpType == f[j].AmqpType {
+				f[i].Fields = append(f[i].Fields, f[j].Fields...)
       } else {
-        f = append(f, acc)
-        acc = cur
+				i++
+				f[i] = f[j]
       }
+			j++
     }
+		return f[:i+1], nil
   }
 
   return
+}
+
+func (me *renderer) HasType(typ string, method Method) bool {
+	for _, f := range method.Fields {
+		name, _ := me.FieldType(f)
+		if name == typ {
+			return true
+		}
+	}
+	return false
 }
 
 func (me *renderer) HasField(field string, method Method) bool {

@@ -33,7 +33,7 @@ type Channel struct {
 	body    []byte
 }
 
-// Constructs and opens a new channel with the given framing rules
+// Constructs a new channel with the given framing rules
 func newChannel(c *Connection, id uint16) (me *Channel, err error) {
 	me = &Channel{
 		connection: c,
@@ -46,7 +46,22 @@ func newChannel(c *Connection, id uint16) (me *Channel, err error) {
 	return me, nil
 }
 
-func (me *Channel) send(msg message) {
+func (me *Channel) open() (err error) {
+	if err = me.send(&channelOpen{}); err != nil {
+		return
+	}
+
+	switch (<-me.rpc).(type) {
+	case *channelOpenOk:
+		return
+	case nil:
+		return me.Close()
+	}
+
+	return ErrBadProtocol
+}
+
+func (me *Channel) send(msg message) (err error) {
 	if content, ok := msg.(messageWithContent); ok {
 		me.flow.Lock()
 		defer me.flow.Unlock()
@@ -55,34 +70,42 @@ func (me *Channel) send(msg message) {
 		class, _ := content.id()
 		size := me.connection.MaxFrameSize
 
-		me.connection.send(&methodFrame{
+		if err = me.connection.send(&methodFrame{
 			ChannelId: me.id,
 			Method:    content,
-		})
+		}); err != nil {
+			return
+		}
 
-		me.connection.send(&headerFrame{
+		if err = me.connection.send(&headerFrame{
 			ChannelId:  me.id,
 			ClassId:    class,
 			Size:       uint64(len(body)),
 			Properties: props,
-		})
+		}); err != nil {
+			return
+		}
 
 		for i, j := 0, size; i < len(body); i, j = j, j+size {
 			if j > len(body) {
 				j = len(body)
 			}
 
-			me.connection.send(&bodyFrame{
+			if err = me.connection.send(&bodyFrame{
 				ChannelId: me.id,
 				Body:      body[i:j],
-			})
+			}); err != nil {
+				return
+			}
 		}
 	} else {
-		me.connection.send(&methodFrame{
+		return me.connection.send(&methodFrame{
 			ChannelId: me.id,
 			Method:    msg,
 		})
 	}
+
+	panic("unreachable")
 }
 
 // Initiate a clean channel closure by sending a close message with the error code set to '200'
@@ -271,8 +294,9 @@ func (me *Channel) Cancel(consumerTag string, noWait bool) error { return nil }
 func (me *Channel) Get(queueName string, noAck bool) error                     { return nil }
 func (me *Channel) Recover(requeue bool) error                                 { return nil }
 func (me *Channel) Nack(deliveryTag uint64, requeue bool, multiple bool) error { return nil }
-func (me *Channel) Confirm(noWait bool) error                                  { return nil }
 
-func (me *Channel) TxSelect() error   { return nil }
-func (me *Channel) TxCommit() error   { return nil }
-func (me *Channel) TxRollback() error { return nil }
+//func (me *Channel) Confirm(noWait bool) error                                  { return nil }
+
+//func (me *Channel) TxSelect() error   { return nil }
+//func (me *Channel) TxCommit() error   { return nil }
+//func (me *Channel) TxRollback() error { return nil }
