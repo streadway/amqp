@@ -152,7 +152,7 @@ var (
     {{$class := .}}
     {{range .Methods}}
       {{$method := .}}
-			{{$struct := camel $class.Name $method.Name}}
+			{{$struct := $.StructName $class.Name $method.Name}}
       {{if .Docs}}/* {{range .Docs}} {{.Body | clean}} {{end}} */{{end}}
       type {{$struct}} struct {
         {{range .Fields}}
@@ -170,11 +170,11 @@ var (
 			}
 
 			{{if .Content}}
-      func (me *{{$struct}}) GetContent() (Properties, []byte) {
+      func (me *{{$struct}}) getContent() (Properties, []byte) {
         return me.Properties, me.Body
       }
 
-      func (me *{{$struct}}) SetContent(properties Properties, body []byte) {
+      func (me *{{$struct}}) setContent(properties Properties, body []byte) {
         me.Properties, me.Body = properties, body
       }
 			{{end}}
@@ -190,8 +190,8 @@ var (
     {{end}}
   {{end}}
 
-  func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, err error) {
-    mf := &MethodFrame {
+  func (me *reader) parseMethodFrame(channel uint16, size uint32) (f frame, err error) {
+    mf := &methodFrame {
       ChannelId: channel,
     }
 
@@ -211,7 +211,7 @@ var (
       {{range .Methods}}
       case {{.Index}}: // {{$class.Name}} {{.Name}}
         //fmt.Println("NextMethod: class:{{$class.Index}} method:{{.Index}}")
-        method := &{{camel $class.Name .Name}}{}
+        method := &{{$.StructName $class.Name .Name}}{}
         if err = method.read(me.r); err != nil {
           return
         }
@@ -384,80 +384,6 @@ func (me *renderer) HasField(field string, method Method) bool {
 	return false
 }
 
-func (me *renderer) FieldEncode(field Field) (str string, err error) {
-  var fieldType, nativeType, fieldName string
-
-  if fieldType, err = me.FieldType(field); err != nil {
-    return "", err
-  }
-
-  if nativeType, err = me.NativeType(fieldType); err != nil {
-    return "", err
-  }
-
-  if field.Reserved {
-    fieldName = camel(field.Name)
-    str += fmt.Sprintf("var %s %s\n", fieldName, nativeType)
-  } else {
-    fieldName = fmt.Sprintf("me.%s", camel(field.Name))
-  }
-
-  if fieldType == "bit" {
-    if me.bitcounter == 0 {
-      str += fmt.Sprintf("buf.PutOctet(0)\n")
-    }
-    str += fmt.Sprintf("buf.Put%s(%s, %d)", camel(fieldType), fieldName, me.bitcounter)
-    me.bitcounter = me.bitcounter + 1
-    return
-  }
-
-  me.bitcounter = 0
-  str += fmt.Sprintf("buf.Put%s(%s)", camel(fieldType), fieldName)
-
-  return
-}
-
-func (me *renderer) FinishDecode() (string, error) {
-  if me.bitcounter > 0 {
-    me.bitcounter = 0
-    // The last field in the fieldset was a bit field
-    // which means we need to consume this word.  This would
-    // be better done with object scoping
-    return "me.NextOctet()", nil
-  }
-  return "", nil
-}
-
-func (me *renderer) FieldDecode(name string, field Field) (string, error) {
-  var str string
-
-  t, err := me.FieldType(field)
-  if err != nil {
-    return "", err
-  }
-
-  if field.Reserved {
-    str = "_ = "
-  } else {
-    str = fmt.Sprintf("%s.%s = ", name, camel(field.Name))
-  }
-
-  if t == "bit" {
-    str += fmt.Sprintf("me.Next%s(%d)", camel(t), me.bitcounter)
-    me.bitcounter = me.bitcounter + 1
-    return str, nil
-  }
-
-  if me.bitcounter > 0 {
-    // We've advanced past a bit word, so consume it before the real decoding
-    str = "me.NextOctet() // reset\n" + str
-    me.bitcounter = 0
-  }
-
-  return str + fmt.Sprintf("me.Next%s()", camel(t)), nil
-
-}
-
 func (me *renderer) Domain(field Field) (domain Domain, err error) {
   for _, domain = range me.Root.Domains {
     if field.Domain == domain.Name {
@@ -512,6 +438,10 @@ func (me *renderer) Tag(d Domain) string {
   label += "`"
 
   return label
+}
+
+func (me *renderer) StructName(parts ...string) string {
+	return parts[0] + camel(parts[1:]...)
 }
 
 func clean(body string) (res string) {

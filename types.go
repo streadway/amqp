@@ -2,6 +2,7 @@ package amqp
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"time"
 )
@@ -16,20 +17,18 @@ var (
 	ErrBadFrameSize        = errors.New("Bad frame: invalid size")
 	ErrBadFrameTermination = errors.New("Bad frame: invalid terminator")
 
+	ErrAlreadyClosed = errors.New("Connection/Channel has already been closed")
+
 	ProtocolHeader = []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}
 )
 
-type Message interface {
-	id() (uint16, uint16)
-	wait() bool
-	read(io.Reader) error
-	write(io.Writer) error
+type Closed struct {
+	Code   uint16
+	Reason string
 }
 
-type MessageWithContent interface {
-	Message
-	GetContent() (Properties, []byte)
-	SetContent(Properties, []byte)
+func (me Closed) Error() string {
+	return fmt.Sprintf("Closed with code (%d) reason: '%s'", me.Code, me.Reason)
 }
 
 type Properties struct {
@@ -74,11 +73,91 @@ const (
 	flagReserved1       = 0x0004
 )
 
-//type Message interface {
-//	frames(int) []*Frame
-//	content() *Content, bool
-//	synchronous() bool
-//}
+type Lifetime int
+
+const (
+	UntilDeleted         Lifetime = iota // durable
+	UntilServerRestarted                 // not durable, not auto-delete
+	UntilUnused                          // auto-delete
+)
+
+func (me *Lifetime) durable() bool {
+	switch *me {
+	case UntilDeleted:
+		return true
+	case UntilServerRestarted:
+		return false
+	case UntilUnused:
+		return false
+	}
+	panic("unknown lifetime")
+}
+
+func (me *Lifetime) autoDelete() bool {
+	switch *me {
+	case UntilDeleted:
+		return false
+	case UntilServerRestarted:
+		return false
+	case UntilUnused:
+		return true
+	}
+	panic("unknown lifetime")
+}
+
+const (
+	Direct  = "direct"
+	Topic   = "topic"
+	Fanout  = "fanout"
+	Headers = "headers"
+)
+
+type Exchange struct {
+	channel *Channel
+	name    string
+}
+
+type Queue struct {
+	channel *Channel
+	name    string
+}
+
+type QueueState struct {
+	Declared      bool
+	MessageCount  int
+	ConsumerCount int
+}
+
+type Delivery struct {
+	channel *Channel
+
+	Headers Table // Application or header exchange table
+
+	// Properties for the message
+	ContentType     string    // MIME content type
+	ContentEncoding string    // MIME content encoding
+	DeliveryMode    uint8     // queue implemention use - non-persistent (1) or persistent (2)
+	Priority        uint8     // queue implementation use - 0 to 9
+	CorrelationId   string    // application use - correlation identifier
+	ReplyTo         string    // application use - address to to reply to (ex: RPC)
+	Expiration      string    // implementation use - message expiration spec
+	MessageId       string    // application use - message identifier
+	Timestamp       time.Time // application use - message timestamp
+	Type            string    // application use - message type name
+	UserId          string    // application use - creating user id
+	AppId           string    // application use - creating application id
+
+	ConsumerTag  string // only meaningful from a Channel.Consume or Queue.Consume
+	MessageCount uint32 // only meaningful on Channel.Get
+
+	// Other parts of the delivery parameters
+	DeliveryTag uint64
+	Redelivered bool
+	Exchange    string
+	RoutingKey  string // Message routing key
+
+	Body []byte
+}
 
 type Decimal struct {
 	Scale uint8
@@ -89,25 +168,38 @@ type Table map[string]interface{}
 
 var (
 	// The method in the frame could not be parsed
-	ErrBadMethod = errors.New("Bad Frame Method")
+	ErrBadMethod = errors.New("Bad frame Method")
 
 	// The content properties in the frame could not be parsed
-	ErrBadHeader = errors.New("Bad Frame Header")
+	ErrBadHeader = errors.New("Bad frame Header")
 
 	// The content in the frame could not be parsed
-	ErrBadContent = errors.New("Bad Frame Content")
+	ErrBadContent = errors.New("Bad frame Content")
 
 	// The frame was not terminated by the special 206 (0xCE) byte
-	ErrBadFrameEnd = errors.New("Bad Frame End")
+	ErrBadFrameEnd = errors.New("Bad frame End")
 
 	// The frame type was not recognized
-	ErrBadFrameType = errors.New("Bad Frame Type")
+	ErrBadFrameType = errors.New("Bad frame Type")
 )
+
+type message interface {
+	id() (uint16, uint16)
+	wait() bool
+	read(io.Reader) error
+	write(io.Writer) error
+}
+
+type messageWithContent interface {
+	message
+	getContent() (Properties, []byte)
+	setContent(Properties, []byte)
+}
 
 /*
 The base interface implemented as:
 
-2.3.5  Frame Details
+2.3.5  frame Details
 
 All frames consist of a header (7 octets), a payload of arbitrary size, and a 'frame-end' octet that detects
 malformed frames:
@@ -128,22 +220,17 @@ In realistic implementations where performance is a concern, we would use “rea
 “gathering reads” to avoid doing three separate system calls to read a frame.
 
 */
-type Frame interface {
+type frame interface {
 	write(io.Writer) error
 	channel() uint16
 }
 
-type Framer struct {
-	r       io.Reader
-	w       io.Writer
-	scratch [8]byte
+type reader struct {
+	r io.Reader
 }
 
-/*
-Intended to run sequentially over a single reader, not threadsafe
-*/
-func NewFramer(r io.Reader, w io.Writer) *Framer {
-	return &Framer{r: r, w: w}
+type writer struct {
+	w io.Writer
 }
 
 /*
@@ -168,14 +255,14 @@ Method frame bodies are constructed as a list of AMQP data fields (bits,
 integers, strings and string tables).  The marshalling code is trivially
 generated directly from the protocol specifications, and can be very rapid.
 */
-type MethodFrame struct {
+type methodFrame struct {
 	ChannelId uint16
 	ClassId   uint16
 	MethodId  uint16
-	Method    Message
+	Method    message
 }
 
-func (me *MethodFrame) channel() uint16 { return me.ChannelId }
+func (me *methodFrame) channel() uint16 { return me.ChannelId }
 
 /*
 Heartbeating is a technique designed to undo one of TCP/IP's features, namely
@@ -186,11 +273,11 @@ Since heartbeating can be done at a low level, we implement this as a special
 type of frame that peers exchange at the transport level, rather than as a
 class method.
 */
-type HeartbeatFrame struct {
+type heartbeatFrame struct {
 	ChannelId uint16
 }
 
-func (me *HeartbeatFrame) channel() uint16 { return me.ChannelId }
+func (me *heartbeatFrame) channel() uint16 { return me.ChannelId }
 
 /*
 Certain methods (such as Basic.Publish, Basic.Deliver, etc.) are formally
@@ -211,7 +298,7 @@ never marshalled or encoded.  We place the content properties in their own
 frame so that recipients can selectively discard contents they do not want to
 process
 */
-type HeaderFrame struct {
+type headerFrame struct {
 	ChannelId  uint16
 	ClassId    uint16
 	weight     uint16
@@ -219,7 +306,7 @@ type HeaderFrame struct {
 	Properties Properties
 }
 
-func (me *HeaderFrame) channel() uint16 { return me.ChannelId }
+func (me *headerFrame) channel() uint16 { return me.ChannelId }
 
 /*
 Content is the application data we carry from client-to-client via the AMQP
@@ -236,9 +323,9 @@ might see something like this:
 		[method]
 		...
 */
-type BodyFrame struct {
+type bodyFrame struct {
 	ChannelId uint16
 	Body      []byte
 }
 
-func (me *BodyFrame) channel() uint16 { return me.ChannelId }
+func (me *bodyFrame) channel() uint16 { return me.ChannelId }

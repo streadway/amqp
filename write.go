@@ -8,11 +8,11 @@ import (
 	"time"
 )
 
-func (me *Framer) WriteFrame(frame Frame) error {
+func (me *writer) WriteFrame(frame frame) error {
 	return frame.write(me.w)
 }
 
-func (me *MethodFrame) write(w io.Writer) (err error) {
+func (me *methodFrame) write(w io.Writer) (err error) {
 	var payload bytes.Buffer
 
 	if me.Method == nil {
@@ -37,7 +37,7 @@ func (me *MethodFrame) write(w io.Writer) (err error) {
 // Heartbeat
 //
 // Payload is empty
-func (me *HeartbeatFrame) write(w io.Writer) (err error) {
+func (me *heartbeatFrame) write(w io.Writer) (err error) {
 	return writeFrame(w, FrameHeartbeat, me.ChannelId, []byte{})
 }
 
@@ -48,7 +48,7 @@ func (me *HeartbeatFrame) write(w io.Writer) (err error) {
 // +----------+--------+-----------+----------------+------------- - -
 //    short     short    long long       short        remainder... 
 //
-func (me *HeaderFrame) write(w io.Writer) (err error) {
+func (me *headerFrame) write(w io.Writer) (err error) {
 	var payload bytes.Buffer
 
 	if err = binary.Write(&payload, binary.BigEndian, me.ClassId); err != nil {
@@ -185,7 +185,7 @@ func (me *HeaderFrame) write(w io.Writer) (err error) {
 //
 // Payload is one byterange from the full body who's size is declared in the
 // Header frame
-func (me *BodyFrame) write(w io.Writer) (err error) {
+func (me *bodyFrame) write(w io.Writer) (err error) {
 	return writeFrame(w, FrameBody, me.ChannelId, me.Body)
 }
 

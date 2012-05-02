@@ -10,7 +10,7 @@ func TestNewClientHandshake(t *testing.T) {
 	server, client := interPipes(t)
 
 	go func() {
-		var f amqp.Frame
+		var f amqp.frame
 		var err error
 		var ok bool
 
@@ -22,7 +22,7 @@ func TestNewClientHandshake(t *testing.T) {
 
 		r := amqp.NewFrameReader(server)
 
-		amqp.MethodFrame{
+		amqp.methodFrame{
 			Channel: 0,
 			Method: amqp.ConnectionStart{
 				VersionMajor: 0,
@@ -36,11 +36,11 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("bad read", err)
 		}
 
-		if _, ok = f.(amqp.MethodFrame).Method.(amqp.ConnectionStartOk); !ok {
+		if _, ok = f.(amqp.methodFrame).Method.(amqp.ConnectionStartOk); !ok {
 			t.Fatal("expected ConnectionStartOk")
 		}
 
-		amqp.MethodFrame{
+		amqp.methodFrame{
 			Channel: 0,
 			Method: amqp.ConnectionTune{
 				ChannelMax: 11,
@@ -53,7 +53,7 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("bad read", err)
 		}
 
-		if _, ok = f.(amqp.MethodFrame).Method.(amqp.ConnectionTuneOk); !ok {
+		if _, ok = f.(amqp.methodFrame).Method.(amqp.ConnectionTuneOk); !ok {
 			t.Fatal("expected ConnectionTuneOk")
 		}
 
@@ -61,11 +61,11 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("bad read", err)
 		}
 
-		if _, ok = f.(amqp.MethodFrame).Method.(amqp.ConnectionOpen); !ok {
+		if _, ok = f.(amqp.methodFrame).Method.(amqp.ConnectionOpen); !ok {
 			t.Fatal("expected ConnectionOpen")
 		}
 
-		amqp.MethodFrame{
+		amqp.methodFrame{
 			Channel: 0,
 			Method:  amqp.ConnectionOpenOk{},
 		}.WriteTo(server)
@@ -74,7 +74,7 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("bad read", err)
 		}
 
-		if _, ok = f.(amqp.MethodFrame).Method.(amqp.ChannelOpen); !ok {
+		if _, ok = f.(amqp.methodFrame).Method.(amqp.ChannelOpen); !ok {
 			t.Fatal("expected ChannelOpen")
 		}
 
@@ -82,7 +82,7 @@ func TestNewClientHandshake(t *testing.T) {
 			t.Fatal("expected ChannelOpen on channel 1")
 		}
 
-		amqp.MethodFrame{
+		amqp.methodFrame{
 			Channel: 1,
 			Method:  amqp.ChannelOpenOk{},
 		}.WriteTo(server)

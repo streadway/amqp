@@ -135,7 +135,7 @@ const (
    protocol version that the server proposes, along with a list of security mechanisms
    which the client can use for authentication.
 */
-type ConnectionStart struct {
+type connectionStart struct {
 	VersionMajor     byte   // protocol major version
 	VersionMinor     byte   // protocol minor version
 	ServerProperties Table  // server properties
@@ -144,15 +144,15 @@ type ConnectionStart struct {
 
 }
 
-func (me *ConnectionStart) id() (uint16, uint16) {
+func (me *connectionStart) id() (uint16, uint16) {
 	return 10, 10
 }
 
-func (me *ConnectionStart) wait() bool {
+func (me *connectionStart) wait() bool {
 	return true
 }
 
-func (me *ConnectionStart) write(w io.Writer) (err error) {
+func (me *connectionStart) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.VersionMajor); err != nil {
 		return
@@ -168,7 +168,7 @@ func (me *ConnectionStart) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ConnectionStart) read(r io.Reader) (err error) {
+func (me *connectionStart) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.VersionMajor); err != nil {
 		return
@@ -187,7 +187,7 @@ func (me *ConnectionStart) read(r io.Reader) (err error) {
 /*  
    This method selects a SASL security mechanism.
 */
-type ConnectionStartOk struct {
+type connectionStartOk struct {
 	ClientProperties Table  // client properties
 	Mechanism        string // selected security mechanism
 	Response         string // security response data
@@ -195,15 +195,15 @@ type ConnectionStartOk struct {
 
 }
 
-func (me *ConnectionStartOk) id() (uint16, uint16) {
+func (me *connectionStartOk) id() (uint16, uint16) {
 	return 10, 11
 }
 
-func (me *ConnectionStartOk) wait() bool {
+func (me *connectionStartOk) wait() bool {
 	return true
 }
 
-func (me *ConnectionStartOk) write(w io.Writer) (err error) {
+func (me *connectionStartOk) write(w io.Writer) (err error) {
 
 	if err = writeTable(w, me.ClientProperties); err != nil {
 		return
@@ -220,7 +220,7 @@ func (me *ConnectionStartOk) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ConnectionStartOk) read(r io.Reader) (err error) {
+func (me *connectionStartOk) read(r io.Reader) (err error) {
 
 	if me.ClientProperties, err = readTable(r); err != nil {
 		return
@@ -242,25 +242,25 @@ func (me *ConnectionStartOk) read(r io.Reader) (err error) {
    received sufficient information to authenticate each other. This method challenges
    the client to provide more information.
 */
-type ConnectionSecure struct {
+type connectionSecure struct {
 	Challenge string // security challenge data
 
 }
 
-func (me *ConnectionSecure) id() (uint16, uint16) {
+func (me *connectionSecure) id() (uint16, uint16) {
 	return 10, 20
 }
 
-func (me *ConnectionSecure) wait() bool {
+func (me *connectionSecure) wait() bool {
 	return true
 }
 
-func (me *ConnectionSecure) write(w io.Writer) (err error) {
+func (me *connectionSecure) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ConnectionSecure) read(r io.Reader) (err error) {
+func (me *connectionSecure) read(r io.Reader) (err error) {
 
 	return
 }
@@ -269,25 +269,25 @@ func (me *ConnectionSecure) read(r io.Reader) (err error) {
    This method attempts to authenticate, passing a block of SASL data for the security
    mechanism at the server side.
 */
-type ConnectionSecureOk struct {
+type connectionSecureOk struct {
 	Response string // security response data
 
 }
 
-func (me *ConnectionSecureOk) id() (uint16, uint16) {
+func (me *connectionSecureOk) id() (uint16, uint16) {
 	return 10, 21
 }
 
-func (me *ConnectionSecureOk) wait() bool {
+func (me *connectionSecureOk) wait() bool {
 	return true
 }
 
-func (me *ConnectionSecureOk) write(w io.Writer) (err error) {
+func (me *connectionSecureOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ConnectionSecureOk) read(r io.Reader) (err error) {
+func (me *connectionSecureOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -296,22 +296,22 @@ func (me *ConnectionSecureOk) read(r io.Reader) (err error) {
    This method proposes a set of connection configuration values to the client. The
    client can accept and/or adjust these.
 */
-type ConnectionTune struct {
+type connectionTune struct {
 	ChannelMax uint16 // proposed maximum channels
 	FrameMax   uint32 // proposed maximum frame size
 	Heartbeat  uint16 // desired heartbeat delay
 
 }
 
-func (me *ConnectionTune) id() (uint16, uint16) {
+func (me *connectionTune) id() (uint16, uint16) {
 	return 10, 30
 }
 
-func (me *ConnectionTune) wait() bool {
+func (me *connectionTune) wait() bool {
 	return true
 }
 
-func (me *ConnectionTune) write(w io.Writer) (err error) {
+func (me *connectionTune) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.ChannelMax); err != nil {
 		return
@@ -324,7 +324,7 @@ func (me *ConnectionTune) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ConnectionTune) read(r io.Reader) (err error) {
+func (me *connectionTune) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.ChannelMax); err != nil {
 		return
@@ -341,22 +341,22 @@ func (me *ConnectionTune) read(r io.Reader) (err error) {
    This method sends the client's connection tuning parameters to the server.
    Certain fields are negotiated, others provide capability information.
 */
-type ConnectionTuneOk struct {
+type connectionTuneOk struct {
 	ChannelMax uint16 // negotiated maximum channels
 	FrameMax   uint32 // negotiated maximum frame size
 	Heartbeat  uint16 // desired heartbeat delay
 
 }
 
-func (me *ConnectionTuneOk) id() (uint16, uint16) {
+func (me *connectionTuneOk) id() (uint16, uint16) {
 	return 10, 31
 }
 
-func (me *ConnectionTuneOk) wait() bool {
+func (me *connectionTuneOk) wait() bool {
 	return true
 }
 
-func (me *ConnectionTuneOk) write(w io.Writer) (err error) {
+func (me *connectionTuneOk) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.ChannelMax); err != nil {
 		return
@@ -369,7 +369,7 @@ func (me *ConnectionTuneOk) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ConnectionTuneOk) read(r io.Reader) (err error) {
+func (me *connectionTuneOk) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.ChannelMax); err != nil {
 		return
@@ -388,21 +388,21 @@ func (me *ConnectionTuneOk) read(r io.Reader) (err error) {
    The server may apply arbitrary limits per virtual host, such as the number
    of each type of entity that may be used, per connection and/or in total.
 */
-type ConnectionOpen struct {
+type connectionOpen struct {
 	VirtualHost string // virtual host name
 	reserved1   string
 	reserved2   bool
 }
 
-func (me *ConnectionOpen) id() (uint16, uint16) {
+func (me *connectionOpen) id() (uint16, uint16) {
 	return 10, 40
 }
 
-func (me *ConnectionOpen) wait() bool {
+func (me *connectionOpen) wait() bool {
 	return true
 }
 
-func (me *ConnectionOpen) write(w io.Writer) (err error) {
+func (me *connectionOpen) write(w io.Writer) (err error) {
 
 	if err = writeShortstr(w, me.VirtualHost); err != nil {
 		return
@@ -414,7 +414,7 @@ func (me *ConnectionOpen) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ConnectionOpen) read(r io.Reader) (err error) {
+func (me *connectionOpen) read(r io.Reader) (err error) {
 
 	if me.VirtualHost, err = readShortstr(r); err != nil {
 		return
@@ -429,24 +429,24 @@ func (me *ConnectionOpen) read(r io.Reader) (err error) {
 /*  
    This method signals to the client that the connection is ready for use.
 */
-type ConnectionOpenOk struct {
+type connectionOpenOk struct {
 	reserved1 string
 }
 
-func (me *ConnectionOpenOk) id() (uint16, uint16) {
+func (me *connectionOpenOk) id() (uint16, uint16) {
 	return 10, 41
 }
 
-func (me *ConnectionOpenOk) wait() bool {
+func (me *connectionOpenOk) wait() bool {
 	return true
 }
 
-func (me *ConnectionOpenOk) write(w io.Writer) (err error) {
+func (me *connectionOpenOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ConnectionOpenOk) read(r io.Reader) (err error) {
+func (me *connectionOpenOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -457,7 +457,7 @@ func (me *ConnectionOpenOk) read(r io.Reader) (err error) {
    a specific method, i.e. an exception. When a close is due to an exception, the
    sender provides the class and method id of the method which caused the exception.
 */
-type ConnectionClose struct {
+type connectionClose struct {
 	ReplyCode uint16
 	ReplyText string
 	ClassId   uint16 // failing method class
@@ -465,15 +465,15 @@ type ConnectionClose struct {
 
 }
 
-func (me *ConnectionClose) id() (uint16, uint16) {
+func (me *connectionClose) id() (uint16, uint16) {
 	return 10, 50
 }
 
-func (me *ConnectionClose) wait() bool {
+func (me *connectionClose) wait() bool {
 	return true
 }
 
-func (me *ConnectionClose) write(w io.Writer) (err error) {
+func (me *connectionClose) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.ReplyCode); err != nil {
 		return
@@ -486,7 +486,7 @@ func (me *ConnectionClose) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ConnectionClose) read(r io.Reader) (err error) {
+func (me *connectionClose) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.ReplyCode); err != nil {
 		return
@@ -503,23 +503,23 @@ func (me *ConnectionClose) read(r io.Reader) (err error) {
    This method confirms a Connection.Close method and tells the recipient that it is
    safe to release resources for the connection and close the socket.
 */
-type ConnectionCloseOk struct {
+type connectionCloseOk struct {
 }
 
-func (me *ConnectionCloseOk) id() (uint16, uint16) {
+func (me *connectionCloseOk) id() (uint16, uint16) {
 	return 10, 51
 }
 
-func (me *ConnectionCloseOk) wait() bool {
+func (me *connectionCloseOk) wait() bool {
 	return true
 }
 
-func (me *ConnectionCloseOk) write(w io.Writer) (err error) {
+func (me *connectionCloseOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ConnectionCloseOk) read(r io.Reader) (err error) {
+func (me *connectionCloseOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -527,24 +527,24 @@ func (me *ConnectionCloseOk) read(r io.Reader) (err error) {
 /*  
    This method opens a channel to the server.
 */
-type ChannelOpen struct {
+type channelOpen struct {
 	reserved1 string
 }
 
-func (me *ChannelOpen) id() (uint16, uint16) {
+func (me *channelOpen) id() (uint16, uint16) {
 	return 20, 10
 }
 
-func (me *ChannelOpen) wait() bool {
+func (me *channelOpen) wait() bool {
 	return true
 }
 
-func (me *ChannelOpen) write(w io.Writer) (err error) {
+func (me *channelOpen) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ChannelOpen) read(r io.Reader) (err error) {
+func (me *channelOpen) read(r io.Reader) (err error) {
 
 	return
 }
@@ -552,24 +552,24 @@ func (me *ChannelOpen) read(r io.Reader) (err error) {
 /*  
    This method signals to the client that the channel is ready for use.
 */
-type ChannelOpenOk struct {
+type channelOpenOk struct {
 	reserved1 string
 }
 
-func (me *ChannelOpenOk) id() (uint16, uint16) {
+func (me *channelOpenOk) id() (uint16, uint16) {
 	return 20, 11
 }
 
-func (me *ChannelOpenOk) wait() bool {
+func (me *channelOpenOk) wait() bool {
 	return true
 }
 
-func (me *ChannelOpenOk) write(w io.Writer) (err error) {
+func (me *channelOpenOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ChannelOpenOk) read(r io.Reader) (err error) {
+func (me *channelOpenOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -581,25 +581,25 @@ func (me *ChannelOpenOk) read(r io.Reader) (err error) {
    it can process. Note that this method is not intended for window control. It does
    not affect contents returned by Basic.Get-Ok methods.
 */
-type ChannelFlow struct {
+type channelFlow struct {
 	Active bool // start/stop content frames
 
 }
 
-func (me *ChannelFlow) id() (uint16, uint16) {
+func (me *channelFlow) id() (uint16, uint16) {
 	return 20, 20
 }
 
-func (me *ChannelFlow) wait() bool {
+func (me *channelFlow) wait() bool {
 	return true
 }
 
-func (me *ChannelFlow) write(w io.Writer) (err error) {
+func (me *channelFlow) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ChannelFlow) read(r io.Reader) (err error) {
+func (me *channelFlow) read(r io.Reader) (err error) {
 
 	return
 }
@@ -607,25 +607,25 @@ func (me *ChannelFlow) read(r io.Reader) (err error) {
 /*  
    Confirms to the peer that a flow command was received and processed.
 */
-type ChannelFlowOk struct {
+type channelFlowOk struct {
 	Active bool // current flow setting
 
 }
 
-func (me *ChannelFlowOk) id() (uint16, uint16) {
+func (me *channelFlowOk) id() (uint16, uint16) {
 	return 20, 21
 }
 
-func (me *ChannelFlowOk) wait() bool {
+func (me *channelFlowOk) wait() bool {
 	return false
 }
 
-func (me *ChannelFlowOk) write(w io.Writer) (err error) {
+func (me *channelFlowOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ChannelFlowOk) read(r io.Reader) (err error) {
+func (me *channelFlowOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -636,7 +636,7 @@ func (me *ChannelFlowOk) read(r io.Reader) (err error) {
    method, i.e. an exception. When a close is due to an exception, the sender provides
    the class and method id of the method which caused the exception.
 */
-type ChannelClose struct {
+type channelClose struct {
 	ReplyCode uint16
 	ReplyText string
 	ClassId   uint16 // failing method class
@@ -644,15 +644,15 @@ type ChannelClose struct {
 
 }
 
-func (me *ChannelClose) id() (uint16, uint16) {
+func (me *channelClose) id() (uint16, uint16) {
 	return 20, 40
 }
 
-func (me *ChannelClose) wait() bool {
+func (me *channelClose) wait() bool {
 	return true
 }
 
-func (me *ChannelClose) write(w io.Writer) (err error) {
+func (me *channelClose) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.ReplyCode); err != nil {
 		return
@@ -665,7 +665,7 @@ func (me *ChannelClose) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ChannelClose) read(r io.Reader) (err error) {
+func (me *channelClose) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.ReplyCode); err != nil {
 		return
@@ -682,23 +682,23 @@ func (me *ChannelClose) read(r io.Reader) (err error) {
    This method confirms a Channel.Close method and tells the recipient that it is safe
    to release resources for the channel.
 */
-type ChannelCloseOk struct {
+type channelCloseOk struct {
 }
 
-func (me *ChannelCloseOk) id() (uint16, uint16) {
+func (me *channelCloseOk) id() (uint16, uint16) {
 	return 20, 41
 }
 
-func (me *ChannelCloseOk) wait() bool {
+func (me *channelCloseOk) wait() bool {
 	return true
 }
 
-func (me *ChannelCloseOk) write(w io.Writer) (err error) {
+func (me *channelCloseOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ChannelCloseOk) read(r io.Reader) (err error) {
+func (me *channelCloseOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -707,7 +707,7 @@ func (me *ChannelCloseOk) read(r io.Reader) (err error) {
    This method creates an exchange if it does not already exist, and if the exchange
    exists, verifies that it is of the correct and expected class.
 */
-type ExchangeDeclare struct {
+type exchangeDeclare struct {
 	reserved1  uint16
 	Exchange   string
 	Type       string // exchange type
@@ -720,15 +720,15 @@ type ExchangeDeclare struct {
 
 }
 
-func (me *ExchangeDeclare) id() (uint16, uint16) {
+func (me *exchangeDeclare) id() (uint16, uint16) {
 	return 40, 10
 }
 
-func (me *ExchangeDeclare) wait() bool {
+func (me *exchangeDeclare) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *ExchangeDeclare) write(w io.Writer) (err error) {
+func (me *exchangeDeclare) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -770,7 +770,7 @@ func (me *ExchangeDeclare) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ExchangeDeclare) read(r io.Reader) (err error) {
+func (me *exchangeDeclare) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -800,23 +800,23 @@ func (me *ExchangeDeclare) read(r io.Reader) (err error) {
    This method confirms a Declare method and confirms the name of the exchange,
    essential for automatically-named exchanges.
 */
-type ExchangeDeclareOk struct {
+type exchangeDeclareOk struct {
 }
 
-func (me *ExchangeDeclareOk) id() (uint16, uint16) {
+func (me *exchangeDeclareOk) id() (uint16, uint16) {
 	return 40, 11
 }
 
-func (me *ExchangeDeclareOk) wait() bool {
+func (me *exchangeDeclareOk) wait() bool {
 	return true
 }
 
-func (me *ExchangeDeclareOk) write(w io.Writer) (err error) {
+func (me *exchangeDeclareOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ExchangeDeclareOk) read(r io.Reader) (err error) {
+func (me *exchangeDeclareOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -825,22 +825,22 @@ func (me *ExchangeDeclareOk) read(r io.Reader) (err error) {
    This method deletes an exchange. When an exchange is deleted all queue bindings on
    the exchange are cancelled.
 */
-type ExchangeDelete struct {
+type exchangeDelete struct {
 	reserved1 uint16
 	Exchange  string
 	IfUnused  bool // delete only if unused
 	NoWait    bool
 }
 
-func (me *ExchangeDelete) id() (uint16, uint16) {
+func (me *exchangeDelete) id() (uint16, uint16) {
 	return 40, 20
 }
 
-func (me *ExchangeDelete) wait() bool {
+func (me *exchangeDelete) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *ExchangeDelete) write(w io.Writer) (err error) {
+func (me *exchangeDelete) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -853,7 +853,7 @@ func (me *ExchangeDelete) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ExchangeDelete) read(r io.Reader) (err error) {
+func (me *exchangeDelete) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -867,29 +867,29 @@ func (me *ExchangeDelete) read(r io.Reader) (err error) {
 }
 
 /*  This method confirms the deletion of an exchange.  */
-type ExchangeDeleteOk struct {
+type exchangeDeleteOk struct {
 }
 
-func (me *ExchangeDeleteOk) id() (uint16, uint16) {
+func (me *exchangeDeleteOk) id() (uint16, uint16) {
 	return 40, 21
 }
 
-func (me *ExchangeDeleteOk) wait() bool {
+func (me *exchangeDeleteOk) wait() bool {
 	return true
 }
 
-func (me *ExchangeDeleteOk) write(w io.Writer) (err error) {
+func (me *exchangeDeleteOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ExchangeDeleteOk) read(r io.Reader) (err error) {
+func (me *exchangeDeleteOk) read(r io.Reader) (err error) {
 
 	return
 }
 
 /*  This method binds an exchange to an exchange.  */
-type ExchangeBind struct {
+type exchangeBind struct {
 	reserved1   uint16
 	Destination string // name of the destination exchange to bind to
 	Source      string // name of the source exchange to bind to
@@ -899,15 +899,15 @@ type ExchangeBind struct {
 
 }
 
-func (me *ExchangeBind) id() (uint16, uint16) {
+func (me *exchangeBind) id() (uint16, uint16) {
 	return 40, 30
 }
 
-func (me *ExchangeBind) wait() bool {
+func (me *exchangeBind) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *ExchangeBind) write(w io.Writer) (err error) {
+func (me *exchangeBind) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -936,7 +936,7 @@ func (me *ExchangeBind) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ExchangeBind) read(r io.Reader) (err error) {
+func (me *exchangeBind) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -962,29 +962,29 @@ func (me *ExchangeBind) read(r io.Reader) (err error) {
 }
 
 /*  This method confirms that the bind was successful.  */
-type ExchangeBindOk struct {
+type exchangeBindOk struct {
 }
 
-func (me *ExchangeBindOk) id() (uint16, uint16) {
+func (me *exchangeBindOk) id() (uint16, uint16) {
 	return 40, 31
 }
 
-func (me *ExchangeBindOk) wait() bool {
+func (me *exchangeBindOk) wait() bool {
 	return true
 }
 
-func (me *ExchangeBindOk) write(w io.Writer) (err error) {
+func (me *exchangeBindOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ExchangeBindOk) read(r io.Reader) (err error) {
+func (me *exchangeBindOk) read(r io.Reader) (err error) {
 
 	return
 }
 
 /*  This method unbinds an exchange from an exchange.  */
-type ExchangeUnbind struct {
+type exchangeUnbind struct {
 	reserved1   uint16
 	Destination string
 	Source      string
@@ -994,15 +994,15 @@ type ExchangeUnbind struct {
 
 }
 
-func (me *ExchangeUnbind) id() (uint16, uint16) {
+func (me *exchangeUnbind) id() (uint16, uint16) {
 	return 40, 40
 }
 
-func (me *ExchangeUnbind) wait() bool {
+func (me *exchangeUnbind) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *ExchangeUnbind) write(w io.Writer) (err error) {
+func (me *exchangeUnbind) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1031,7 +1031,7 @@ func (me *ExchangeUnbind) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *ExchangeUnbind) read(r io.Reader) (err error) {
+func (me *exchangeUnbind) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1057,23 +1057,23 @@ func (me *ExchangeUnbind) read(r io.Reader) (err error) {
 }
 
 /*  This method confirms that the unbind was successful.  */
-type ExchangeUnbindOk struct {
+type exchangeUnbindOk struct {
 }
 
-func (me *ExchangeUnbindOk) id() (uint16, uint16) {
+func (me *exchangeUnbindOk) id() (uint16, uint16) {
 	return 40, 51
 }
 
-func (me *ExchangeUnbindOk) wait() bool {
+func (me *exchangeUnbindOk) wait() bool {
 	return true
 }
 
-func (me *ExchangeUnbindOk) write(w io.Writer) (err error) {
+func (me *exchangeUnbindOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ExchangeUnbindOk) read(r io.Reader) (err error) {
+func (me *exchangeUnbindOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -1083,7 +1083,7 @@ func (me *ExchangeUnbindOk) read(r io.Reader) (err error) {
    specify various properties that control the durability of the queue and its
    contents, and the level of sharing for the queue.
 */
-type QueueDeclare struct {
+type queueDeclare struct {
 	reserved1  uint16
 	Queue      string
 	Passive    bool // do not create queue
@@ -1095,15 +1095,15 @@ type QueueDeclare struct {
 
 }
 
-func (me *QueueDeclare) id() (uint16, uint16) {
+func (me *queueDeclare) id() (uint16, uint16) {
 	return 50, 10
 }
 
-func (me *QueueDeclare) wait() bool {
+func (me *queueDeclare) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *QueueDeclare) write(w io.Writer) (err error) {
+func (me *queueDeclare) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1142,7 +1142,7 @@ func (me *QueueDeclare) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *QueueDeclare) read(r io.Reader) (err error) {
+func (me *queueDeclare) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1169,22 +1169,22 @@ func (me *QueueDeclare) read(r io.Reader) (err error) {
    This method confirms a Declare method and confirms the name of the queue, essential
    for automatically-named queues.
 */
-type QueueDeclareOk struct {
+type queueDeclareOk struct {
 	Queue         string
 	MessageCount  uint32
 	ConsumerCount uint32 // number of consumers
 
 }
 
-func (me *QueueDeclareOk) id() (uint16, uint16) {
+func (me *queueDeclareOk) id() (uint16, uint16) {
 	return 50, 11
 }
 
-func (me *QueueDeclareOk) wait() bool {
+func (me *queueDeclareOk) wait() bool {
 	return true
 }
 
-func (me *QueueDeclareOk) write(w io.Writer) (err error) {
+func (me *queueDeclareOk) write(w io.Writer) (err error) {
 
 	if err = writeShortstr(w, me.Queue); err != nil {
 		return
@@ -1193,7 +1193,7 @@ func (me *QueueDeclareOk) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *QueueDeclareOk) read(r io.Reader) (err error) {
+func (me *queueDeclareOk) read(r io.Reader) (err error) {
 
 	if me.Queue, err = readShortstr(r); err != nil {
 		return
@@ -1208,7 +1208,7 @@ func (me *QueueDeclareOk) read(r io.Reader) (err error) {
    are bound to a direct exchange and subscription queues are bound to a topic
    exchange.
 */
-type QueueBind struct {
+type queueBind struct {
 	reserved1  uint16
 	Queue      string
 	Exchange   string // name of the exchange to bind to
@@ -1218,15 +1218,15 @@ type QueueBind struct {
 
 }
 
-func (me *QueueBind) id() (uint16, uint16) {
+func (me *queueBind) id() (uint16, uint16) {
 	return 50, 20
 }
 
-func (me *QueueBind) wait() bool {
+func (me *queueBind) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *QueueBind) write(w io.Writer) (err error) {
+func (me *queueBind) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1255,7 +1255,7 @@ func (me *QueueBind) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *QueueBind) read(r io.Reader) (err error) {
+func (me *queueBind) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1281,29 +1281,29 @@ func (me *QueueBind) read(r io.Reader) (err error) {
 }
 
 /*  This method confirms that the bind was successful.  */
-type QueueBindOk struct {
+type queueBindOk struct {
 }
 
-func (me *QueueBindOk) id() (uint16, uint16) {
+func (me *queueBindOk) id() (uint16, uint16) {
 	return 50, 21
 }
 
-func (me *QueueBindOk) wait() bool {
+func (me *queueBindOk) wait() bool {
 	return true
 }
 
-func (me *QueueBindOk) write(w io.Writer) (err error) {
+func (me *queueBindOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *QueueBindOk) read(r io.Reader) (err error) {
+func (me *queueBindOk) read(r io.Reader) (err error) {
 
 	return
 }
 
 /*  This method unbinds a queue from an exchange.  */
-type QueueUnbind struct {
+type queueUnbind struct {
 	reserved1  uint16
 	Queue      string
 	Exchange   string
@@ -1312,15 +1312,15 @@ type QueueUnbind struct {
 
 }
 
-func (me *QueueUnbind) id() (uint16, uint16) {
+func (me *queueUnbind) id() (uint16, uint16) {
 	return 50, 50
 }
 
-func (me *QueueUnbind) wait() bool {
+func (me *queueUnbind) wait() bool {
 	return true
 }
 
-func (me *QueueUnbind) write(w io.Writer) (err error) {
+func (me *queueUnbind) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1339,7 +1339,7 @@ func (me *QueueUnbind) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *QueueUnbind) read(r io.Reader) (err error) {
+func (me *queueUnbind) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1359,23 +1359,23 @@ func (me *QueueUnbind) read(r io.Reader) (err error) {
 }
 
 /*  This method confirms that the unbind was successful.  */
-type QueueUnbindOk struct {
+type queueUnbindOk struct {
 }
 
-func (me *QueueUnbindOk) id() (uint16, uint16) {
+func (me *queueUnbindOk) id() (uint16, uint16) {
 	return 50, 51
 }
 
-func (me *QueueUnbindOk) wait() bool {
+func (me *queueUnbindOk) wait() bool {
 	return true
 }
 
-func (me *QueueUnbindOk) write(w io.Writer) (err error) {
+func (me *queueUnbindOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *QueueUnbindOk) read(r io.Reader) (err error) {
+func (me *queueUnbindOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -1384,21 +1384,21 @@ func (me *QueueUnbindOk) read(r io.Reader) (err error) {
    This method removes all messages from a queue which are not awaiting
    acknowledgment.
 */
-type QueuePurge struct {
+type queuePurge struct {
 	reserved1 uint16
 	Queue     string
 	NoWait    bool
 }
 
-func (me *QueuePurge) id() (uint16, uint16) {
+func (me *queuePurge) id() (uint16, uint16) {
 	return 50, 30
 }
 
-func (me *QueuePurge) wait() bool {
+func (me *queuePurge) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *QueuePurge) write(w io.Writer) (err error) {
+func (me *queuePurge) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1411,7 +1411,7 @@ func (me *QueuePurge) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *QueuePurge) read(r io.Reader) (err error) {
+func (me *queuePurge) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1425,24 +1425,24 @@ func (me *QueuePurge) read(r io.Reader) (err error) {
 }
 
 /*  This method confirms the purge of a queue.  */
-type QueuePurgeOk struct {
+type queuePurgeOk struct {
 	MessageCount uint32
 }
 
-func (me *QueuePurgeOk) id() (uint16, uint16) {
+func (me *queuePurgeOk) id() (uint16, uint16) {
 	return 50, 31
 }
 
-func (me *QueuePurgeOk) wait() bool {
+func (me *queuePurgeOk) wait() bool {
 	return true
 }
 
-func (me *QueuePurgeOk) write(w io.Writer) (err error) {
+func (me *queuePurgeOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *QueuePurgeOk) read(r io.Reader) (err error) {
+func (me *queuePurgeOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -1452,7 +1452,7 @@ func (me *QueuePurgeOk) read(r io.Reader) (err error) {
    to a dead-letter queue if this is defined in the server configuration, and all
    consumers on the queue are cancelled.
 */
-type QueueDelete struct {
+type queueDelete struct {
 	reserved1 uint16
 	Queue     string
 	IfUnused  bool // delete only if unused
@@ -1460,15 +1460,15 @@ type QueueDelete struct {
 	NoWait    bool
 }
 
-func (me *QueueDelete) id() (uint16, uint16) {
+func (me *queueDelete) id() (uint16, uint16) {
 	return 50, 40
 }
 
-func (me *QueueDelete) wait() bool {
+func (me *queueDelete) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *QueueDelete) write(w io.Writer) (err error) {
+func (me *queueDelete) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1481,7 +1481,7 @@ func (me *QueueDelete) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *QueueDelete) read(r io.Reader) (err error) {
+func (me *queueDelete) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1495,24 +1495,24 @@ func (me *QueueDelete) read(r io.Reader) (err error) {
 }
 
 /*  This method confirms the deletion of a queue.  */
-type QueueDeleteOk struct {
+type queueDeleteOk struct {
 	MessageCount uint32
 }
 
-func (me *QueueDeleteOk) id() (uint16, uint16) {
+func (me *queueDeleteOk) id() (uint16, uint16) {
 	return 50, 41
 }
 
-func (me *QueueDeleteOk) wait() bool {
+func (me *queueDeleteOk) wait() bool {
 	return true
 }
 
-func (me *QueueDeleteOk) write(w io.Writer) (err error) {
+func (me *queueDeleteOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *QueueDeleteOk) read(r io.Reader) (err error) {
+func (me *queueDeleteOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -1524,22 +1524,22 @@ func (me *QueueDeleteOk) read(r io.Reader) (err error) {
    qos method could in principle apply to both peers, it is currently meaningful only
    for the server.
 */
-type BasicQos struct {
+type basicQos struct {
 	PrefetchSize  uint32 // prefetch window in octets
 	PrefetchCount uint16 // prefetch window in messages
 	Global        bool   // apply to entire connection
 
 }
 
-func (me *BasicQos) id() (uint16, uint16) {
+func (me *basicQos) id() (uint16, uint16) {
 	return 60, 10
 }
 
-func (me *BasicQos) wait() bool {
+func (me *basicQos) wait() bool {
 	return true
 }
 
-func (me *BasicQos) write(w io.Writer) (err error) {
+func (me *basicQos) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.PrefetchSize); err != nil {
 		return
@@ -1552,7 +1552,7 @@ func (me *BasicQos) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicQos) read(r io.Reader) (err error) {
+func (me *basicQos) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.PrefetchSize); err != nil {
 		return
@@ -1570,23 +1570,23 @@ func (me *BasicQos) read(r io.Reader) (err error) {
    server. The requested QoS applies to all active consumers until a new QoS is
    defined.
 */
-type BasicQosOk struct {
+type basicQosOk struct {
 }
 
-func (me *BasicQosOk) id() (uint16, uint16) {
+func (me *basicQosOk) id() (uint16, uint16) {
 	return 60, 11
 }
 
-func (me *BasicQosOk) wait() bool {
+func (me *basicQosOk) wait() bool {
 	return true
 }
 
-func (me *BasicQosOk) write(w io.Writer) (err error) {
+func (me *basicQosOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *BasicQosOk) read(r io.Reader) (err error) {
+func (me *basicQosOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -1596,7 +1596,7 @@ func (me *BasicQosOk) read(r io.Reader) (err error) {
    messages from a specific queue. Consumers last as long as the channel they were
    declared on, or until the client cancels them.
 */
-type BasicConsume struct {
+type basicConsume struct {
 	reserved1   uint16
 	Queue       string
 	ConsumerTag string
@@ -1608,15 +1608,15 @@ type BasicConsume struct {
 
 }
 
-func (me *BasicConsume) id() (uint16, uint16) {
+func (me *basicConsume) id() (uint16, uint16) {
 	return 60, 20
 }
 
-func (me *BasicConsume) wait() bool {
+func (me *basicConsume) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *BasicConsume) write(w io.Writer) (err error) {
+func (me *basicConsume) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1654,7 +1654,7 @@ func (me *BasicConsume) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicConsume) read(r io.Reader) (err error) {
+func (me *basicConsume) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1683,24 +1683,24 @@ func (me *BasicConsume) read(r io.Reader) (err error) {
    The server provides the client with a consumer tag, which is used by the client
    for methods called on the consumer at a later stage.
 */
-type BasicConsumeOk struct {
+type basicConsumeOk struct {
 	ConsumerTag string
 }
 
-func (me *BasicConsumeOk) id() (uint16, uint16) {
+func (me *basicConsumeOk) id() (uint16, uint16) {
 	return 60, 21
 }
 
-func (me *BasicConsumeOk) wait() bool {
+func (me *basicConsumeOk) wait() bool {
 	return true
 }
 
-func (me *BasicConsumeOk) write(w io.Writer) (err error) {
+func (me *basicConsumeOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *BasicConsumeOk) read(r io.Reader) (err error) {
+func (me *basicConsumeOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -1722,20 +1722,20 @@ func (me *BasicConsumeOk) read(r io.Reader) (err error) {
    capable of accepting the method, through some means of
    capability negotiation.
 */
-type BasicCancel struct {
+type basicCancel struct {
 	ConsumerTag string
 	NoWait      bool
 }
 
-func (me *BasicCancel) id() (uint16, uint16) {
+func (me *basicCancel) id() (uint16, uint16) {
 	return 60, 30
 }
 
-func (me *BasicCancel) wait() bool {
+func (me *basicCancel) wait() bool {
 	return true && !me.NoWait
 }
 
-func (me *BasicCancel) write(w io.Writer) (err error) {
+func (me *basicCancel) write(w io.Writer) (err error) {
 
 	if err = writeShortstr(w, me.ConsumerTag); err != nil {
 		return
@@ -1744,7 +1744,7 @@ func (me *BasicCancel) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicCancel) read(r io.Reader) (err error) {
+func (me *basicCancel) read(r io.Reader) (err error) {
 
 	if me.ConsumerTag, err = readShortstr(r); err != nil {
 		return
@@ -1756,24 +1756,24 @@ func (me *BasicCancel) read(r io.Reader) (err error) {
 /*  
    This method confirms that the cancellation was completed.
 */
-type BasicCancelOk struct {
+type basicCancelOk struct {
 	ConsumerTag string
 }
 
-func (me *BasicCancelOk) id() (uint16, uint16) {
+func (me *basicCancelOk) id() (uint16, uint16) {
 	return 60, 31
 }
 
-func (me *BasicCancelOk) wait() bool {
+func (me *basicCancelOk) wait() bool {
 	return true
 }
 
-func (me *BasicCancelOk) write(w io.Writer) (err error) {
+func (me *basicCancelOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *BasicCancelOk) read(r io.Reader) (err error) {
+func (me *basicCancelOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -1783,7 +1783,7 @@ func (me *BasicCancelOk) read(r io.Reader) (err error) {
    to queues as defined by the exchange configuration and distributed to any active
    consumers when the transaction, if any, is committed.
 */
-type BasicPublish struct {
+type basicPublish struct {
 	reserved1  uint16
 	Exchange   string
 	RoutingKey string // Message routing key
@@ -1793,23 +1793,23 @@ type BasicPublish struct {
 	Body       []byte
 }
 
-func (me *BasicPublish) id() (uint16, uint16) {
+func (me *basicPublish) id() (uint16, uint16) {
 	return 60, 40
 }
 
-func (me *BasicPublish) wait() bool {
+func (me *basicPublish) wait() bool {
 	return false
 }
 
-func (me *BasicPublish) GetContent() (Properties, []byte) {
+func (me *basicPublish) getContent() (Properties, []byte) {
 	return me.Properties, me.Body
 }
 
-func (me *BasicPublish) SetContent(properties Properties, body []byte) {
+func (me *basicPublish) setContent(properties Properties, body []byte) {
 	me.Properties, me.Body = properties, body
 }
 
-func (me *BasicPublish) write(w io.Writer) (err error) {
+func (me *basicPublish) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1825,7 +1825,7 @@ func (me *BasicPublish) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicPublish) read(r io.Reader) (err error) {
+func (me *basicPublish) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -1847,7 +1847,7 @@ func (me *BasicPublish) read(r io.Reader) (err error) {
    reply code and text provide information about the reason that the message was
    undeliverable.
 */
-type BasicReturn struct {
+type basicReturn struct {
 	ReplyCode  uint16
 	ReplyText  string
 	Exchange   string
@@ -1856,23 +1856,23 @@ type BasicReturn struct {
 	Body       []byte
 }
 
-func (me *BasicReturn) id() (uint16, uint16) {
+func (me *basicReturn) id() (uint16, uint16) {
 	return 60, 50
 }
 
-func (me *BasicReturn) wait() bool {
+func (me *basicReturn) wait() bool {
 	return false
 }
 
-func (me *BasicReturn) GetContent() (Properties, []byte) {
+func (me *basicReturn) getContent() (Properties, []byte) {
 	return me.Properties, me.Body
 }
 
-func (me *BasicReturn) SetContent(properties Properties, body []byte) {
+func (me *basicReturn) setContent(properties Properties, body []byte) {
 	me.Properties, me.Body = properties, body
 }
 
-func (me *BasicReturn) write(w io.Writer) (err error) {
+func (me *basicReturn) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.ReplyCode); err != nil {
 		return
@@ -1881,7 +1881,7 @@ func (me *BasicReturn) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicReturn) read(r io.Reader) (err error) {
+func (me *basicReturn) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.ReplyCode); err != nil {
 		return
@@ -1896,7 +1896,7 @@ func (me *BasicReturn) read(r io.Reader) (err error) {
    the server responds with Deliver methods as and when messages arrive for that
    consumer.
 */
-type BasicDeliver struct {
+type basicDeliver struct {
 	ConsumerTag string
 	DeliveryTag uint64
 	Redelivered bool
@@ -1906,23 +1906,23 @@ type BasicDeliver struct {
 	Body        []byte
 }
 
-func (me *BasicDeliver) id() (uint16, uint16) {
+func (me *basicDeliver) id() (uint16, uint16) {
 	return 60, 60
 }
 
-func (me *BasicDeliver) wait() bool {
+func (me *basicDeliver) wait() bool {
 	return false
 }
 
-func (me *BasicDeliver) GetContent() (Properties, []byte) {
+func (me *basicDeliver) getContent() (Properties, []byte) {
 	return me.Properties, me.Body
 }
 
-func (me *BasicDeliver) SetContent(properties Properties, body []byte) {
+func (me *basicDeliver) setContent(properties Properties, body []byte) {
 	me.Properties, me.Body = properties, body
 }
 
-func (me *BasicDeliver) write(w io.Writer) (err error) {
+func (me *basicDeliver) write(w io.Writer) (err error) {
 
 	if err = writeShortstr(w, me.ConsumerTag); err != nil {
 		return
@@ -1945,7 +1945,7 @@ func (me *BasicDeliver) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicDeliver) read(r io.Reader) (err error) {
+func (me *basicDeliver) read(r io.Reader) (err error) {
 
 	if me.ConsumerTag, err = readShortstr(r); err != nil {
 		return
@@ -1969,21 +1969,21 @@ func (me *BasicDeliver) read(r io.Reader) (err error) {
    dialogue that is designed for specific types of application where synchronous
    functionality is more important than performance.
 */
-type BasicGet struct {
+type basicGet struct {
 	reserved1 uint16
 	Queue     string
 	NoAck     bool
 }
 
-func (me *BasicGet) id() (uint16, uint16) {
+func (me *basicGet) id() (uint16, uint16) {
 	return 60, 70
 }
 
-func (me *BasicGet) wait() bool {
+func (me *basicGet) wait() bool {
 	return true
 }
 
-func (me *BasicGet) write(w io.Writer) (err error) {
+func (me *basicGet) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.reserved1); err != nil {
 		return
@@ -1996,7 +1996,7 @@ func (me *BasicGet) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicGet) read(r io.Reader) (err error) {
+func (me *basicGet) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.reserved1); err != nil {
 		return
@@ -2014,7 +2014,7 @@ func (me *BasicGet) read(r io.Reader) (err error) {
    delivered by 'get-ok' must be acknowledged unless the no-ack option was set in the
    get method.
 */
-type BasicGetOk struct {
+type basicGetOk struct {
 	DeliveryTag  uint64
 	Redelivered  bool
 	Exchange     string
@@ -2024,23 +2024,23 @@ type BasicGetOk struct {
 	Body         []byte
 }
 
-func (me *BasicGetOk) id() (uint16, uint16) {
+func (me *basicGetOk) id() (uint16, uint16) {
 	return 60, 71
 }
 
-func (me *BasicGetOk) wait() bool {
+func (me *basicGetOk) wait() bool {
 	return true
 }
 
-func (me *BasicGetOk) GetContent() (Properties, []byte) {
+func (me *basicGetOk) getContent() (Properties, []byte) {
 	return me.Properties, me.Body
 }
 
-func (me *BasicGetOk) SetContent(properties Properties, body []byte) {
+func (me *basicGetOk) setContent(properties Properties, body []byte) {
 	me.Properties, me.Body = properties, body
 }
 
-func (me *BasicGetOk) write(w io.Writer) (err error) {
+func (me *basicGetOk) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
 		return
@@ -2066,7 +2066,7 @@ func (me *BasicGetOk) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicGetOk) read(r io.Reader) (err error) {
+func (me *basicGetOk) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
 		return
@@ -2092,24 +2092,24 @@ func (me *BasicGetOk) read(r io.Reader) (err error) {
    This method tells the client that the queue has no messages available for the
    client.
 */
-type BasicGetEmpty struct {
+type basicGetEmpty struct {
 	reserved1 string
 }
 
-func (me *BasicGetEmpty) id() (uint16, uint16) {
+func (me *basicGetEmpty) id() (uint16, uint16) {
 	return 60, 72
 }
 
-func (me *BasicGetEmpty) wait() bool {
+func (me *basicGetEmpty) wait() bool {
 	return true
 }
 
-func (me *BasicGetEmpty) write(w io.Writer) (err error) {
+func (me *basicGetEmpty) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *BasicGetEmpty) read(r io.Reader) (err error) {
+func (me *basicGetEmpty) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2125,21 +2125,21 @@ func (me *BasicGetEmpty) read(r io.Reader) (err error) {
    The acknowledgement can be for a single message or a set of
    messages up to and including a specific message.
 */
-type BasicAck struct {
+type basicAck struct {
 	DeliveryTag uint64
 	Multiple    bool // acknowledge multiple messages
 
 }
 
-func (me *BasicAck) id() (uint16, uint16) {
+func (me *basicAck) id() (uint16, uint16) {
 	return 60, 80
 }
 
-func (me *BasicAck) wait() bool {
+func (me *basicAck) wait() bool {
 	return false
 }
 
-func (me *BasicAck) write(w io.Writer) (err error) {
+func (me *basicAck) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
 		return
@@ -2148,7 +2148,7 @@ func (me *BasicAck) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicAck) read(r io.Reader) (err error) {
+func (me *basicAck) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
 		return
@@ -2162,21 +2162,21 @@ func (me *BasicAck) read(r io.Reader) (err error) {
    cancel large incoming messages, or return untreatable messages to their original
    queue.
 */
-type BasicReject struct {
+type basicReject struct {
 	DeliveryTag uint64
 	Requeue     bool // requeue the message
 
 }
 
-func (me *BasicReject) id() (uint16, uint16) {
+func (me *basicReject) id() (uint16, uint16) {
 	return 60, 90
 }
 
-func (me *BasicReject) wait() bool {
+func (me *basicReject) wait() bool {
 	return false
 }
 
-func (me *BasicReject) write(w io.Writer) (err error) {
+func (me *basicReject) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
 		return
@@ -2185,7 +2185,7 @@ func (me *BasicReject) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicReject) read(r io.Reader) (err error) {
+func (me *basicReject) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
 		return
@@ -2199,25 +2199,25 @@ func (me *BasicReject) read(r io.Reader) (err error) {
    specified channel. Zero or more messages may be redelivered.  This method
    is deprecated in favour of the synchronous Recover/Recover-Ok.
 */
-type BasicRecoverAsync struct {
+type basicRecoverAsync struct {
 	Requeue bool // requeue the message
 
 }
 
-func (me *BasicRecoverAsync) id() (uint16, uint16) {
+func (me *basicRecoverAsync) id() (uint16, uint16) {
 	return 60, 100
 }
 
-func (me *BasicRecoverAsync) wait() bool {
+func (me *basicRecoverAsync) wait() bool {
 	return false
 }
 
-func (me *BasicRecoverAsync) write(w io.Writer) (err error) {
+func (me *basicRecoverAsync) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *BasicRecoverAsync) read(r io.Reader) (err error) {
+func (me *basicRecoverAsync) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2227,25 +2227,25 @@ func (me *BasicRecoverAsync) read(r io.Reader) (err error) {
    specified channel. Zero or more messages may be redelivered.  This method
    replaces the asynchronous Recover.
 */
-type BasicRecover struct {
+type basicRecover struct {
 	Requeue bool // requeue the message
 
 }
 
-func (me *BasicRecover) id() (uint16, uint16) {
+func (me *basicRecover) id() (uint16, uint16) {
 	return 60, 110
 }
 
-func (me *BasicRecover) wait() bool {
+func (me *basicRecover) wait() bool {
 	return false
 }
 
-func (me *BasicRecover) write(w io.Writer) (err error) {
+func (me *basicRecover) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *BasicRecover) read(r io.Reader) (err error) {
+func (me *basicRecover) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2253,23 +2253,23 @@ func (me *BasicRecover) read(r io.Reader) (err error) {
 /*  
    This method acknowledges a Basic.Recover method.
 */
-type BasicRecoverOk struct {
+type basicRecoverOk struct {
 }
 
-func (me *BasicRecoverOk) id() (uint16, uint16) {
+func (me *basicRecoverOk) id() (uint16, uint16) {
 	return 60, 111
 }
 
-func (me *BasicRecoverOk) wait() bool {
+func (me *basicRecoverOk) wait() bool {
 	return true
 }
 
-func (me *BasicRecoverOk) write(w io.Writer) (err error) {
+func (me *basicRecoverOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *BasicRecoverOk) read(r io.Reader) (err error) {
+func (me *basicRecoverOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2283,22 +2283,22 @@ func (me *BasicRecoverOk) read(r io.Reader) (err error) {
    confirm mode of unhandled messages.  If a publisher receives this method, it
    probably needs to republish the offending messages.
 */
-type BasicNack struct {
+type basicNack struct {
 	DeliveryTag uint64
 	Multiple    bool // reject multiple messages
 	Requeue     bool // requeue the message
 
 }
 
-func (me *BasicNack) id() (uint16, uint16) {
+func (me *basicNack) id() (uint16, uint16) {
 	return 60, 120
 }
 
-func (me *BasicNack) wait() bool {
+func (me *basicNack) wait() bool {
 	return false
 }
 
-func (me *BasicNack) write(w io.Writer) (err error) {
+func (me *basicNack) write(w io.Writer) (err error) {
 
 	if err = binary.Write(w, binary.BigEndian, me.DeliveryTag); err != nil {
 		return
@@ -2307,7 +2307,7 @@ func (me *BasicNack) write(w io.Writer) (err error) {
 	return
 }
 
-func (me *BasicNack) read(r io.Reader) (err error) {
+func (me *basicNack) read(r io.Reader) (err error) {
 
 	if err = binary.Read(r, binary.BigEndian, &me.DeliveryTag); err != nil {
 		return
@@ -2320,23 +2320,23 @@ func (me *BasicNack) read(r io.Reader) (err error) {
    This method sets the channel to use standard transactions. The client must use this
    method at least once on a channel before using the Commit or Rollback methods.
 */
-type TxSelect struct {
+type txSelect struct {
 }
 
-func (me *TxSelect) id() (uint16, uint16) {
+func (me *txSelect) id() (uint16, uint16) {
 	return 90, 10
 }
 
-func (me *TxSelect) wait() bool {
+func (me *txSelect) wait() bool {
 	return true
 }
 
-func (me *TxSelect) write(w io.Writer) (err error) {
+func (me *txSelect) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *TxSelect) read(r io.Reader) (err error) {
+func (me *txSelect) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2345,23 +2345,23 @@ func (me *TxSelect) read(r io.Reader) (err error) {
    This method confirms to the client that the channel was successfully set to use
    standard transactions.
 */
-type TxSelectOk struct {
+type txSelectOk struct {
 }
 
-func (me *TxSelectOk) id() (uint16, uint16) {
+func (me *txSelectOk) id() (uint16, uint16) {
 	return 90, 11
 }
 
-func (me *TxSelectOk) wait() bool {
+func (me *txSelectOk) wait() bool {
 	return true
 }
 
-func (me *TxSelectOk) write(w io.Writer) (err error) {
+func (me *txSelectOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *TxSelectOk) read(r io.Reader) (err error) {
+func (me *txSelectOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2370,23 +2370,23 @@ func (me *TxSelectOk) read(r io.Reader) (err error) {
    This method commits all message publications and acknowledgments performed in
    the current transaction.  A new transaction starts immediately after a commit.
 */
-type TxCommit struct {
+type txCommit struct {
 }
 
-func (me *TxCommit) id() (uint16, uint16) {
+func (me *txCommit) id() (uint16, uint16) {
 	return 90, 20
 }
 
-func (me *TxCommit) wait() bool {
+func (me *txCommit) wait() bool {
 	return true
 }
 
-func (me *TxCommit) write(w io.Writer) (err error) {
+func (me *txCommit) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *TxCommit) read(r io.Reader) (err error) {
+func (me *txCommit) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2395,23 +2395,23 @@ func (me *TxCommit) read(r io.Reader) (err error) {
    This method confirms to the client that the commit succeeded. Note that if a commit
    fails, the server raises a channel exception.
 */
-type TxCommitOk struct {
+type txCommitOk struct {
 }
 
-func (me *TxCommitOk) id() (uint16, uint16) {
+func (me *txCommitOk) id() (uint16, uint16) {
 	return 90, 21
 }
 
-func (me *TxCommitOk) wait() bool {
+func (me *txCommitOk) wait() bool {
 	return true
 }
 
-func (me *TxCommitOk) write(w io.Writer) (err error) {
+func (me *txCommitOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *TxCommitOk) read(r io.Reader) (err error) {
+func (me *txCommitOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2422,23 +2422,23 @@ func (me *TxCommitOk) read(r io.Reader) (err error) {
    Note that unacked messages will not be automatically redelivered by rollback;
    if that is required an explicit recover call should be issued.
 */
-type TxRollback struct {
+type txRollback struct {
 }
 
-func (me *TxRollback) id() (uint16, uint16) {
+func (me *txRollback) id() (uint16, uint16) {
 	return 90, 30
 }
 
-func (me *TxRollback) wait() bool {
+func (me *txRollback) wait() bool {
 	return true
 }
 
-func (me *TxRollback) write(w io.Writer) (err error) {
+func (me *txRollback) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *TxRollback) read(r io.Reader) (err error) {
+func (me *txRollback) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2447,23 +2447,23 @@ func (me *TxRollback) read(r io.Reader) (err error) {
    This method confirms to the client that the rollback succeeded. Note that if an
    rollback fails, the server raises a channel exception.
 */
-type TxRollbackOk struct {
+type txRollbackOk struct {
 }
 
-func (me *TxRollbackOk) id() (uint16, uint16) {
+func (me *txRollbackOk) id() (uint16, uint16) {
 	return 90, 31
 }
 
-func (me *TxRollbackOk) wait() bool {
+func (me *txRollbackOk) wait() bool {
 	return true
 }
 
-func (me *TxRollbackOk) write(w io.Writer) (err error) {
+func (me *txRollbackOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *TxRollbackOk) read(r io.Reader) (err error) {
+func (me *txRollbackOk) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2473,24 +2473,24 @@ func (me *TxRollbackOk) read(r io.Reader) (err error) {
    The client can only use this method on a non-transactional
    channel.
 */
-type ConfirmSelect struct {
+type confirmSelect struct {
 	Nowait bool
 }
 
-func (me *ConfirmSelect) id() (uint16, uint16) {
+func (me *confirmSelect) id() (uint16, uint16) {
 	return 85, 10
 }
 
-func (me *ConfirmSelect) wait() bool {
+func (me *confirmSelect) wait() bool {
 	return true
 }
 
-func (me *ConfirmSelect) write(w io.Writer) (err error) {
+func (me *confirmSelect) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ConfirmSelect) read(r io.Reader) (err error) {
+func (me *confirmSelect) read(r io.Reader) (err error) {
 
 	return
 }
@@ -2499,29 +2499,29 @@ func (me *ConfirmSelect) read(r io.Reader) (err error) {
    This method confirms to the client that the channel was successfully
    set to use publisher acknowledgements.
 */
-type ConfirmSelectOk struct {
+type confirmSelectOk struct {
 }
 
-func (me *ConfirmSelectOk) id() (uint16, uint16) {
+func (me *confirmSelectOk) id() (uint16, uint16) {
 	return 85, 11
 }
 
-func (me *ConfirmSelectOk) wait() bool {
+func (me *confirmSelectOk) wait() bool {
 	return true
 }
 
-func (me *ConfirmSelectOk) write(w io.Writer) (err error) {
+func (me *confirmSelectOk) write(w io.Writer) (err error) {
 
 	return
 }
 
-func (me *ConfirmSelectOk) read(r io.Reader) (err error) {
+func (me *confirmSelectOk) read(r io.Reader) (err error) {
 
 	return
 }
 
-func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, err error) {
-	mf := &MethodFrame{
+func (me *reader) parseMethodFrame(channel uint16, size uint32) (f frame, err error) {
+	mf := &methodFrame{
 		ChannelId: channel,
 	}
 
@@ -2540,7 +2540,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 10: // connection start
 			//fmt.Println("NextMethod: class:10 method:10")
-			method := &ConnectionStart{}
+			method := &connectionStart{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2548,7 +2548,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 11: // connection start-ok
 			//fmt.Println("NextMethod: class:10 method:11")
-			method := &ConnectionStartOk{}
+			method := &connectionStartOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2556,7 +2556,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 20: // connection secure
 			//fmt.Println("NextMethod: class:10 method:20")
-			method := &ConnectionSecure{}
+			method := &connectionSecure{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2564,7 +2564,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 21: // connection secure-ok
 			//fmt.Println("NextMethod: class:10 method:21")
-			method := &ConnectionSecureOk{}
+			method := &connectionSecureOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2572,7 +2572,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 30: // connection tune
 			//fmt.Println("NextMethod: class:10 method:30")
-			method := &ConnectionTune{}
+			method := &connectionTune{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2580,7 +2580,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 31: // connection tune-ok
 			//fmt.Println("NextMethod: class:10 method:31")
-			method := &ConnectionTuneOk{}
+			method := &connectionTuneOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2588,7 +2588,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 40: // connection open
 			//fmt.Println("NextMethod: class:10 method:40")
-			method := &ConnectionOpen{}
+			method := &connectionOpen{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2596,7 +2596,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 41: // connection open-ok
 			//fmt.Println("NextMethod: class:10 method:41")
-			method := &ConnectionOpenOk{}
+			method := &connectionOpenOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2604,7 +2604,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 50: // connection close
 			//fmt.Println("NextMethod: class:10 method:50")
-			method := &ConnectionClose{}
+			method := &connectionClose{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2612,7 +2612,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 51: // connection close-ok
 			//fmt.Println("NextMethod: class:10 method:51")
-			method := &ConnectionCloseOk{}
+			method := &connectionCloseOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2627,7 +2627,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 10: // channel open
 			//fmt.Println("NextMethod: class:20 method:10")
-			method := &ChannelOpen{}
+			method := &channelOpen{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2635,7 +2635,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 11: // channel open-ok
 			//fmt.Println("NextMethod: class:20 method:11")
-			method := &ChannelOpenOk{}
+			method := &channelOpenOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2643,7 +2643,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 20: // channel flow
 			//fmt.Println("NextMethod: class:20 method:20")
-			method := &ChannelFlow{}
+			method := &channelFlow{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2651,7 +2651,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 21: // channel flow-ok
 			//fmt.Println("NextMethod: class:20 method:21")
-			method := &ChannelFlowOk{}
+			method := &channelFlowOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2659,7 +2659,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 40: // channel close
 			//fmt.Println("NextMethod: class:20 method:40")
-			method := &ChannelClose{}
+			method := &channelClose{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2667,7 +2667,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 41: // channel close-ok
 			//fmt.Println("NextMethod: class:20 method:41")
-			method := &ChannelCloseOk{}
+			method := &channelCloseOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2682,7 +2682,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 10: // exchange declare
 			//fmt.Println("NextMethod: class:40 method:10")
-			method := &ExchangeDeclare{}
+			method := &exchangeDeclare{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2690,7 +2690,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 11: // exchange declare-ok
 			//fmt.Println("NextMethod: class:40 method:11")
-			method := &ExchangeDeclareOk{}
+			method := &exchangeDeclareOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2698,7 +2698,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 20: // exchange delete
 			//fmt.Println("NextMethod: class:40 method:20")
-			method := &ExchangeDelete{}
+			method := &exchangeDelete{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2706,7 +2706,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 21: // exchange delete-ok
 			//fmt.Println("NextMethod: class:40 method:21")
-			method := &ExchangeDeleteOk{}
+			method := &exchangeDeleteOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2714,7 +2714,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 30: // exchange bind
 			//fmt.Println("NextMethod: class:40 method:30")
-			method := &ExchangeBind{}
+			method := &exchangeBind{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2722,7 +2722,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 31: // exchange bind-ok
 			//fmt.Println("NextMethod: class:40 method:31")
-			method := &ExchangeBindOk{}
+			method := &exchangeBindOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2730,7 +2730,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 40: // exchange unbind
 			//fmt.Println("NextMethod: class:40 method:40")
-			method := &ExchangeUnbind{}
+			method := &exchangeUnbind{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2738,7 +2738,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 51: // exchange unbind-ok
 			//fmt.Println("NextMethod: class:40 method:51")
-			method := &ExchangeUnbindOk{}
+			method := &exchangeUnbindOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2753,7 +2753,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 10: // queue declare
 			//fmt.Println("NextMethod: class:50 method:10")
-			method := &QueueDeclare{}
+			method := &queueDeclare{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2761,7 +2761,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 11: // queue declare-ok
 			//fmt.Println("NextMethod: class:50 method:11")
-			method := &QueueDeclareOk{}
+			method := &queueDeclareOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2769,7 +2769,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 20: // queue bind
 			//fmt.Println("NextMethod: class:50 method:20")
-			method := &QueueBind{}
+			method := &queueBind{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2777,7 +2777,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 21: // queue bind-ok
 			//fmt.Println("NextMethod: class:50 method:21")
-			method := &QueueBindOk{}
+			method := &queueBindOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2785,7 +2785,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 50: // queue unbind
 			//fmt.Println("NextMethod: class:50 method:50")
-			method := &QueueUnbind{}
+			method := &queueUnbind{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2793,7 +2793,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 51: // queue unbind-ok
 			//fmt.Println("NextMethod: class:50 method:51")
-			method := &QueueUnbindOk{}
+			method := &queueUnbindOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2801,7 +2801,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 30: // queue purge
 			//fmt.Println("NextMethod: class:50 method:30")
-			method := &QueuePurge{}
+			method := &queuePurge{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2809,7 +2809,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 31: // queue purge-ok
 			//fmt.Println("NextMethod: class:50 method:31")
-			method := &QueuePurgeOk{}
+			method := &queuePurgeOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2817,7 +2817,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 40: // queue delete
 			//fmt.Println("NextMethod: class:50 method:40")
-			method := &QueueDelete{}
+			method := &queueDelete{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2825,7 +2825,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 41: // queue delete-ok
 			//fmt.Println("NextMethod: class:50 method:41")
-			method := &QueueDeleteOk{}
+			method := &queueDeleteOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2840,7 +2840,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 10: // basic qos
 			//fmt.Println("NextMethod: class:60 method:10")
-			method := &BasicQos{}
+			method := &basicQos{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2848,7 +2848,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 11: // basic qos-ok
 			//fmt.Println("NextMethod: class:60 method:11")
-			method := &BasicQosOk{}
+			method := &basicQosOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2856,7 +2856,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 20: // basic consume
 			//fmt.Println("NextMethod: class:60 method:20")
-			method := &BasicConsume{}
+			method := &basicConsume{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2864,7 +2864,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 21: // basic consume-ok
 			//fmt.Println("NextMethod: class:60 method:21")
-			method := &BasicConsumeOk{}
+			method := &basicConsumeOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2872,7 +2872,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 30: // basic cancel
 			//fmt.Println("NextMethod: class:60 method:30")
-			method := &BasicCancel{}
+			method := &basicCancel{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2880,7 +2880,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 31: // basic cancel-ok
 			//fmt.Println("NextMethod: class:60 method:31")
-			method := &BasicCancelOk{}
+			method := &basicCancelOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2888,7 +2888,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 40: // basic publish
 			//fmt.Println("NextMethod: class:60 method:40")
-			method := &BasicPublish{}
+			method := &basicPublish{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2896,7 +2896,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 50: // basic return
 			//fmt.Println("NextMethod: class:60 method:50")
-			method := &BasicReturn{}
+			method := &basicReturn{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2904,7 +2904,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 60: // basic deliver
 			//fmt.Println("NextMethod: class:60 method:60")
-			method := &BasicDeliver{}
+			method := &basicDeliver{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2912,7 +2912,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 70: // basic get
 			//fmt.Println("NextMethod: class:60 method:70")
-			method := &BasicGet{}
+			method := &basicGet{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2920,7 +2920,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 71: // basic get-ok
 			//fmt.Println("NextMethod: class:60 method:71")
-			method := &BasicGetOk{}
+			method := &basicGetOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2928,7 +2928,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 72: // basic get-empty
 			//fmt.Println("NextMethod: class:60 method:72")
-			method := &BasicGetEmpty{}
+			method := &basicGetEmpty{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2936,7 +2936,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 80: // basic ack
 			//fmt.Println("NextMethod: class:60 method:80")
-			method := &BasicAck{}
+			method := &basicAck{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2944,7 +2944,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 90: // basic reject
 			//fmt.Println("NextMethod: class:60 method:90")
-			method := &BasicReject{}
+			method := &basicReject{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2952,7 +2952,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 100: // basic recover-async
 			//fmt.Println("NextMethod: class:60 method:100")
-			method := &BasicRecoverAsync{}
+			method := &basicRecoverAsync{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2960,7 +2960,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 110: // basic recover
 			//fmt.Println("NextMethod: class:60 method:110")
-			method := &BasicRecover{}
+			method := &basicRecover{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2968,7 +2968,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 111: // basic recover-ok
 			//fmt.Println("NextMethod: class:60 method:111")
-			method := &BasicRecoverOk{}
+			method := &basicRecoverOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2976,7 +2976,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 120: // basic nack
 			//fmt.Println("NextMethod: class:60 method:120")
-			method := &BasicNack{}
+			method := &basicNack{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2991,7 +2991,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 10: // tx select
 			//fmt.Println("NextMethod: class:90 method:10")
-			method := &TxSelect{}
+			method := &txSelect{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -2999,7 +2999,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 11: // tx select-ok
 			//fmt.Println("NextMethod: class:90 method:11")
-			method := &TxSelectOk{}
+			method := &txSelectOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -3007,7 +3007,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 20: // tx commit
 			//fmt.Println("NextMethod: class:90 method:20")
-			method := &TxCommit{}
+			method := &txCommit{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -3015,7 +3015,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 21: // tx commit-ok
 			//fmt.Println("NextMethod: class:90 method:21")
-			method := &TxCommitOk{}
+			method := &txCommitOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -3023,7 +3023,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 30: // tx rollback
 			//fmt.Println("NextMethod: class:90 method:30")
-			method := &TxRollback{}
+			method := &txRollback{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -3031,7 +3031,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 31: // tx rollback-ok
 			//fmt.Println("NextMethod: class:90 method:31")
-			method := &TxRollbackOk{}
+			method := &txRollbackOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -3046,7 +3046,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 10: // confirm select
 			//fmt.Println("NextMethod: class:85 method:10")
-			method := &ConfirmSelect{}
+			method := &confirmSelect{}
 			if err = method.read(me.r); err != nil {
 				return
 			}
@@ -3054,7 +3054,7 @@ func (me *Framer) parseMethodFrame(channel uint16, size uint32) (frame Frame, er
 
 		case 11: // confirm select-ok
 			//fmt.Println("NextMethod: class:85 method:11")
-			method := &ConfirmSelectOk{}
+			method := &confirmSelectOk{}
 			if err = method.read(me.r); err != nil {
 				return
 			}

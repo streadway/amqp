@@ -10,20 +10,20 @@ import (
 type Connection struct {
 	conn io.ReadWriteCloser
 
-	messages chan Message
+	messages chan message
 
-	c2s chan Frame
+	out chan frame
 
-	major      int
-	minor      int
-	properties Table
+	VersionMajor int
+	VersionMinor int
+	Properties   Table
 
-	maxChannels       int
-	maxFrameSize      int
-	heartbeatInterval int
+	MaxChannels       int
+	MaxFrameSize      int
+	HeartbeatInterval int
 
-	m   sync.Mutex
-	seq uint16
+	increment sync.Mutex
+	sequence  uint16
 
 	channels map[uint16]*Channel
 }
@@ -31,8 +31,8 @@ type Connection struct {
 func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *Connection, err error) {
 	me = &Connection{
 		conn: conn,
-		//msgs:  make(chan Message), // incoming synchronous connection methods (Channel == 0)
-		//out:      make(chan Frame),  // shared chan that muxes all frames
+		//msgs:  make(chan message), // incoming synchronous connection methods (Channel == 0)
+		//out:      make(chan frame),  // shared chan that muxes all frames
 		channels: make(map[uint16]*Channel),
 	}
 
@@ -42,31 +42,36 @@ func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *
 	return me, me.open(auth.Username, auth.Password, vhost)
 }
 
-func (me *Connection) nextSeq() uint16 {
-	me.m.Lock()
-	defer me.m.Unlock()
-	me.seq++
-	return me.seq
+func (me *Connection) nextChannelId() uint16 {
+	me.increment.Lock()
+	defer me.increment.Unlock()
+	me.sequence++
+	return me.sequence
+}
+
+func (me *Connection) send(f frame) error {
+	me.out <- f
+	return nil
 }
 
 // All methods sent to the connection channel should be synchronous so we
 // can handle them directly without a framing component
-func (me *Connection) demux(frame Frame) {
-	if frame.channel() == 0 {
+func (me *Connection) demux(f frame) {
+	if f.channel() == 0 {
 		// TODO send hard error if any content frames/async frames are sent here
-		switch mf := frame.(type) {
-		case *MethodFrame:
-			println(mf)
+		switch mf := f.(type) {
+		case *methodFrame:
+			me.messages <- mf.Method
 		default:
 			panic("TODO close with hard-error")
 		}
 	} else {
-		channel, ok := me.channels[frame.channel()]
+		channel, ok := me.channels[f.channel()]
 		if ok {
-			channel.s2c <- frame
+			channel.recv(channel, f)
 		} else {
 			// TODO handle unknown channel for now drop
-			println("XXX unknown channel", frame.channel())
+			println("XXX unknown channel", f.channel())
 			panic("XXX unknown channel")
 		}
 	}
@@ -76,7 +81,7 @@ func (me *Connection) demux(frame Frame) {
 // will demux the streams and dispatch to one of the opened channels or
 // handle on channel 0 (the connection channel).
 func (me *Connection) reader() {
-	frames := NewFramer(me.conn, me.conn)
+	frames := &reader{me.conn}
 
 	for {
 		frame, err := frames.ReadFrame()
@@ -92,7 +97,7 @@ func (me *Connection) reader() {
 
 func (me *Connection) writer() {
 	for {
-		frame := <-me.c2s
+		frame := <-me.out
 		if frame == nil {
 			// TODO handle when the chan closes
 			return
@@ -110,8 +115,8 @@ func (me *Connection) writer() {
 // multiple consumers on the same network Connection.  Each client comes with a
 // opened embedded channel and exposes all channel related interfaces directly.
 func (me *Connection) OpenChannel() (channel *Channel, err error) {
-	id := me.nextSeq()
-	channel, err = newChannel(id, me.maxFrameSize, make(chan Frame), me.c2s)
+	id := me.nextChannelId()
+	channel, err = newChannel(me, id)
 	me.channels[id] = channel
 	//return channel, channel.open()
 	return channel, nil
@@ -133,14 +138,14 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 	}
 
 	switch start := (<-me.messages).(type) {
-	case *ConnectionStart:
-		me.major = int(start.VersionMajor)
-		me.minor = int(start.VersionMinor)
-		me.properties = Table(start.ServerProperties)
+	case *connectionStart:
+		me.VersionMajor = int(start.VersionMajor)
+		me.VersionMinor = int(start.VersionMinor)
+		me.Properties = Table(start.ServerProperties)
 
-		me.c2s <- &MethodFrame{
+		me.out <- &methodFrame{
 			ChannelId: 0,
-			Method: &ConnectionStartOk{
+			Method: &connectionStartOk{
 				Mechanism: "PLAIN",
 				Response:  fmt.Sprintf("\000%s\000%s", username, password),
 			},
@@ -148,29 +153,29 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 
 		switch tune := (<-me.messages).(type) {
 		// TODO SECURE HANDSHAKE
-		case *ConnectionTune:
-			me.maxChannels = int(tune.ChannelMax)
-			me.heartbeatInterval = int(tune.Heartbeat)
-			me.maxFrameSize = int(tune.FrameMax)
+		case *connectionTune:
+			me.MaxChannels = int(tune.ChannelMax)
+			me.HeartbeatInterval = int(tune.Heartbeat)
+			me.MaxFrameSize = int(tune.FrameMax)
 
-			me.c2s <- &MethodFrame{
+			me.out <- &methodFrame{
 				ChannelId: 0,
-				Method: &ConnectionTuneOk{
+				Method: &connectionTuneOk{
 					ChannelMax: 10,
 					FrameMax:   FrameMinSize,
 					Heartbeat:  0,
 				},
 			}
 
-			me.c2s <- &MethodFrame{
+			me.out <- &methodFrame{
 				ChannelId: 0,
-				Method: &ConnectionOpen{
+				Method: &connectionOpen{
 					VirtualHost: vhost,
 				},
 			}
 
 			switch (<-me.messages).(type) {
-			case *ConnectionOpenOk:
+			case *connectionOpenOk:
 				return nil
 			}
 		}

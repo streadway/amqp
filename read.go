@@ -11,12 +11,12 @@ import (
 Reads a frame from an input stream and returns an interface that can be cast into
 one of the following:
 
-   MethodFrame
+   methodFrame
    PropertiesFrame
-   BodyFrame
-   HeartbeatFrame
+   bodyFrame
+   heartbeatFrame
 
-2.3.5  Frame Details
+2.3.5  frame Details
 
 All frames consist of a header (7 octets), a payload of arbitrary size, and a
 'frame-end' octet that detects malformed frames:
@@ -37,7 +37,7 @@ In realistic implementations where performance is a concern, we would use
 
 “gathering reads” to avoid doing three separate system calls to read a frame.
 */
-func (me *Framer) ReadFrame() (frame Frame, err error) {
+func (me *reader) ReadFrame() (frame frame, err error) {
 	var scratch [7]byte
 
 	if _, err = io.ReadFull(me.r, scratch[:7]); err != nil {
@@ -329,11 +329,8 @@ func hasProperty(mask uint16, prop int) bool {
 	return int(mask)&prop > 0
 }
 
-// defined in spec
-// func (me *Framer) parseMethodFrame(channel uint16, b []byte) (frame Frame, err error) {
-
-func (me *Framer) parseHeaderFrame(channel uint16, size uint32) (frame Frame, err error) {
-	hf := &HeaderFrame{
+func (me *reader) parseHeaderFrame(channel uint16, size uint32) (frame frame, err error) {
+	hf := &headerFrame{
 		ChannelId: channel,
 	}
 
@@ -429,8 +426,8 @@ func (me *Framer) parseHeaderFrame(channel uint16, size uint32) (frame Frame, er
 	return hf, nil
 }
 
-func (me *Framer) parseBodyFrame(channel uint16, size uint32) (frame Frame, err error) {
-	bf := &BodyFrame{
+func (me *reader) parseBodyFrame(channel uint16, size uint32) (frame frame, err error) {
+	bf := &bodyFrame{
 		ChannelId: channel,
 		Body:      make([]byte, size),
 	}
@@ -442,8 +439,8 @@ func (me *Framer) parseBodyFrame(channel uint16, size uint32) (frame Frame, err 
 	return bf, nil
 }
 
-func (me *Framer) parseHeartbeatFrame(channel uint16, size uint32) (frame Frame, err error) {
-	hf := &HeartbeatFrame{
+func (me *reader) parseHeartbeatFrame(channel uint16, size uint32) (frame frame, err error) {
+	hf := &heartbeatFrame{
 		ChannelId: channel,
 	}
 

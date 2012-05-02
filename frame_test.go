@@ -31,14 +31,14 @@ var (
 	readBadMethod  = []byte{7, 0, 11, 0, 0, 0, 0, 206}
 )
 
-func TestReadMethodFrame(t *testing.T) {
+func TestReadmethodFrame(t *testing.T) {
 	r := NewFrameReader(bytes.NewBuffer(frameTune))
 	f, err := r.NextFrame()
 	if err != nil {
 		t.Error("Bad read:", err)
 	}
 
-	m, ok := f.(MethodFrame)
+	m, ok := f.(methodFrame)
 	if !ok {
 		t.Error("Method Type error", m)
 	}
@@ -88,7 +88,7 @@ func TestReadContentHeader(t *testing.T) {
 		t.Error("Bad read:", err)
 	}
 
-	m, ok := f.(HeaderFrame)
+	m, ok := f.(headerFrame)
 	if !ok {
 		t.Error("Header Type error", m)
 	}
@@ -109,7 +109,7 @@ func TestReadContent(t *testing.T) {
 		t.Error("Bad read:", err)
 	}
 
-	m, ok := f.(BodyFrame)
+	m, ok := f.(bodyFrame)
 	if !ok {
 		t.Error("Header Type error", m)
 	}
@@ -123,14 +123,14 @@ func TestReadContent(t *testing.T) {
 	}
 }
 
-func TestReadHeartbeatFrame(t *testing.T) {
+func TestReadheartbeatFrame(t *testing.T) {
 	r := NewFrameReader(bytes.NewBuffer(frameHeartbeat))
 	f, err := r.NextFrame()
 	if err != nil {
 		t.Error("Bad read:", err)
 	}
 
-	m, ok := f.(HeartbeatFrame)
+	m, ok := f.(heartbeatFrame)
 	if !ok {
 		t.Error("Method Type error", m)
 	}
@@ -145,7 +145,7 @@ var ()
 func TestWriteMethod(t *testing.T) {
 	var buf bytes.Buffer
 
-	f := MethodFrame{
+	f := methodFrame{
 		Channel: 11,
 		Method: ConnectionTune{
 			ChannelMax: 5,
@@ -164,7 +164,7 @@ func TestWriteMethod(t *testing.T) {
 func TestWriteHeartbeat(t *testing.T) {
 	var buf bytes.Buffer
 
-	f := HeartbeatFrame{
+	f := heartbeatFrame{
 		Channel: 11,
 	}
 
@@ -178,7 +178,7 @@ func TestWriteHeartbeat(t *testing.T) {
 func TestWriteHeader(t *testing.T) {
 	var buf bytes.Buffer
 
-	f := HeaderFrame{
+	f := headerFrame{
 		Channel: 11,
 		Header: ContentHeader{
 			Class: 10,
@@ -199,7 +199,7 @@ func TestWriteHeader(t *testing.T) {
 func TestWriteBody(t *testing.T) {
 	var buf bytes.Buffer
 
-	f := BodyFrame{
+	f := bodyFrame{
 		Channel: 11,
 		Payload: []byte("ohai"),
 	}
