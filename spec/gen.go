@@ -157,7 +157,7 @@ var (
       type {{$struct}} struct {
         {{range .Fields}}
         {{$.FieldName .}} {{$.FieldType . | $.NativeType}} {{if .Label}}// {{.Label}}{{end}}{{end}}
-				{{if .Content}}Properties Properties
+				{{if .Content}}Properties properties
 				Body []byte{{end}}
       }
 
@@ -170,12 +170,12 @@ var (
 			}
 
 			{{if .Content}}
-      func (me *{{$struct}}) getContent() (Properties, []byte) {
+      func (me *{{$struct}}) getContent() (properties, []byte) {
         return me.Properties, me.Body
       }
 
-      func (me *{{$struct}}) setContent(properties Properties, body []byte) {
-        me.Properties, me.Body = properties, body
+      func (me *{{$struct}}) setContent(props properties, body []byte) {
+        me.Properties, me.Body = props, body
       }
 			{{end}}
       func (me *{{$struct}}) write(w io.Writer) (err error) {

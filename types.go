@@ -19,9 +19,10 @@ var (
 
 	ErrAlreadyClosed = errors.New("Connection/Channel has already been closed")
 
-	ProtocolHeader = []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}
+	protocolHeader = []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}
 )
 
+// The code and reason a channel or connection has been closed by the server.
 type Closed struct {
 	Code   uint16
 	Reason string
@@ -31,7 +32,8 @@ func (me Closed) Error() string {
 	return fmt.Sprintf("Closed with code (%d) reason: '%s'", me.Code, me.Reason)
 }
 
-type Properties struct {
+// Used by header frames to capture routing and header information
+type properties struct {
 	ContentType     string    // MIME content type
 	ContentEncoding string    // MIME content encoding
 	Headers         Table     // Application or header exchange table
@@ -48,6 +50,8 @@ type Properties struct {
 	reserved1       string    // was cluster-id - process for buffer consumption
 }
 
+// The enum of possible DeliveryMode values.  Transient means higher throughput
+// but message loss on broker crash.
 const (
 	TransientDelivery  uint8 = 1
 	PersistentDelivery uint8 = 2
@@ -73,6 +77,9 @@ const (
 	flagReserved1       = 0x0004
 )
 
+// A library type that makes it simpler to reason about the possible Durable
+// and AutoDelete fields that make sense for a Queue or Exchange.  This avoids
+// the possible combination of durable=true, autoDelete=true.
 type Lifetime int
 
 const (
@@ -105,6 +112,8 @@ func (me *Lifetime) autoDelete() bool {
 	panic("unknown lifetime")
 }
 
+// AMQP defined exchange types.  You may use these constants or provide your
+// own exchange types to Exchange.Declare
 const (
 	Direct  = "direct"
 	Topic   = "topic"
@@ -112,22 +121,59 @@ const (
 	Headers = "headers"
 )
 
+// A receiver for the protocol messages that make sense in the Exchage class.
+// Primarily for segmenting API related activities and reducing the parameter
+// lists for the methods.
+//
+// In AMQP - you Publish to Exchanges
 type Exchange struct {
 	channel *Channel
 	name    string
 }
 
+// A receiver for the protocol messages that make sense in the Queue class.
+// Primarily for segmenting API related activities and reducing the parameter
+// lists for the methods.
+//
+// In AMQP - you Consume from Queues
 type Queue struct {
 	channel *Channel
 	name    string
 }
 
+// Server state about the existence of a Queue.  This can be from a Declare or Inspect
 type QueueState struct {
 	Declared      bool
 	MessageCount  int
 	ConsumerCount int
 }
 
+// A published message from the client to the server.  The typed fields are the
+// message delivery properties that will have a more efficient representation
+// on the wire.
+type Publishing struct {
+	Headers Table // Application or header exchange table
+
+	// Properties for the message
+	ContentType     string    // MIME content type
+	ContentEncoding string    // MIME content encoding
+	DeliveryMode    uint8     // queue implemention use - non-persistent (1) or persistent (2)
+	Priority        uint8     // queue implementation use - 0 to 9
+	CorrelationId   string    // application use - correlation identifier
+	ReplyTo         string    // application use - address to to reply to (ex: RPC)
+	Expiration      string    // implementation use - message expiration spec
+	MessageId       string    // application use - message identifier
+	Timestamp       time.Time // application use - message timestamp
+	Type            string    // application use - message type name
+	UserId          string    // application use - creating user id
+	AppId           string    // application use - creating application id
+
+	Body []byte
+}
+
+// A delivery from the server to a consumer created with Queue.Consume or Queue.Get.  The
+// types have been promoted from the framing and the method so to provide flat,
+// typed access to everything the channel knows about this message.
 type Delivery struct {
 	channel *Channel
 
@@ -159,11 +205,15 @@ type Delivery struct {
 	Body []byte
 }
 
+// The golang type that matches the amqp type.  Scale is the number of decimal digits
+// Scale == 2, Value == 12345, Decimal == 123.45
 type Decimal struct {
 	Scale uint8
 	Value uint32
 }
 
+// The amqp type that represents a string to field.  Most Go types are supported in
+// table serialization.
 type Table map[string]interface{}
 
 var (
@@ -192,8 +242,8 @@ type message interface {
 
 type messageWithContent interface {
 	message
-	getContent() (Properties, []byte)
-	setContent(Properties, []byte)
+	getContent() (properties, []byte)
+	setContent(properties, []byte)
 }
 
 /*
@@ -303,7 +353,7 @@ type headerFrame struct {
 	ClassId    uint16
 	weight     uint16
 	Size       uint64
-	Properties Properties
+	Properties properties
 }
 
 func (me *headerFrame) channel() uint16 { return me.ChannelId }

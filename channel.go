@@ -46,6 +46,17 @@ func newChannel(c *Connection, id uint16) (me *Channel, err error) {
 	return me, nil
 }
 
+func (me *Channel) addConsumer(tag string, ch chan Delivery) string {
+	// TODO Mutex
+	if tag == "" {
+		tag = randomTag()
+	}
+
+	me.consumers[tag] = ch
+
+	return tag
+}
+
 func (me *Channel) open() (err error) {
 	if err = me.send(&channelOpen{}); err != nil {
 		return
@@ -56,9 +67,11 @@ func (me *Channel) open() (err error) {
 		return
 	case nil:
 		return me.Close()
+	default:
+		return ErrBadProtocol
 	}
 
-	return ErrBadProtocol
+	panic("unreachable")
 }
 
 func (me *Channel) send(msg message) (err error) {
@@ -282,21 +295,65 @@ func (me *Channel) recvContent(f frame) error {
 
 // RPC Implementation
 
-func (me *Channel) E(name string) Exchange { return Exchange{channel: me, name: name} }
-func (me *Channel) Q(name string) Queue    { return Queue{channel: me, name: name} }
+func (me *Channel) E(name string) *Exchange {
+	return &Exchange{channel: me, name: name}
+}
 
-func (me *Channel) Flow(active bool) error { return nil }
+func (me *Channel) Q(name string) *Queue {
+	return &Queue{channel: me, name: name}
+}
 
-func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) error { return nil }
+//func (me *Channel) Flow(active bool) error { return nil }
 
-func (me *Channel) Cancel(consumerTag string, noWait bool) error { return nil }
+func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (err error) {
+	if err = me.send(&basicQos{
+		PrefetchSize:  prefetchSize,
+		PrefetchCount: prefetchCount,
+		Global:        global,
+	}); err != nil {
+		return
+	}
 
-func (me *Channel) Get(queueName string, noAck bool) error                     { return nil }
-func (me *Channel) Recover(requeue bool) error                                 { return nil }
-func (me *Channel) Nack(deliveryTag uint64, requeue bool, multiple bool) error { return nil }
+	switch (<-me.rpc).(type) {
+	case *basicQosOk:
+		return
+	case nil:
+		return me.Close()
+	default:
+		return ErrBadProtocol
+	}
 
-//func (me *Channel) Confirm(noWait bool) error                                  { return nil }
+	panic("unreachable")
+}
 
-//func (me *Channel) TxSelect() error   { return nil }
-//func (me *Channel) TxCommit() error   { return nil }
-//func (me *Channel) TxRollback() error { return nil }
+func (me *Channel) Cancel(consumerTag string, noWait bool) (err error) {
+	if err = me.send(&basicCancel{
+		ConsumerTag: consumerTag,
+		NoWait:      noWait,
+	}); err != nil {
+		return
+	}
+
+	if !noWait {
+		switch (<-me.rpc).(type) {
+		case *basicCancelOk:
+			return
+		case nil:
+			return me.Close()
+		default:
+			return ErrBadProtocol
+		}
+	}
+
+	return
+}
+
+//TODO func (me *Channel) Get(queueName string, noAck bool) error                     { return nil }
+//TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }
+//TODO func (me *Channel) Nack(deliveryTag uint64, requeue bool, multiple bool) error { return nil }
+
+//TODO func (me *Channel) Confirm(noWait bool) error                                  { return nil }
+
+//TODO func (me *Channel) TxSelect() error   { return nil }
+//TODO func (me *Channel) TxCommit() error   { return nil }
+//TODO func (me *Channel) TxRollback() error { return nil }

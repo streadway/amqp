@@ -2126,7 +2126,7 @@ type basicPublish struct {
 	RoutingKey string // Message routing key
 	Mandatory  bool   // indicate mandatory routing
 	Immediate  bool   // request immediate delivery
-	Properties Properties
+	Properties properties
 	Body       []byte
 }
 
@@ -2138,12 +2138,12 @@ func (me *basicPublish) wait() bool {
 	return false
 }
 
-func (me *basicPublish) getContent() (Properties, []byte) {
+func (me *basicPublish) getContent() (properties, []byte) {
 	return me.Properties, me.Body
 }
 
-func (me *basicPublish) setContent(properties Properties, body []byte) {
-	me.Properties, me.Body = properties, body
+func (me *basicPublish) setContent(props properties, body []byte) {
+	me.Properties, me.Body = props, body
 }
 
 func (me *basicPublish) write(w io.Writer) (err error) {
@@ -2209,7 +2209,7 @@ type basicReturn struct {
 	ReplyText  string
 	Exchange   string
 	RoutingKey string // Message routing key
-	Properties Properties
+	Properties properties
 	Body       []byte
 }
 
@@ -2221,12 +2221,12 @@ func (me *basicReturn) wait() bool {
 	return false
 }
 
-func (me *basicReturn) getContent() (Properties, []byte) {
+func (me *basicReturn) getContent() (properties, []byte) {
 	return me.Properties, me.Body
 }
 
-func (me *basicReturn) setContent(properties Properties, body []byte) {
-	me.Properties, me.Body = properties, body
+func (me *basicReturn) setContent(props properties, body []byte) {
+	me.Properties, me.Body = props, body
 }
 
 func (me *basicReturn) write(w io.Writer) (err error) {
@@ -2279,7 +2279,7 @@ type basicDeliver struct {
 	Redelivered bool
 	Exchange    string
 	RoutingKey  string // Message routing key
-	Properties  Properties
+	Properties  properties
 	Body        []byte
 }
 
@@ -2291,12 +2291,12 @@ func (me *basicDeliver) wait() bool {
 	return false
 }
 
-func (me *basicDeliver) getContent() (Properties, []byte) {
+func (me *basicDeliver) getContent() (properties, []byte) {
 	return me.Properties, me.Body
 }
 
-func (me *basicDeliver) setContent(properties Properties, body []byte) {
-	me.Properties, me.Body = properties, body
+func (me *basicDeliver) setContent(props properties, body []byte) {
+	me.Properties, me.Body = props, body
 }
 
 func (me *basicDeliver) write(w io.Writer) (err error) {
@@ -2425,7 +2425,7 @@ type basicGetOk struct {
 	Exchange     string
 	RoutingKey   string // Message routing key
 	MessageCount uint32
-	Properties   Properties
+	Properties   properties
 	Body         []byte
 }
 
@@ -2437,12 +2437,12 @@ func (me *basicGetOk) wait() bool {
 	return true
 }
 
-func (me *basicGetOk) getContent() (Properties, []byte) {
+func (me *basicGetOk) getContent() (properties, []byte) {
 	return me.Properties, me.Body
 }
 
-func (me *basicGetOk) setContent(properties Properties, body []byte) {
-	me.Properties, me.Body = properties, body
+func (me *basicGetOk) setContent(props properties, body []byte) {
+	me.Properties, me.Body = props, body
 }
 
 func (me *basicGetOk) write(w io.Writer) (err error) {

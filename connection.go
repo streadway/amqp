@@ -139,7 +139,7 @@ func (me *Connection) Channel() (channel *Channel, err error) {
 //    close-Connection    = C:CLOSE S:CLOSE-OK
 //                        / S:CLOSE C:CLOSE-OK
 func (me *Connection) open(username, password, vhost string) (err error) {
-	if _, err = me.conn.Write(ProtocolHeader); err != nil {
+	if _, err = me.conn.Write(protocolHeader); err != nil {
 		return
 	}
 
