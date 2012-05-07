@@ -14,6 +14,8 @@ type Connection struct {
 	in  chan message
 	out chan frame
 
+	closed *connectionClose
+
 	VersionMajor int
 	VersionMinor int
 	Properties   Table
@@ -49,7 +51,62 @@ func (me *Connection) nextChannelId() uint16 {
 	return me.sequence
 }
 
+func (me *Connection) Close() error {
+	if me.closed != nil {
+		return ErrAlreadyClosed
+	}
+	me.close(false, &connectionClose{ReplyCode: ReplySuccess, ReplyText: "bye"})
+	return nil
+}
+
+func (me *Connection) finish() {
+	me.conn.Close()
+}
+
+func (me *Connection) close(fromServer bool, msg *connectionClose) {
+	if me.closed == nil {
+		me.closed = msg
+
+		for _, c := range me.channels {
+			c.Close()
+		}
+
+		if !fromServer {
+			me.out <- &methodFrame{
+				ChannelId: 0,
+				Method:    msg,
+			}
+		} else {
+			me.out <- &methodFrame{
+				ChannelId: 0,
+				Method:    &connectionCloseOk{},
+			}
+		}
+	}
+
+	close(me.out)
+}
+
+func (me *Connection) dispatch() {
+	for {
+		switch msg := (<-me.in).(type) {
+		case *connectionClose:
+			me.close(true, msg)
+		case *connectionCloseOk:
+			me.finish()
+		}
+	}
+}
+
 func (me *Connection) send(f frame) error {
+	if me.closed != nil {
+		return ErrAlreadyClosed
+	}
+
+	if m, ok := f.(*methodFrame); ok {
+		fmt.Println("XXX send:", m, m.Method)
+	}
+
 	me.out <- f
 	return nil
 }
@@ -87,7 +144,12 @@ func (me *Connection) reader() {
 	for {
 		frame, err := frames.ReadFrame()
 
+		if m, ok := frame.(*methodFrame); ok {
+			fmt.Println("read:", m, m.Method)
+		}
+
 		if err != nil {
+			fmt.Println("err in ReadFrame:", frame, err)
 			return
 			panic(fmt.Sprintf("TODO process io error by initiating a shutdown/reconnect", err))
 		}
@@ -103,19 +165,20 @@ func (me *Connection) writer() {
 	frames := &writer{buf}
 
 	for {
-		frame := <-me.out
-		if frame == nil {
+		frame, ok := <-me.out
+		if frame == nil || !ok {
 			// TODO handle when the chan closes
+			me.conn.Close()
 			return
 		}
 
 		if err = frames.WriteFrame(frame); err != nil {
 			// TODO handle write failure to cleanly shutdown the connection
-			panic("bad write")
+			me.Close()
 		}
 
 		if err = buf.Flush(); err != nil {
-			panic("bad write")
+			me.Close()
 		}
 	}
 }
@@ -125,6 +188,7 @@ func (me *Connection) Channel() (channel *Channel, err error) {
 	id := me.nextChannelId()
 	channel, err = newChannel(me, id)
 	me.channels[id] = channel
+	println("XXX connection channel", id)
 	return channel, channel.open()
 }
 
@@ -182,6 +246,7 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 
 			switch (<-me.in).(type) {
 			case *connectionOpenOk:
+				go me.dispatch()
 				return nil
 			}
 		}

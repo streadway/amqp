@@ -1,7 +1,7 @@
 package amqp
 
 import (
-	//	"fmt"
+	"fmt"
 	"sync"
 )
 
@@ -59,15 +59,16 @@ func (me *Channel) addConsumer(tag string, ch chan Delivery) string {
 
 func (me *Channel) open() (err error) {
 	if err = me.send(&channelOpen{}); err != nil {
+		fmt.Println("open failed:", err)
 		return
 	}
 
-	switch (<-me.rpc).(type) {
+	switch msg := (<-me.rpc).(type) {
 	case *channelOpenOk:
+		fmt.Println("open ok:", msg)
 		return
-	case nil:
-		return me.Close()
 	default:
+		fmt.Println("open failed:", msg)
 		return ErrBadProtocol
 	}
 
@@ -75,6 +76,10 @@ func (me *Channel) open() (err error) {
 }
 
 func (me *Channel) send(msg message) (err error) {
+	if me.closed {
+		return ErrAlreadyClosed
+	}
+
 	if content, ok := msg.(messageWithContent); ok {
 		me.flow.Lock()
 		defer me.flow.Unlock()
@@ -112,13 +117,13 @@ func (me *Channel) send(msg message) (err error) {
 			}
 		}
 	} else {
-		return me.connection.send(&methodFrame{
+		err = me.connection.send(&methodFrame{
 			ChannelId: me.id,
 			Method:    msg,
 		})
 	}
 
-	panic("unreachable")
+	return
 }
 
 // Initiate a clean channel closure by sending a close message with the error code set to '200'
@@ -186,8 +191,11 @@ func (me *Channel) terminate() {
 // Eventually called via the state machine from the connection's reader goroutine so
 // assumes serialized access
 func (me *Channel) dispatch(msg message) {
+	fmt.Println("dispatch:", msg)
+
 	switch m := msg.(type) {
 	case *channelClose:
+		fmt.Println("close:", m)
 		me.send(&channelCloseOk{})
 		if !me.closed {
 			// when the connection is closed, we'll get an error here
@@ -232,7 +240,7 @@ func (me *Channel) recvMethod(f frame) error {
 			return me.transition((*Channel).recvHeader)
 		}
 
-		me.dispatch(me.message) // termination state
+		me.dispatch(frame.Method) // termination state
 		return me.transition((*Channel).recvMethod)
 
 	case *headerFrame:
@@ -317,8 +325,6 @@ func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (
 	switch (<-me.rpc).(type) {
 	case *basicQosOk:
 		return
-	case nil:
-		return me.Close()
 	default:
 		return ErrBadProtocol
 	}
@@ -338,8 +344,6 @@ func (me *Channel) Cancel(consumerTag string, noWait bool) (err error) {
 		switch (<-me.rpc).(type) {
 		case *basicCancelOk:
 			return
-		case nil:
-			return me.Close()
 		default:
 			return ErrBadProtocol
 		}

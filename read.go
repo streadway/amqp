@@ -3,6 +3,7 @@ package amqp
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"time"
 )
@@ -283,6 +284,8 @@ func readField(r io.Reader) (v interface{}, err error) {
 		return nil, nil
 	}
 
+	fmt.Println("Table: bad field", typ)
+
 	return nil, ErrUnknownFieldType
 }
 
@@ -310,11 +313,11 @@ func readTable(r io.Reader) (table Table, err error) {
 		var key string
 		var value interface{}
 
-		if key, err = readShortstr(r); err != nil {
+		if key, err = readShortstr(&nested); err != nil {
 			return
 		}
 
-		if value, err = readField(r); err != nil {
+		if value, err = readField(&nested); err != nil {
 			return
 		}
 
