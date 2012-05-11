@@ -137,7 +137,7 @@ func (me *Queue) Delete(ifUnused bool, ifEmpty bool, noWait bool) (err error) {
 
 	if !noWait {
 		switch (<-me.channel.rpc).(type) {
-		case *queueUnbindOk:
+		case *queueDeleteOk:
 			return
 		case nil:
 			return me.channel.Close()

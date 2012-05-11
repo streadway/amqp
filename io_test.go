@@ -1,9 +1,10 @@
 package amqp
 
 import (
-	"fmt"
+	"encoding/hex"
 	"io"
 	"testing"
+	//"fmt"
 )
 
 // Combines a reader and writer into a pipe
@@ -28,23 +29,25 @@ type logIO struct {
 }
 
 func (me *logIO) Read(p []byte) (n int, err error) {
-	fmt.Printf("%s reading %d\n", me.prefix, len(p))
+	me.t.Logf("%s reading %d\n", me.prefix, len(p))
 	n, err = me.proxy.Read(p)
 	if err != nil {
-		fmt.Printf("%s read %x: %v\n", me.prefix, p[0:n], err)
+		me.t.Logf("%s read %x: %v\n", me.prefix, p[0:n], err)
 	} else {
-		fmt.Printf("%s read %x\n", me.prefix, p[0:n])
+		me.t.Logf("%s read:\n%s\n", me.prefix, hex.Dump(p[0:n]))
+		//fmt.Printf("%s read:\n%s\n", me.prefix, hex.Dump(p[0:n]))
 	}
 	return
 }
 
 func (me *logIO) Write(p []byte) (n int, err error) {
-	fmt.Printf("%s writing %d\n", me.prefix, len(p))
+	me.t.Logf("%s writing %d\n", me.prefix, len(p))
 	n, err = me.proxy.Write(p)
 	if err != nil {
-		fmt.Printf("%s write %d, %x: %v\n", me.prefix, len(p), p[0:n], err)
+		me.t.Logf("%s write %d, %x: %v\n", me.prefix, len(p), p[0:n], err)
 	} else {
-		fmt.Printf("%s write %d, %x\n", me.prefix, len(p), p[0:n])
+		me.t.Logf("%s write %d:\n%s", me.prefix, len(p), hex.Dump(p[0:n]))
+		//fmt.Printf("%s write %d:\n%s", me.prefix, len(p), hex.Dump(p[0:n]))
 	}
 	return
 }
@@ -52,13 +55,13 @@ func (me *logIO) Write(p []byte) (n int, err error) {
 func (me *logIO) Close() (err error) {
 	err = me.proxy.Close()
 	if err != nil {
-		fmt.Printf("%s close : %v\n", me.prefix, err)
+		me.t.Logf("%s close : %v\n", me.prefix, err)
 	} else {
-		fmt.Printf("%s close\n", me.prefix, err)
+		me.t.Logf("%s close\n", me.prefix, err)
 	}
 	return
 }
 
 func (me *logIO) Test() {
-	fmt.Printf("test: %v\n", me)
+	me.t.Logf("test: %v\n", me)
 }

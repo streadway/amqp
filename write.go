@@ -1,6 +1,7 @@
 package amqp
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -8,8 +9,16 @@ import (
 	"time"
 )
 
-func (me *writer) WriteFrame(frame frame) error {
-	return frame.write(me.w)
+func (me *writer) WriteFrame(frame frame) (err error) {
+	if err = frame.write(me.w); err != nil {
+		return
+	}
+
+	if buf, ok := me.w.(*bufio.Writer); ok {
+		err = buf.Flush()
+	}
+
+	return
 }
 
 func (me *methodFrame) write(w io.Writer) (err error) {
@@ -52,6 +61,7 @@ func (me *heartbeatFrame) write(w io.Writer) (err error) {
 //
 func (me *headerFrame) write(w io.Writer) (err error) {
 	var payload bytes.Buffer
+	var zeroTime time.Time
 
 	if err = binary.Write(&payload, binary.BigEndian, me.ClassId); err != nil {
 		return
@@ -97,7 +107,7 @@ func (me *headerFrame) write(w io.Writer) (err error) {
 	if len(me.Properties.MessageId) > 0 {
 		mask = mask | flagMessageId
 	}
-	if me.Properties.Timestamp.Unix() > 0 {
+	if me.Properties.Timestamp != zeroTime {
 		mask = mask | flagTimestamp
 	}
 	if len(me.Properties.Type) > 0 {

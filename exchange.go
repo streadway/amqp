@@ -18,8 +18,6 @@ func (me *Exchange) Declare(lifetime Lifetime, exchangeType string, internal boo
 		switch (<-me.channel.rpc).(type) {
 		case *exchangeDeclareOk:
 			return
-		case nil:
-			return me.channel.Close()
 		default:
 			return ErrBadProtocol
 		}

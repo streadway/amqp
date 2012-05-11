@@ -7,6 +7,17 @@ import (
 	"time"
 )
 
+// Connection and channel state
+type state int
+
+const (
+	initialize state = iota
+	handshaking
+	open
+	closing
+	closed
+)
+
 var (
 	ErrBadProtocol         = errors.New("Unexpected protocol message")
 	ErrUnexpectedMethod    = errors.New("Bad protocol: Received out of order method")
@@ -165,7 +176,7 @@ type Publishing struct {
 	MessageId       string    // application use - message identifier
 	Timestamp       time.Time // application use - message timestamp
 	Type            string    // application use - message type name
-	UserId          string    // application use - creating user id
+	UserId          string    // application use - creating user id - should be authenticated user
 	AppId           string    // application use - creating application id
 
 	Body []byte
@@ -190,13 +201,16 @@ type Delivery struct {
 	MessageId       string    // application use - message identifier
 	Timestamp       time.Time // application use - message timestamp
 	Type            string    // application use - message type name
-	UserId          string    // application use - creating user id
+	UserId          string    // application use - creating user idA - should be authenticated user
 	AppId           string    // application use - creating application id
 
-	ConsumerTag  string // only meaningful from a Channel.Consume or Queue.Consume
-	MessageCount uint32 // only meaningful on Channel.Get
+	// only meaningful from a Channel.Consume or Queue.Consume
+	ConsumerTag string
 
-	// Other parts of the delivery parameters
+	// only meaningful on Channel.Get
+	MessageCount uint32
+
+	// Only meaningful when this is a result of a message consumption
 	DeliveryTag uint64
 	Redelivered bool
 	Exchange    string

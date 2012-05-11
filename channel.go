@@ -2,7 +2,6 @@ package amqp
 
 import (
 	"fmt"
-	"sync"
 )
 
 // Represents an AMQP channel, used for concurrent, interleaved publishers and
@@ -17,12 +16,8 @@ type Channel struct {
 
 	consumers map[string]chan Delivery
 
-	id     uint16
-	closed bool
-
-	// Sequences sending content frames against to the connection,
-	// can be controlled by flow messages
-	flow sync.Mutex
+	id    uint16
+	state state
 
 	// State machine that manages frame order
 	recv func(*Channel, frame) error
@@ -57,18 +52,35 @@ func (me *Channel) addConsumer(tag string, ch chan Delivery) string {
 	return tag
 }
 
+func (me *Channel) shutdown() {
+	fmt.Println("channel shutdown", me.state)
+	me.state = closing
+
+	delete(me.connection.channels, me.id)
+
+	for tag, ch := range me.consumers {
+		delete(me.consumers, tag)
+		me.Cancel(tag, false)
+		close(ch)
+	}
+
+	close(me.rpc)
+
+	me.state = closed
+}
+
 func (me *Channel) open() (err error) {
+	me.state = handshaking
+
 	if err = me.send(&channelOpen{}); err != nil {
-		fmt.Println("open failed:", err)
 		return
 	}
 
-	switch msg := (<-me.rpc).(type) {
+	switch (<-me.rpc).(type) {
 	case *channelOpenOk:
-		fmt.Println("open ok:", msg)
+		me.state = open
 		return
 	default:
-		fmt.Println("open failed:", msg)
 		return ErrBadProtocol
 	}
 
@@ -76,14 +88,11 @@ func (me *Channel) open() (err error) {
 }
 
 func (me *Channel) send(msg message) (err error) {
-	if me.closed {
+	if me.state != open && me.state != handshaking {
 		return ErrAlreadyClosed
 	}
 
 	if content, ok := msg.(messageWithContent); ok {
-		me.flow.Lock()
-		defer me.flow.Unlock()
-
 		props, body := content.getContent()
 		class, _ := content.id()
 		size := me.connection.MaxFrameSize
@@ -128,11 +137,24 @@ func (me *Channel) send(msg message) (err error) {
 
 // Initiate a clean channel closure by sending a close message with the error code set to '200'
 func (me *Channel) Close() (err error) {
-	if me.closed {
+	if me.state != open {
 		return ErrAlreadyClosed
 	}
+
+	me.state = closing
+
 	me.send(&channelClose{ReplyCode: ReplySuccess})
-	return nil
+
+	switch (<-me.rpc).(type) {
+	case *channelCloseOk:
+		return
+	case nil:
+		return
+	default:
+		return ErrBadProtocol
+	}
+
+	panic("unreachable")
 }
 
 func (me *Channel) deliver(msg messageWithContent, c chan Delivery) {
@@ -179,40 +201,21 @@ func (me *Channel) deliver(msg messageWithContent, c chan Delivery) {
 	c <- delivery
 }
 
-func (me *Channel) terminate() {
-	close(me.rpc)
-
-	for k, c := range me.consumers {
-		delete(me.consumers, k)
-		close(c)
-	}
-}
-
 // Eventually called via the state machine from the connection's reader goroutine so
 // assumes serialized access
 func (me *Channel) dispatch(msg message) {
-	fmt.Println("dispatch:", msg)
-
 	switch m := msg.(type) {
 	case *channelClose:
-		fmt.Println("close:", m)
 		me.send(&channelCloseOk{})
-		if !me.closed {
-			// when the connection is closed, we'll get an error here
-			me.send(&channelClose{ReplyCode: ReplySuccess})
-		}
-
-	case *channelCloseOk:
-		if !me.closed {
-			me.closed = true
-			me.terminate()
+		if me.state == open {
+			me.Close()
 		}
 
 	case *channelFlow:
 		// unhandled
 
 	case *basicDeliver:
-		if !me.closed {
+		if me.state == open {
 			if c, ok := me.consumers[m.ConsumerTag]; ok {
 				me.deliver(m, c)
 			}
@@ -220,7 +223,7 @@ func (me *Channel) dispatch(msg message) {
 		}
 
 	default:
-		if !me.closed {
+		if me.state != closed {
 			me.rpc <- m
 		}
 	}
@@ -262,9 +265,15 @@ func (me *Channel) recvHeader(f frame) error {
 		return me.recvMethod(f)
 
 	case *headerFrame:
-		// start collecting
+		// start collecting if we expect body frames
 		me.header = frame
-		return me.transition((*Channel).recvContent)
+
+		if frame.Size == 0 {
+			me.dispatch(me.message) // termination state
+			return me.transition((*Channel).recvMethod)
+		} else {
+			return me.transition((*Channel).recvContent)
+		}
 
 	case *bodyFrame:
 		// drop and reset
@@ -310,8 +319,6 @@ func (me *Channel) E(name string) *Exchange {
 func (me *Channel) Q(name string) *Queue {
 	return &Queue{channel: me, name: name}
 }
-
-//func (me *Channel) Flow(active bool) error { return nil }
 
 func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (err error) {
 	if err = me.send(&basicQos{
@@ -361,3 +368,4 @@ func (me *Channel) Cancel(consumerTag string, noWait bool) (err error) {
 //TODO func (me *Channel) TxSelect() error   { return nil }
 //TODO func (me *Channel) TxCommit() error   { return nil }
 //TODO func (me *Channel) TxRollback() error { return nil }
+//TODO func (me *Channel) Flow(active bool) error { return nil }

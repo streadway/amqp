@@ -11,10 +11,12 @@ import (
 type Connection struct {
 	conn io.ReadWriteCloser
 
-	in  chan message
-	out chan frame
+	in chan message
 
-	closed *connectionClose
+	state state
+
+	writer *writer
+	muw    sync.Mutex
 
 	VersionMajor int
 	VersionMinor int
@@ -33,13 +35,12 @@ type Connection struct {
 func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *Connection, err error) {
 	me = &Connection{
 		conn:     conn,
-		out:      make(chan frame),
+		writer:   &writer{bufio.NewWriter(conn)},
 		in:       make(chan message),
 		channels: make(map[uint16]*Channel),
 	}
 
 	go me.reader()
-	go me.writer()
 
 	return me, me.open(auth.Username, auth.Password, vhost)
 }
@@ -51,85 +52,97 @@ func (me *Connection) nextChannelId() uint16 {
 	return me.sequence
 }
 
-func (me *Connection) Close() error {
-	if me.closed != nil {
-		return ErrAlreadyClosed
-	}
-	me.close(false, &connectionClose{ReplyCode: ReplySuccess, ReplyText: "bye"})
-	return nil
-}
-
-func (me *Connection) finish() {
-	me.conn.Close()
-}
-
-func (me *Connection) close(fromServer bool, msg *connectionClose) {
-	if me.closed == nil {
-		me.closed = msg
-
-		for _, c := range me.channels {
-			c.Close()
+func (me *Connection) Close() (err error) {
+	if me.state != closed {
+		if err = me.send(&methodFrame{
+			ChannelId: 0,
+			Method:    &connectionClose{ReplyCode: ReplySuccess, ReplyText: "bye"},
+		}); err != nil {
+			return
 		}
 
-		if !fromServer {
-			me.out <- &methodFrame{
-				ChannelId: 0,
-				Method:    msg,
-			}
-		} else {
-			me.out <- &methodFrame{
-				ChannelId: 0,
-				Method:    &connectionCloseOk{},
-			}
+		switch (<-me.in).(type) {
+		case *connectionCloseOk:
+			me.shutdown()
+			return nil
+		default:
+			return ErrBadProtocol
 		}
 	}
 
-	close(me.out)
+	return ErrAlreadyClosed
 }
 
 func (me *Connection) dispatch() {
 	for {
-		switch msg := (<-me.in).(type) {
+		switch (<-me.in).(type) {
+		// handle the 4 way shutdown
 		case *connectionClose:
-			me.close(true, msg)
-		case *connectionCloseOk:
-			me.finish()
+			me.send(&methodFrame{
+				ChannelId: 0,
+				Method:    &connectionCloseOk{},
+			})
+			me.Close()
+		case nil:
+			// closed
+			return
 		}
 	}
 }
 
-func (me *Connection) send(f frame) error {
-	if me.closed != nil {
+func (me *Connection) send(f frame) (err error) {
+	//fmt.Println("send:", f)
+
+	me.muw.Lock()
+	defer me.muw.Unlock()
+
+	if me.state > open {
 		return ErrAlreadyClosed
 	}
 
-	if m, ok := f.(*methodFrame); ok {
-		fmt.Println("XXX send:", m, m.Method)
+	if err = me.writer.WriteFrame(f); err != nil {
+		// TODO handle write failure to cleanly shutdown the connection
+		me.shutdown()
 	}
 
-	me.out <- f
 	return nil
+}
+
+func (me *Connection) shutdown() {
+	fmt.Println("connection shutdown", me.state)
+	if me.state != closed {
+		me.state = closing
+		for i, c := range me.channels {
+			delete(me.channels, i)
+			c.shutdown()
+		}
+		close(me.in)
+		me.conn.Close()
+		me.state = closed
+	}
 }
 
 // All methods sent to the connection channel should be synchronous so we
 // can handle them directly without a framing component
 func (me *Connection) demux(f frame) {
-	if f.channel() == 0 {
-		// TODO send hard error if any content frames/async frames are sent here
-		switch mf := f.(type) {
-		case *methodFrame:
-			me.in <- mf.Method
-		default:
-			panic("TODO close with hard-error")
-		}
-	} else {
-		channel, ok := me.channels[f.channel()]
-		if ok {
-			channel.recv(channel, f)
+	if me.state != closed {
+		if f.channel() == 0 {
+			// TODO send hard error if any content frames/async frames are sent here
+			switch mf := f.(type) {
+			case *methodFrame:
+				me.in <- mf.Method
+			default:
+				panic("TODO close with hard-error")
+			}
 		} else {
-			// TODO handle unknown channel for now drop
-			println("XXX unknown channel", f.channel())
-			panic("XXX unknown channel")
+			channel, ok := me.channels[f.channel()]
+			if ok {
+				channel.recv(channel, f)
+			} else {
+				// TODO handle unknown channel for now drop
+				println("XXX unknown channel", f.channel())
+				panic("XXX unknown channel")
+			}
 		}
 	}
 }
@@ -144,42 +157,13 @@ func (me *Connection) reader() {
 	for {
 		frame, err := frames.ReadFrame()
 
-		if m, ok := frame.(*methodFrame); ok {
-			fmt.Println("read:", m, m.Method)
-		}
-
 		if err != nil {
 			fmt.Println("err in ReadFrame:", frame, err)
+			me.shutdown()
 			return
-			panic(fmt.Sprintf("TODO process io error by initiating a shutdown/reconnect", err))
 		}
 
 		me.demux(frame)
-	}
-}
-
-func (me *Connection) writer() {
-	var err error
-
-	buf := bufio.NewWriter(me.conn)
-	frames := &writer{buf}
-
-	for {
-		frame, ok := <-me.out
-		if frame == nil || !ok {
-			// TODO handle when the chan closes
-			me.conn.Close()
-			return
-		}
-
-		if err = frames.WriteFrame(frame); err != nil {
-			// TODO handle write failure to cleanly shutdown the connection
-			me.Close()
-		}
-
-		if err = buf.Flush(); err != nil {
-			me.Close()
-		}
 	}
 }
 
@@ -188,7 +172,6 @@ func (me *Connection) Channel() (channel *Channel, err error) {
 	id := me.nextChannelId()
 	channel, err = newChannel(me, id)
 	me.channels[id] = channel
-	println("XXX connection channel", id)
 	return channel, channel.open()
 }
 
@@ -203,6 +186,8 @@ func (me *Connection) Channel() (channel *Channel, err error) {
 //    close-Connection    = C:CLOSE S:CLOSE-OK
 //                        / S:CLOSE C:CLOSE-OK
 func (me *Connection) open(username, password, vhost string) (err error) {
+	me.state = handshaking
+
 	if _, err = me.conn.Write(protocolHeader); err != nil {
 		return
 	}
@@ -213,12 +198,14 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 		me.VersionMinor = int(start.VersionMinor)
 		me.Properties = Table(start.ServerProperties)
 
-		me.out <- &methodFrame{
+		if err = me.send(&methodFrame{
 			ChannelId: 0,
 			Method: &connectionStartOk{
 				Mechanism: "PLAIN",
 				Response:  fmt.Sprintf("\000%s\000%s", username, password),
 			},
+		}); err != nil {
+			return
 		}
 
 		switch tune := (<-me.in).(type) {
@@ -228,24 +215,29 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 			me.HeartbeatInterval = int(tune.Heartbeat)
 			me.MaxFrameSize = int(tune.FrameMax)
 
-			me.out <- &methodFrame{
+			if err = me.send(&methodFrame{
 				ChannelId: 0,
 				Method: &connectionTuneOk{
 					ChannelMax: 10,
 					FrameMax:   FrameMinSize,
 					Heartbeat:  0,
 				},
+			}); err != nil {
+				return
 			}
 
-			me.out <- &methodFrame{
+			if err = me.send(&methodFrame{
 				ChannelId: 0,
 				Method: &connectionOpen{
 					VirtualHost: vhost,
 				},
+			}); err != nil {
+				return
 			}
 
 			switch (<-me.in).(type) {
 			case *connectionOpenOk:
+				me.state = open
 				go me.dispatch()
 				return nil
 			}

@@ -124,6 +124,6 @@ func TestNewConnectionChannelOpen(t *testing.T) {
 
 	ch, err := c.Channel()
 	if err != nil {
-		t.Fatal("could not open channel:", ch, err)
+		t.Fatal("could not open channel:", ch, err, c.state, ch.state)
 	}
 }
