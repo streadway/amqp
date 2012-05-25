@@ -7,12 +7,12 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/signal"
 	"reflect"
+	"syscall"
 	"testing"
 	"testing/quick"
 	"time"
-	"os/signal"
-	"syscall"
 )
 
 func init() {
@@ -106,6 +106,54 @@ func TestIntegrationConnectChannel(t *testing.T) {
 		if _, err := c.Channel(); err != nil {
 			t.Errorf("Channel could not be open", err)
 		}
+	}
+}
+
+func TestIntegrationConnectBadVhost(t *testing.T) {
+	url := os.Getenv("AMQP_URL")
+	if url == "" {
+		return
+	}
+
+	hostport, username, password, vhost := parseUrl(url)
+
+	conn, err := net.Dial("tcp", hostport)
+	if err != nil {
+		t.Fatalf("Dial: %s", err)
+	}
+
+	auth := &PlainAuth{
+		Username: username,
+		Password: password,
+	}
+
+	vhost = "lolwat_not_found"
+
+	if _, err = NewConnection(&logIO{t, "badauth", conn}, auth, vhost); err != ErrBadVhost {
+		t.Errorf("Expected ErrBadVhost", err)
+	}
+}
+
+func TestIntegrationConnectBadCredentials(t *testing.T) {
+	url := os.Getenv("AMQP_URL")
+	if url == "" {
+		return
+	}
+
+	hostport, _, _, vhost := parseUrl(url)
+
+	conn, err := net.Dial("tcp", hostport)
+	if err != nil {
+		t.Fatalf("Dial: %s", err)
+	}
+
+	auth := &PlainAuth{
+		Username: "",
+		Password: "",
+	}
+
+	if _, err = NewConnection(&logIO{t, "badauth", conn}, auth, vhost); err != ErrBadCredentials {
+		t.Errorf("Expected ErrBadCredentials", err)
 	}
 }
 

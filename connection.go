@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"sync"
 )
 
@@ -30,6 +32,50 @@ type Connection struct {
 	sequence  uint16
 
 	channels map[uint16]*Channel
+}
+
+// Accepts a string in the AMQP URI format specificer found at:
+// http://www.rabbitmq.com/uri-spec.html and returns a new Connection
+// to the peer over tcp using PlainAuth
+// 
+// Fallback values for the fields are:
+//
+// host:			localhost
+// port:			5672
+// usenrame:	guest
+// password:	guest
+// vhost:			/
+func Dial(amqp string) (me *Connection, err error) {
+	host, port, username, password, vhost := "localhost", 5672, "guest", "guest", "/"
+
+	u, err := url.Parse(amqp)
+	if err != nil {
+		return
+	}
+
+	fmt.Sscanf(u.Host, "%s:%d", &host, &port)
+
+	hostport := fmt.Sprintf("%s:%d", host, port)
+
+	if u.User != nil {
+		username = u.User.Username()
+		if p, ok := u.User.Password(); ok {
+			password = p
+		}
+	}
+
+	if u.Path != "" {
+		vhost = u.Path
+	}
+
+	conn, err := net.Dial("tcp", hostport)
+	if err != nil {
+		return
+	}
+
+	me, err = NewConnection(conn, &PlainAuth{username, password}, vhost)
+
+	return
 }
 
 func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *Connection, err error) {
@@ -240,7 +286,11 @@ func (me *Connection) open(username, password, vhost string) (err error) {
 				me.state = open
 				go me.dispatch()
 				return nil
+			case nil:
+				return ErrBadVhost
 			}
+		case nil:
+			return ErrBadCredentials
 		}
 	}
 	return ErrBadProtocol

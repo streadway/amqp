@@ -19,7 +19,10 @@ const (
 )
 
 var (
-	ErrBadProtocol         = errors.New("Unexpected protocol message")
+	ErrBadProtocol    = errors.New("Unexpected protocol message")
+	ErrBadCredentials = errors.New("Credentials were not accepted")
+	ErrBadVhost       = errors.New("Not authorized for vhost or vhost not found")
+
 	ErrUnexpectedMethod    = errors.New("Bad protocol: Received out of order method")
 	ErrUnknownMethod       = errors.New("Unknown wire method id")
 	ErrUnknownClass        = errors.New("Unknown wire class id")
@@ -57,7 +60,7 @@ type properties struct {
 	Timestamp       time.Time // application use - message timestamp
 	Type            string    // application use - message type name
 	UserId          string    // application use - creating user id
-	AppId           string    // application use - creating application id
+	AppId           string    // application use - creating application
 	reserved1       string    // was cluster-id - process for buffer consumption
 }
 
