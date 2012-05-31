@@ -205,6 +205,9 @@ func (me *Channel) deliver(msg messageWithContent, c chan Delivery) {
 func (me *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
+		if me.state != closed {
+			me.rpc <- msg
+		}
 		me.send(&channelCloseOk{})
 		if me.state == open {
 			me.Close()
@@ -220,10 +223,9 @@ func (me *Channel) dispatch(msg message) {
 			}
 			// TODO log failed consumer
 		}
-
 	default:
 		if me.state != closed {
-			me.rpc <- m
+			me.rpc <- msg
 		}
 	}
 }

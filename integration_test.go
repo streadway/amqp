@@ -169,6 +169,7 @@ func TestIntegrationPublishConsume(t *testing.T) {
 
 		pub.Q(queue).Declare(UntilUnused, false, false, nil)
 		sub.Q(queue).Declare(UntilUnused, false, false, nil)
+		defer pub.Q(queue).Delete(false, false, false)
 
 		messages, _ := sub.Q(queue).Consume(false, false, false, false, "", nil, nil)
 
@@ -363,7 +364,7 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 		}
 
 		msg := Publishing{
-			Body: make([]byte, 1e6+10000),
+			Body: make([]byte, 1e6+1000),
 		}
 
 		err = pub.Q("test-pubsub").Publish(false, false, msg)
@@ -377,3 +378,28 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 	}
 }
 
+func TestExchangeDeclarePrecondition(t *testing.T) {
+	c1 := integrationConnection(t, "exchange-double-declare")
+	if c1 != nil {
+		//defer c1.Close()
+
+		ch, err := c1.Channel()
+		if err != nil {
+			t.Fatal("Create channel")
+		}
+
+		e := ch.E("test-mismatched-redeclare")
+
+		err = e.Declare(UntilUnused, "direct", false, false, nil)
+		if err != nil {
+			t.Fatal("Could not initially declare exchange")
+		}
+		// TODO currently stalls
+		// defer e.Delete(false, false)
+
+		err = e.Declare(UntilDeleted, "direct", false, false, nil)
+		if err == nil {
+			t.Fatal("Expected to fail a redeclare with different lifetime, didn't receive an error")
+		}
+	}
+}
