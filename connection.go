@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -53,7 +55,12 @@ func Dial(amqp string) (me *Connection, err error) {
 		return
 	}
 
-	fmt.Sscanf(u.Host, "%s:%d", &host, &port)
+	if toks := strings.Split(u.Host, ":"); len(toks) == 2 {
+		host = toks[0]
+		if port32, err := strconv.ParseInt(toks[1], 10, 32); err == nil {
+			port = int(port32)
+		}
+	}
 
 	hostport := fmt.Sprintf("%s:%d", host, port)
 
