@@ -183,7 +183,6 @@ func TestIntegrationPublishConsume(t *testing.T) {
 }
 
 func (c *Connection) Generate(r *rand.Rand, _ int) reflect.Value {
-	//fmt.Println("gen gen gen")
 	hostport, username, password, vhost := parseUrl(os.Getenv("AMQP_URL"))
 
 	conn, err := net.Dial("tcp", hostport)
@@ -326,17 +325,14 @@ func TestQuickPublishConsumeOnly(t *testing.T) {
 
 		quick.CheckEqual(
 			func(msg Publishing) []byte {
-				//fmt.Println("check pub", msg)
 				empty := Publishing{Body: msg.Body}
 				if p.Publish(false, false, empty) != nil {
 					return []byte{'X'}
 				}
-				//fmt.Println("published", empty)
 				return msg.Body
 			},
 			func(msg Publishing) []byte {
 				out := <-ch
-				//fmt.Println("delivered", out)
 				out.Ack(false)
 				return out.Body
 			},
@@ -380,3 +376,4 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 		}
 	}
 }
+

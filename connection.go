@@ -162,7 +162,6 @@ func (me *Connection) send(f frame) (err error) {
 }
 
 func (me *Connection) shutdown() {
-	fmt.Println("connection shutdown", me.state)
 	if me.state != closed {
 		me.state = closing
 		for i, c := range me.channels {
@@ -211,7 +210,6 @@ func (me *Connection) reader() {
 		frame, err := frames.ReadFrame()
 
 		if err != nil {
-			fmt.Println("err in ReadFrame:", frame, err)
 			me.shutdown()
 			return
 		}

@@ -1,7 +1,7 @@
 package amqp
 
 import (
-	"fmt"
+//"fmt"
 )
 
 // Represents an AMQP channel, used for concurrent, interleaved publishers and
@@ -53,7 +53,6 @@ func (me *Channel) addConsumer(tag string, ch chan Delivery) string {
 }
 
 func (me *Channel) shutdown() {
-	fmt.Println("channel shutdown", me.state)
 	me.state = closing
 
 	delete(me.connection.channels, me.id)
