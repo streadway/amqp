@@ -140,9 +140,9 @@ func (me *Channel) Close() (err error) {
 		return ErrAlreadyClosed
 	}
 
-	me.state = closing
-
 	me.send(&channelClose{ReplyCode: ReplySuccess})
+
+	me.state = closing
 
 	switch (<-me.rpc).(type) {
 	case *channelCloseOk:

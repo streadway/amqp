@@ -134,6 +134,54 @@ func TestIntegrationConnectBadVhost(t *testing.T) {
 	}
 }
 
+// https://github.com/streadway/amqp/issues/6
+func TestIntegrationNonBlockingClose(t *testing.T) {
+	c1 := integrationConnection(t, "pub")
+	if c1 != nil {
+		ch, err := c1.Channel()
+		if err != nil {
+			t.Fatal("Could not create channel")
+		}
+
+		queue := ch.Q("test.integration.blocking.close")
+
+		_, err = queue.Declare(UntilUnused, false, false, nil)
+		if err != nil {
+			t.Fatal("Could not declare")
+		}
+
+		msgs, err := queue.Consume(false, false, false, false, "", nil, nil)
+		if err != nil {
+			t.Fatal("Could not consume")
+		}
+		
+		// Simulate a consumer
+		go func() {
+			for _ = range msgs {
+				t.Log("Oh my, received message on an empty queue")
+			}
+		}()
+
+		time.Sleep(2*time.Second)
+
+		succeed := make(chan bool)
+		fail := time.After(1*time.Second)
+
+		go func() {
+			if err = ch.Close(); err != nil {
+				t.Fatal("Close produced an error when it shouldn't")
+			}
+			succeed <- true
+		}()
+
+		select {
+		case <- succeed:
+		case <-fail:
+			t.Fatalf("Close timed out after 1s")
+		}
+	}
+}
+
 func TestIntegrationConnectBadCredentials(t *testing.T) {
 	url := os.Getenv("AMQP_URL")
 	if url == "" {
