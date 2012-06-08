@@ -239,7 +239,7 @@ func (me *Channel) recvMethod(f frame) error {
 	switch frame := f.(type) {
 	case *methodFrame:
 		if msg, ok := frame.Method.(messageWithContent); ok {
-			me.body = me.body[0:0]
+			me.body = make([]byte, 0)
 			me.message = msg
 			return me.transition((*Channel).recvHeader)
 		}

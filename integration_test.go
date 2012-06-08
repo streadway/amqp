@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"net/url"
 	"os"
 	"os/signal"
 	"reflect"
@@ -28,71 +27,6 @@ func init() {
 	}()
 
 	signal.Notify(c, syscall.SIGINFO)
-}
-
-func parseUrl(amqp string) (hostport string, username string, password string, vhost string) {
-	u, err := url.Parse(amqp)
-	if err != nil {
-		return
-	}
-
-	host, port := "localhost", 5672
-	username, password, vhost = "guest", "guest", "/"
-
-	fmt.Sscanf(u.Host, "%s:%d", &host, &port)
-
-	hostport = fmt.Sprintf("%s:%d", host, port)
-
-	if u.User != nil {
-		username = u.User.Username()
-		if p, ok := u.User.Password(); ok {
-			password = p
-		}
-	}
-
-	if u.Path != "" {
-		vhost = u.Path
-	}
-
-	return
-}
-
-// Returns a conneciton to the AMQP if the AMQP_URL environment
-// variable is set and a connnection can be established.
-func integrationConnection(t *testing.T, name string) *Connection {
-	u := os.Getenv("AMQP_URL")
-	if u == "" {
-		t.Log("Skipping integration tests, AMQP_URL not found in the environment")
-		return nil
-	}
-
-	hostport, username, password, vhost := parseUrl(u)
-
-	conn, err := net.Dial("tcp", hostport)
-	if err != nil {
-		t.Error("Failed to connect to integration server:", err)
-		return nil
-	}
-
-	//io := conn
-	io := &logIO{t, name, conn}
-
-	c, err := NewConnection(io, &PlainAuth{username, password}, vhost)
-
-	if err != nil {
-		t.Error("Failed to create client against integration server:", err)
-		return nil
-	}
-
-	return c
-}
-
-func assertMessageBody(t *testing.T, msg Delivery, body []byte) bool {
-	if bytes.Compare(msg.Body, body) != 0 {
-		t.Errorf("Message body does not match have: %v expect %v", msg.Body, body)
-		return false
-	}
-	return true
 }
 
 func TestIntegrationConnect(t *testing.T) {
@@ -154,7 +88,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 		if err != nil {
 			t.Fatal("Could not consume")
 		}
-		
+
 		// Simulate a consumer
 		go func() {
 			for _ = range msgs {
@@ -162,10 +96,10 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 			}
 		}()
 
-		time.Sleep(2*time.Second)
+		time.Sleep(2 * time.Second)
 
 		succeed := make(chan bool)
-		fail := time.After(1*time.Second)
+		fail := time.After(1 * time.Second)
 
 		go func() {
 			if err = ch.Close(); err != nil {
@@ -175,7 +109,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 		}()
 
 		select {
-		case <- succeed:
+		case <-succeed:
 		case <-fail:
 			t.Fatalf("Close timed out after 1s")
 		}
@@ -422,6 +356,65 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 
 		if bytes.Compare((<-ch).Body, msg.Body) != 0 {
 			t.Error("Consumed big body didn't match")
+		}
+	}
+}
+
+// https://github.com/streadway/amqp/issues/7
+func TestCorruptedMessageRegression(t *testing.T) {
+	messageCount := 1024
+
+	c1 := integrationConnection(t, "corrupt-pub")
+	c2 := integrationConnection(t, "corrupt-sub")
+
+	if c1 != nil && c2 != nil {
+		//defer c1.Close()
+		//defer c2.Close()
+
+		ch1, err := c1.Channel()
+		if err != nil {
+			t.Fatal("Cannot create Channel")
+		}
+
+		ch2, err := c2.Channel()
+		if err != nil {
+			t.Fatal("Cannot create Channel")
+		}
+
+		queue := "test-corrupted-message-regression"
+
+		pub := ch1.Q(queue)
+		if _, err := pub.Declare(UntilUnused, false, false, nil); err != nil {
+			t.Fatal("Cannot declare")
+		}
+
+		sub := ch2.Q(queue)
+		if _, err := pub.Declare(UntilUnused, false, false, nil); err != nil {
+			t.Fatal("Cannot declare")
+		}
+
+		msgs, err := sub.Consume(false, false, false, false, "", nil, nil)
+		if err != nil {
+			t.Fatal("Cannot consume")
+		}
+
+		for i := 0; i < messageCount; i++ {
+			err := pub.Publish(false, false, Publishing{
+				Body: generateCrc32Random(7 * i),
+			})
+
+			if err != nil {
+				t.Fatal("Failed to publish")
+			}
+		}
+
+		for i := 0; i < messageCount; i++ {
+			select {
+			case msg := <-msgs:
+				assertMessageCrc32(t, msg.Body, fmt.Sprintf("missed match at %d", i))
+			case <-time.After(1 * time.Second):
+				t.Fatal("Timed out after 1s")
+			}
 		}
 	}
 }
