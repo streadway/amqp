@@ -109,6 +109,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 
 		select {
 		case <-succeed:
+			break
 		case <-fail:
 			t.Fatalf("Close timed out after 1s")
 		}
