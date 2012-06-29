@@ -31,40 +31,39 @@ func init() {
 
 func TestIntegrationConnect(t *testing.T) {
 	if c := integrationConnection(t, "connect"); c != nil {
-		t.Log("have client")
+		t.Logf("have client")
 	}
 }
 
 func TestIntegrationConnectChannel(t *testing.T) {
 	if c := integrationConnection(t, "channel"); c != nil {
 		if _, err := c.Channel(); err != nil {
-			t.Errorf("Channel could not be open", err)
+			t.Errorf("Channel could not be opened: %s", err)
 		}
 	}
 }
 
 func TestIntegrationConnectBadVhost(t *testing.T) {
-	url := os.Getenv("AMQP_URL")
-	if url == "" {
+	urlStr := os.Getenv("AMQP_URL")
+	if urlStr == "" {
+		t.Logf("Skipping; AMQP_URL not found in the environment")
 		return
 	}
 
-	hostport, username, password, vhost := parseUrl(url)
+	uri, err := ParseURI(urlStr)
+	if err != nil {
+		t.Fatalf("Failed to parse URI: %s", err)
+	}
 
-	conn, err := net.Dial("tcp", hostport)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
 	if err != nil {
 		t.Fatalf("Dial: %s", err)
 	}
 
-	auth := &PlainAuth{
-		Username: username,
-		Password: password,
-	}
-
-	vhost = "lolwat_not_found"
-
-	if _, err = NewConnection(&logIO{t, "badauth", conn}, auth, vhost); err != ErrBadVhost {
-		t.Errorf("Expected ErrBadVhost", err)
+	vhost := "lolwat_not_found"
+	_, err = NewConnection(&logIO{t, "badauth", conn}, uri.PlainAuth(), vhost)
+	if err != ErrBadVhost {
+		t.Errorf("Expected ErrBadVhost, got %s", err)
 	}
 }
 
@@ -92,7 +91,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 		// Simulate a consumer
 		go func() {
 			for _ = range msgs {
-				t.Log("Oh my, received message on an empty queue")
+				t.Logf("Oh my, received message on an empty queue")
 			}
 		}()
 
@@ -117,25 +116,31 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 }
 
 func TestIntegrationConnectBadCredentials(t *testing.T) {
-	url := os.Getenv("AMQP_URL")
-	if url == "" {
+	urlStr := os.Getenv("AMQP_URL")
+	if urlStr == "" {
+		t.Logf("Skipping; AMQP_URL not found in the environment")
 		return
 	}
 
-	hostport, _, _, vhost := parseUrl(url)
+	uri, err := ParseURI(urlStr)
+	if err != nil {
+		t.Fatalf("Failed to parse URI: %s", err)
+	}
 
-	conn, err := net.Dial("tcp", hostport)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
 	if err != nil {
 		t.Fatalf("Dial: %s", err)
 	}
 
-	auth := &PlainAuth{
-		Username: "",
-		Password: "",
-	}
-
-	if _, err = NewConnection(&logIO{t, "badauth", conn}, auth, vhost); err != ErrBadCredentials {
-		t.Errorf("Expected ErrBadCredentials", err)
+	if _, err = NewConnection(
+		&logIO{t, "badauth", conn},
+		&PlainAuth{
+			Username: "",
+			Password: "",
+		},
+		uri.Vhost,
+	); err != ErrBadCredentials {
+		t.Errorf("Expected ErrBadCredentials, got %s", err)
 	}
 }
 
@@ -166,14 +171,22 @@ func TestIntegrationPublishConsume(t *testing.T) {
 }
 
 func (c *Connection) Generate(r *rand.Rand, _ int) reflect.Value {
-	hostport, username, password, vhost := parseUrl(os.Getenv("AMQP_URL"))
+	urlStr := os.Getenv("AMQP_URL")
+	if urlStr == "" {
+		return reflect.ValueOf(nil)
+	}
 
-	conn, err := net.Dial("tcp", hostport)
+	uri, err := ParseURI(urlStr)
 	if err != nil {
 		return reflect.ValueOf(nil)
 	}
 
-	c, err = NewConnection(conn, &PlainAuth{username, password}, vhost)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
+	if err != nil {
+		return reflect.ValueOf(nil)
+	}
+
+	c, err = NewConnection(conn, uri.PlainAuth(), uri.Vhost)
 	if err != nil {
 		return reflect.ValueOf(nil)
 	}
