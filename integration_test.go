@@ -73,19 +73,19 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 	if c1 != nil {
 		ch, err := c1.Channel()
 		if err != nil {
-			t.Fatal("Could not create channel")
+			t.Fatalf("Could not create channel")
 		}
 
 		queue := ch.Q("test.integration.blocking.close")
 
 		_, err = queue.Declare(UntilUnused, false, false, nil)
 		if err != nil {
-			t.Fatal("Could not declare")
+			t.Fatalf("Could not declare")
 		}
 
 		msgs, err := queue.Consume(false, false, false, false, "", nil, nil)
 		if err != nil {
-			t.Fatal("Could not consume")
+			t.Fatalf("Could not consume")
 		}
 
 		// Simulate a consumer
@@ -102,7 +102,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 
 		go func() {
 			if err = ch.Close(); err != nil {
-				t.Fatal("Close produced an error when it shouldn't")
+				t.Fatalf("Close produced an error when it shouldn't")
 			}
 			succeed <- true
 		}()
@@ -248,7 +248,7 @@ func TestQuickPublishOnly(t *testing.T) {
 		q := pub.Q("test-publish")
 
 		if _, err = q.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Error("Failed to declare", err)
+			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
@@ -267,7 +267,7 @@ func TestPublishEmptyBody(t *testing.T) {
 
 		pub, err := c1.Channel()
 		if err != nil {
-			t.Error("Failed to create channel")
+			t.Errorf("Failed to create channel")
 			return
 		}
 
@@ -279,11 +279,11 @@ func TestPublishEmptyBody(t *testing.T) {
 		err = p.Publish(false, false, Publishing{})
 
 		if err != nil {
-			t.Error("Failed to publish")
+			t.Errorf("Failed to publish")
 			return
 		}
 		if len((<-ch).Body) != 0 {
-			t.Error("Received non empty body")
+			t.Errorf("Received non empty body")
 			return
 		}
 	}
@@ -302,13 +302,13 @@ func TestQuickPublishConsumeOnly(t *testing.T) {
 
 		p := pub.Q("TestPublishConsumeOnly")
 		if _, err = p.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Error("Failed to declare", err)
+			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
 		s := sub.Q("TestPublishConsumeOnly")
 		if _, err = s.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Error("Failed to declare", err)
+			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
@@ -316,7 +316,7 @@ func TestQuickPublishConsumeOnly(t *testing.T) {
 
 		ch, err := s.Consume(false, false, false, false, "", nil, nil)
 		if err != nil {
-			t.Error("Could not sub", err)
+			t.Errorf("Could not sub: %s", err)
 		}
 
 		quick.CheckEqual(
@@ -349,13 +349,13 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 
 		q := pub.Q("test-pubsub")
 		if _, err = q.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Error("Failed to declare", err)
+			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
 		ch, err := sub.Q("test-pubsub").Consume(false, false, false, false, "", nil, nil)
 		if err != nil {
-			t.Error("Could not sub", err)
+			t.Errorf("Could not sub: %s", err)
 		}
 
 		msg := Publishing{
@@ -364,11 +364,11 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 
 		err = pub.Q("test-pubsub").Publish(false, false, msg)
 		if err != nil {
-			t.Error("Could not publish big body")
+			t.Errorf("Could not publish big body")
 		}
 
 		if bytes.Compare((<-ch).Body, msg.Body) != 0 {
-			t.Error("Consumed big body didn't match")
+			t.Errorf("Consumed big body didn't match")
 		}
 	}
 }
@@ -386,29 +386,29 @@ func TestCorruptedMessageRegression(t *testing.T) {
 
 		ch1, err := c1.Channel()
 		if err != nil {
-			t.Fatal("Cannot create Channel")
+			t.Fatalf("Cannot create Channel")
 		}
 
 		ch2, err := c2.Channel()
 		if err != nil {
-			t.Fatal("Cannot create Channel")
+			t.Fatalf("Cannot create Channel")
 		}
 
 		queue := "test-corrupted-message-regression"
 
 		pub := ch1.Q(queue)
 		if _, err := pub.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Fatal("Cannot declare")
+			t.Fatalf("Cannot declare")
 		}
 
 		sub := ch2.Q(queue)
 		if _, err := pub.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Fatal("Cannot declare")
+			t.Fatalf("Cannot declare")
 		}
 
 		msgs, err := sub.Consume(false, false, false, false, "", nil, nil)
 		if err != nil {
-			t.Fatal("Cannot consume")
+			t.Fatalf("Cannot consume")
 		}
 
 		for i := 0; i < messageCount; i++ {
@@ -417,7 +417,7 @@ func TestCorruptedMessageRegression(t *testing.T) {
 			})
 
 			if err != nil {
-				t.Fatal("Failed to publish")
+				t.Fatalf("Failed to publish")
 			}
 		}
 
@@ -426,7 +426,7 @@ func TestCorruptedMessageRegression(t *testing.T) {
 			case msg := <-msgs:
 				assertMessageCrc32(t, msg.Body, fmt.Sprintf("missed match at %d", i))
 			case <-time.After(1 * time.Second):
-				t.Fatal("Timed out after 1s")
+				t.Fatalf("Timed out after 1s")
 			}
 		}
 	}
@@ -439,21 +439,21 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 
 		ch, err := c1.Channel()
 		if err != nil {
-			t.Fatal("Create channel")
+			t.Fatalf("Create channel")
 		}
 
 		e := ch.E("test-mismatched-redeclare")
 
 		err = e.Declare(UntilUnused, "direct", false, false, nil)
 		if err != nil {
-			t.Fatal("Could not initially declare exchange")
+			t.Fatalf("Could not initially declare exchange")
 		}
 		// TODO currently stalls
 		// defer e.Delete(false, false)
 
 		err = e.Declare(UntilDeleted, "direct", false, false, nil)
 		if err == nil {
-			t.Fatal("Expected to fail a redeclare with different lifetime, didn't receive an error")
+			t.Fatalf("Expected to fail a redeclare with different lifetime, didn't receive an error")
 		}
 	}
 }

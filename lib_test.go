@@ -23,19 +23,19 @@ func integrationConnection(t *testing.T, name string) *Connection {
 
 	uri, err := ParseURI(urlStr)
 	if err != nil {
-		t.Error("Failed to parse URI:", err)
+		t.Errorf("Failed to parse URI: %s", err)
 		return nil
 	}
 
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
 	if err != nil {
-		t.Error("Failed to connect to integration server:", err)
+		t.Errorf("Failed to connect to integration server: %s", err)
 		return nil
 	}
 
 	c, err := NewConnection(&logIO{t, name, conn}, uri.PlainAuth(), uri.Vhost)
 	if err != nil {
-		t.Error("Failed to create client against integration server:", err)
+		t.Errorf("Failed to create client against integration server: %s", err)
 		return nil
 	}
 
@@ -58,11 +58,11 @@ func assertMessageCrc32(t *testing.T, msg []byte, assert string) {
 	crc.Write(msg[8:])
 
 	if binary.BigEndian.Uint32(msg[4:8]) != crc.Sum32() {
-		t.Fatal("Message does not match CRC", assert)
+		t.Fatalf("Message does not match CRC: %s", assert)
 	}
 
 	if int(size) != len(msg)-8 {
-		t.Fatal("Message does not match size, should:", size, "is:", len(msg)-8, assert)
+		t.Fatalf("Message does not match size, should=%d, is=%d: %s", size, len(msg)-8, assert)
 	}
 }
 

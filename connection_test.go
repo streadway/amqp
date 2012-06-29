@@ -14,7 +14,7 @@ func driveConnectionOpen(t *testing.T, server io.ReadWriter) {
 	handshake := make([]byte, 8)
 	server.Read(handshake)
 	if bytes.Compare(handshake, []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}) != 0 {
-		t.Fatal("bad protocol handshake", handshake)
+		t.Fatalf("bad protocol handshake: %s", handshake)
 	}
 
 	r := reader{server}
@@ -29,15 +29,15 @@ func driveConnectionOpen(t *testing.T, server io.ReadWriter) {
 			Locales:      "en-us",
 		},
 	}); err != nil {
-		t.Fatal("bad write")
+		t.Fatalf("bad write")
 	}
 
 	if f, err = r.ReadFrame(); err != nil {
-		t.Fatal("bad read", err)
+		t.Fatalf("bad read: %s", err)
 	}
 
 	if _, ok = f.(*methodFrame).Method.(*connectionStartOk); !ok {
-		t.Fatal("expected ConnectionStartOk")
+		t.Fatalf("expected ConnectionStartOk")
 	}
 
 	if err = w.WriteFrame(&methodFrame{
@@ -48,30 +48,30 @@ func driveConnectionOpen(t *testing.T, server io.ReadWriter) {
 			Heartbeat:  10,
 		},
 	}); err != nil {
-		t.Fatal("bad write", err)
+		t.Fatalf("bad write: %s", err)
 	}
 
 	if f, err = r.ReadFrame(); err != nil {
-		t.Fatal("bad read", err)
+		t.Fatalf("bad read: %s", err)
 	}
 
 	if _, ok = f.(*methodFrame).Method.(*connectionTuneOk); !ok {
-		t.Fatal("expected ConnectionTuneOk")
+		t.Fatalf("expected ConnectionTuneOk")
 	}
 
 	if f, err = r.ReadFrame(); err != nil {
-		t.Fatal("bad read", err)
+		t.Fatalf("bad read: %s", err)
 	}
 
 	if _, ok = f.(*methodFrame).Method.(*connectionOpen); !ok {
-		t.Fatal("expected ConnectionOpen")
+		t.Fatalf("expected ConnectionOpen")
 	}
 
 	if err = w.WriteFrame(&methodFrame{
 		ChannelId: 0,
 		Method:    &connectionOpenOk{},
 	}); err != nil {
-		t.Fatal("bad write", err)
+		t.Fatalf("bad write: %s", err)
 	}
 }
 
@@ -84,18 +84,18 @@ func driveChannelOpen(t *testing.T, server io.ReadWriteCloser) {
 	w := writer{server}
 
 	if f, err = r.ReadFrame(); err != nil {
-		t.Fatal("bad read", err)
+		t.Fatalf("bad read: %s", err)
 	}
 
 	if _, ok = f.(*methodFrame).Method.(*channelOpen); !ok {
-		t.Fatal("expected channelOpen")
+		t.Fatalf("expected channelOpen")
 	}
 
 	if err = w.WriteFrame(&methodFrame{
 		ChannelId: f.channel(),
 		Method:    &channelOpenOk{},
 	}); err != nil {
-		t.Fatal("bad write")
+		t.Fatalf("bad write")
 	}
 }
 
@@ -106,7 +106,7 @@ func TestNewConnectionOpen(t *testing.T) {
 
 	c, err := NewConnection(client, &PlainAuth{"guest", "guest"}, "/")
 	if err != nil {
-		t.Fatal("could not create connection:", c, err)
+		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
 }
 
@@ -117,13 +117,13 @@ func TestNewConnectionChannelOpen(t *testing.T) {
 
 	c, err := NewConnection(client, &PlainAuth{"guest", "guest"}, "/")
 	if err != nil {
-		t.Fatal("could not create connection:", c, err)
+		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
 
 	go driveChannelOpen(t, server)
 
 	ch, err := c.Channel()
 	if err != nil {
-		t.Fatal("could not open channel:", ch, err, c.state, ch.state)
+		t.Fatalf("could not open channel: %s (%s) %s %s", ch, err, c.state, ch.state)
 	}
 }
