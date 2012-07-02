@@ -8,62 +8,34 @@ import (
 	"hash/crc32"
 	"io"
 	"net"
-	"net/url"
 	"os"
 	"testing"
 )
 
-func parseUrl(amqp string) (hostport string, username string, password string, vhost string) {
-	u, err := url.Parse(amqp)
-	if err != nil {
-		return
-	}
-
-	host, port := "localhost", 5672
-	username, password, vhost = "guest", "guest", "/"
-
-	fmt.Sscanf(u.Host, "%s:%d", &host, &port)
-
-	hostport = fmt.Sprintf("%s:%d", host, port)
-
-	if u.User != nil {
-		username = u.User.Username()
-		if p, ok := u.User.Password(); ok {
-			password = p
-		}
-	}
-
-	if u.Path != "" {
-		vhost = u.Path
-	}
-
-	return
-}
-
 // Returns a conneciton to the AMQP if the AMQP_URL environment
 // variable is set and a connnection can be established.
 func integrationConnection(t *testing.T, name string) *Connection {
-	u := os.Getenv("AMQP_URL")
-	if u == "" {
-		t.Log("Skipping integration tests, AMQP_URL not found in the environment")
+	urlStr := os.Getenv("AMQP_URL")
+	if urlStr == "" {
+		t.Logf("Skipping; AMQP_URL not found in the environment")
 		return nil
 	}
 
-	hostport, username, password, vhost := parseUrl(u)
-
-	conn, err := net.Dial("tcp", hostport)
+	uri, err := ParseURI(urlStr)
 	if err != nil {
-		t.Error("Failed to connect to integration server:", err)
+		t.Errorf("Failed to parse URI: %s", err)
 		return nil
 	}
 
-	//io := conn
-	io := &logIO{t, name, conn}
-
-	c, err := NewConnection(io, &PlainAuth{username, password}, vhost)
-
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
 	if err != nil {
-		t.Error("Failed to create client against integration server:", err)
+		t.Errorf("Failed to connect to integration server: %s", err)
+		return nil
+	}
+
+	c, err := NewConnection(&logIO{t, name, conn}, uri.PlainAuth(), uri.Vhost)
+	if err != nil {
+		t.Errorf("Failed to create client against integration server: %s", err)
 		return nil
 	}
 
@@ -86,11 +58,11 @@ func assertMessageCrc32(t *testing.T, msg []byte, assert string) {
 	crc.Write(msg[8:])
 
 	if binary.BigEndian.Uint32(msg[4:8]) != crc.Sum32() {
-		t.Fatal("Message does not match CRC", assert)
+		t.Fatalf("Message does not match CRC: %s", assert)
 	}
 
 	if int(size) != len(msg)-8 {
-		t.Fatal("Message does not match size, should:", size, "is:", len(msg)-8, assert)
+		t.Fatalf("Message does not match size, should=%d, is=%d: %s", size, len(msg)-8, assert)
 	}
 }
 

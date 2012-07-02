@@ -31,40 +31,39 @@ func init() {
 
 func TestIntegrationConnect(t *testing.T) {
 	if c := integrationConnection(t, "connect"); c != nil {
-		t.Log("have client")
+		t.Logf("have client")
 	}
 }
 
 func TestIntegrationConnectChannel(t *testing.T) {
 	if c := integrationConnection(t, "channel"); c != nil {
 		if _, err := c.Channel(); err != nil {
-			t.Errorf("Channel could not be open", err)
+			t.Errorf("Channel could not be opened: %s", err)
 		}
 	}
 }
 
 func TestIntegrationConnectBadVhost(t *testing.T) {
-	url := os.Getenv("AMQP_URL")
-	if url == "" {
+	urlStr := os.Getenv("AMQP_URL")
+	if urlStr == "" {
+		t.Logf("Skipping; AMQP_URL not found in the environment")
 		return
 	}
 
-	hostport, username, password, vhost := parseUrl(url)
+	uri, err := ParseURI(urlStr)
+	if err != nil {
+		t.Fatalf("Failed to parse URI: %s", err)
+	}
 
-	conn, err := net.Dial("tcp", hostport)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
 	if err != nil {
 		t.Fatalf("Dial: %s", err)
 	}
 
-	auth := &PlainAuth{
-		Username: username,
-		Password: password,
-	}
-
-	vhost = "lolwat_not_found"
-
-	if _, err = NewConnection(&logIO{t, "badauth", conn}, auth, vhost); err != ErrBadVhost {
-		t.Errorf("Expected ErrBadVhost", err)
+	vhost := "lolwat_not_found"
+	_, err = NewConnection(&logIO{t, "badauth", conn}, uri.PlainAuth(), vhost)
+	if err != ErrBadVhost {
+		t.Errorf("Expected ErrBadVhost, got %s", err)
 	}
 }
 
@@ -74,25 +73,25 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 	if c1 != nil {
 		ch, err := c1.Channel()
 		if err != nil {
-			t.Fatal("Could not create channel")
+			t.Fatalf("Could not create channel")
 		}
 
 		queue := ch.Q("test.integration.blocking.close")
 
 		_, err = queue.Declare(UntilUnused, false, false, nil)
 		if err != nil {
-			t.Fatal("Could not declare")
+			t.Fatalf("Could not declare")
 		}
 
 		msgs, err := queue.Consume(false, false, false, false, "", nil, nil)
 		if err != nil {
-			t.Fatal("Could not consume")
+			t.Fatalf("Could not consume")
 		}
 
 		// Simulate a consumer
 		go func() {
 			for _ = range msgs {
-				t.Log("Oh my, received message on an empty queue")
+				t.Logf("Oh my, received message on an empty queue")
 			}
 		}()
 
@@ -103,13 +102,14 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 
 		go func() {
 			if err = ch.Close(); err != nil {
-				t.Fatal("Close produced an error when it shouldn't")
+				t.Fatalf("Close produced an error when it shouldn't")
 			}
 			succeed <- true
 		}()
 
 		select {
 		case <-succeed:
+			break
 		case <-fail:
 			t.Fatalf("Close timed out after 1s")
 		}
@@ -117,25 +117,31 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 }
 
 func TestIntegrationConnectBadCredentials(t *testing.T) {
-	url := os.Getenv("AMQP_URL")
-	if url == "" {
+	urlStr := os.Getenv("AMQP_URL")
+	if urlStr == "" {
+		t.Logf("Skipping; AMQP_URL not found in the environment")
 		return
 	}
 
-	hostport, _, _, vhost := parseUrl(url)
+	uri, err := ParseURI(urlStr)
+	if err != nil {
+		t.Fatalf("Failed to parse URI: %s", err)
+	}
 
-	conn, err := net.Dial("tcp", hostport)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
 	if err != nil {
 		t.Fatalf("Dial: %s", err)
 	}
 
-	auth := &PlainAuth{
-		Username: "",
-		Password: "",
-	}
-
-	if _, err = NewConnection(&logIO{t, "badauth", conn}, auth, vhost); err != ErrBadCredentials {
-		t.Errorf("Expected ErrBadCredentials", err)
+	if _, err = NewConnection(
+		&logIO{t, "badauth", conn},
+		&PlainAuth{
+			Username: "",
+			Password: "",
+		},
+		uri.Vhost,
+	); err != ErrBadCredentials {
+		t.Errorf("Expected ErrBadCredentials, got %s", err)
 	}
 }
 
@@ -166,14 +172,22 @@ func TestIntegrationPublishConsume(t *testing.T) {
 }
 
 func (c *Connection) Generate(r *rand.Rand, _ int) reflect.Value {
-	hostport, username, password, vhost := parseUrl(os.Getenv("AMQP_URL"))
+	urlStr := os.Getenv("AMQP_URL")
+	if urlStr == "" {
+		return reflect.ValueOf(nil)
+	}
 
-	conn, err := net.Dial("tcp", hostport)
+	uri, err := ParseURI(urlStr)
 	if err != nil {
 		return reflect.ValueOf(nil)
 	}
 
-	c, err = NewConnection(conn, &PlainAuth{username, password}, vhost)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
+	if err != nil {
+		return reflect.ValueOf(nil)
+	}
+
+	c, err = NewConnection(conn, uri.PlainAuth(), uri.Vhost)
 	if err != nil {
 		return reflect.ValueOf(nil)
 	}
@@ -235,7 +249,7 @@ func TestQuickPublishOnly(t *testing.T) {
 		q := pub.Q("test-publish")
 
 		if _, err = q.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Error("Failed to declare", err)
+			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
@@ -254,7 +268,7 @@ func TestPublishEmptyBody(t *testing.T) {
 
 		pub, err := c1.Channel()
 		if err != nil {
-			t.Error("Failed to create channel")
+			t.Errorf("Failed to create channel")
 			return
 		}
 
@@ -266,11 +280,11 @@ func TestPublishEmptyBody(t *testing.T) {
 		err = p.Publish(false, false, Publishing{})
 
 		if err != nil {
-			t.Error("Failed to publish")
+			t.Errorf("Failed to publish")
 			return
 		}
 		if len((<-ch).Body) != 0 {
-			t.Error("Received non empty body")
+			t.Errorf("Received non empty body")
 			return
 		}
 	}
@@ -289,13 +303,13 @@ func TestQuickPublishConsumeOnly(t *testing.T) {
 
 		p := pub.Q("TestPublishConsumeOnly")
 		if _, err = p.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Error("Failed to declare", err)
+			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
 		s := sub.Q("TestPublishConsumeOnly")
 		if _, err = s.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Error("Failed to declare", err)
+			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
@@ -303,7 +317,7 @@ func TestQuickPublishConsumeOnly(t *testing.T) {
 
 		ch, err := s.Consume(false, false, false, false, "", nil, nil)
 		if err != nil {
-			t.Error("Could not sub", err)
+			t.Errorf("Could not sub: %s", err)
 		}
 
 		quick.CheckEqual(
@@ -336,13 +350,13 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 
 		q := pub.Q("test-pubsub")
 		if _, err = q.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Error("Failed to declare", err)
+			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
 		ch, err := sub.Q("test-pubsub").Consume(false, false, false, false, "", nil, nil)
 		if err != nil {
-			t.Error("Could not sub", err)
+			t.Errorf("Could not sub: %s", err)
 		}
 
 		msg := Publishing{
@@ -351,11 +365,11 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 
 		err = pub.Q("test-pubsub").Publish(false, false, msg)
 		if err != nil {
-			t.Error("Could not publish big body")
+			t.Errorf("Could not publish big body")
 		}
 
 		if bytes.Compare((<-ch).Body, msg.Body) != 0 {
-			t.Error("Consumed big body didn't match")
+			t.Errorf("Consumed big body didn't match")
 		}
 	}
 }
@@ -373,29 +387,29 @@ func TestCorruptedMessageRegression(t *testing.T) {
 
 		ch1, err := c1.Channel()
 		if err != nil {
-			t.Fatal("Cannot create Channel")
+			t.Fatalf("Cannot create Channel")
 		}
 
 		ch2, err := c2.Channel()
 		if err != nil {
-			t.Fatal("Cannot create Channel")
+			t.Fatalf("Cannot create Channel")
 		}
 
 		queue := "test-corrupted-message-regression"
 
 		pub := ch1.Q(queue)
 		if _, err := pub.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Fatal("Cannot declare")
+			t.Fatalf("Cannot declare")
 		}
 
 		sub := ch2.Q(queue)
 		if _, err := pub.Declare(UntilUnused, false, false, nil); err != nil {
-			t.Fatal("Cannot declare")
+			t.Fatalf("Cannot declare")
 		}
 
 		msgs, err := sub.Consume(false, false, false, false, "", nil, nil)
 		if err != nil {
-			t.Fatal("Cannot consume")
+			t.Fatalf("Cannot consume")
 		}
 
 		for i := 0; i < messageCount; i++ {
@@ -404,7 +418,7 @@ func TestCorruptedMessageRegression(t *testing.T) {
 			})
 
 			if err != nil {
-				t.Fatal("Failed to publish")
+				t.Fatalf("Failed to publish")
 			}
 		}
 
@@ -413,7 +427,7 @@ func TestCorruptedMessageRegression(t *testing.T) {
 			case msg := <-msgs:
 				assertMessageCrc32(t, msg.Body, fmt.Sprintf("missed match at %d", i))
 			case <-time.After(1 * time.Second):
-				t.Fatal("Timed out after 1s")
+				t.Fatalf("Timed out after 1s")
 			}
 		}
 	}
@@ -426,21 +440,21 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 
 		ch, err := c1.Channel()
 		if err != nil {
-			t.Fatal("Create channel")
+			t.Fatalf("Create channel")
 		}
 
 		e := ch.E("test-mismatched-redeclare")
 
 		err = e.Declare(UntilUnused, "direct", false, false, nil)
 		if err != nil {
-			t.Fatal("Could not initially declare exchange")
+			t.Fatalf("Could not initially declare exchange")
 		}
 		// TODO currently stalls
 		// defer e.Delete(false, false)
 
 		err = e.Declare(UntilDeleted, "direct", false, false, nil)
 		if err == nil {
-			t.Fatal("Expected to fail a redeclare with different lifetime, didn't receive an error")
+			t.Fatalf("Expected to fail a redeclare with different lifetime, didn't receive an error")
 		}
 	}
 }

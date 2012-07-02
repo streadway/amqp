@@ -1,19 +1,19 @@
 package amqp
 
 import (
-//"fmt"
+	"sync"
 )
 
-// Represents an AMQP channel, used for concurrent, interleaved publishers and
+// Represents an AMQP channel. Used for concurrent, interleaved publishers and
 // consumers on the same connection.
 type Channel struct {
 	Closed *Closed
 
 	connection *Connection
 
-	// Either asynchronous 
 	rpc chan message
 
+	mutex     sync.Mutex
 	consumers map[string]chan Delivery
 
 	id    uint16
@@ -42,11 +42,12 @@ func newChannel(c *Connection, id uint16) (me *Channel, err error) {
 }
 
 func (me *Channel) addConsumer(tag string, ch chan Delivery) string {
-	// TODO Mutex
 	if tag == "" {
 		tag = randomTag()
 	}
 
+	me.mutex.Lock()
+	defer me.mutex.Unlock()
 	me.consumers[tag] = ch
 
 	return tag
@@ -57,6 +58,8 @@ func (me *Channel) shutdown() {
 
 	delete(me.connection.channels, me.id)
 
+	me.mutex.Lock()
+	defer me.mutex.Unlock()
 	for tag, ch := range me.consumers {
 		delete(me.consumers, tag)
 		me.Cancel(tag, false)
@@ -64,7 +67,6 @@ func (me *Channel) shutdown() {
 	}
 
 	close(me.rpc)
-
 	me.state = closed
 }
 
@@ -200,8 +202,8 @@ func (me *Channel) deliver(msg messageWithContent, c chan Delivery) {
 	c <- delivery
 }
 
-// Eventually called via the state machine from the connection's reader goroutine so
-// assumes serialized access
+// Eventually called via the state machine from the connection's reader
+// goroutine, so assumes serialized access.
 func (me *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
@@ -218,11 +220,14 @@ func (me *Channel) dispatch(msg message) {
 
 	case *basicDeliver:
 		if me.state == open {
+			me.mutex.Lock()
+			defer me.mutex.Unlock()
 			if c, ok := me.consumers[m.ConsumerTag]; ok {
 				me.deliver(m, c)
 			}
 			// TODO log failed consumer
 		}
+
 	default:
 		if me.state != closed {
 			me.rpc <- msg

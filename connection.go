@@ -36,53 +36,84 @@ type Connection struct {
 	channels map[uint16]*Channel
 }
 
-// Accepts a string in the AMQP URI format specificer found at:
-// http://www.rabbitmq.com/uri-spec.html and returns a new Connection
-// to the peer over tcp using PlainAuth
-// 
-// Fallback values for the fields are:
-//
-// host:			localhost
-// port:			5672
-// usenrame:	guest
-// password:	guest
-// vhost:			/
-func Dial(amqp string) (me *Connection, err error) {
-	host, port, username, password, vhost := "localhost", 5672, "guest", "guest", "/"
+// ParsedURI represents a parsed AMQP URI string.
+type ParsedURI struct {
+	Host     string
+	Port     int
+	Username string
+	Password string
+	Vhost    string
+}
 
-	u, err := url.Parse(amqp)
+// ParseURI attempts to parse the given AMQP URI according to the spec.
+// See http://www.rabbitmq.com/uri-spec.html.
+//
+// Default values for the fields are:
+//
+//   host: localhost
+//   port: 5672
+//   username: guest
+//   password: guest
+//   vhost: /
+//
+func ParseURI(uri string) (ParsedURI, error) {
+	p := ParsedURI{
+		Host:     "localhost",
+		Port:     5672,
+		Username: "guest",
+		Password: "guest",
+		Vhost:    "/",
+	}
+
+	u, err := url.Parse(uri)
 	if err != nil {
-		return
+		return p, err
 	}
 
 	if toks := strings.Split(u.Host, ":"); len(toks) == 2 {
-		host = toks[0]
+		p.Host = toks[0]
 		if port32, err := strconv.ParseInt(toks[1], 10, 32); err == nil {
-			port = int(port32)
+			p.Port = int(port32)
 		}
 	}
 
-	hostport := fmt.Sprintf("%s:%d", host, port)
-
 	if u.User != nil {
-		username = u.User.Username()
-		if p, ok := u.User.Password(); ok {
-			password = p
+		p.Username = u.User.Username()
+		if password, ok := u.User.Password(); ok {
+			p.Password = password
 		}
 	}
 
 	if u.Path != "" {
-		vhost = u.Path
+		p.Vhost = u.Path
 	}
 
-	conn, err := net.Dial("tcp", hostport)
+	return p, nil
+}
+
+// PlainAuth returns a PlainAuth structure based on the parsed URI's
+// Username and Password fields.
+func (p ParsedURI) PlainAuth() *PlainAuth {
+	return &PlainAuth{
+		Username: p.Username,
+		Password: p.Password,
+	}
+}
+
+// Dial accepts a string in the AMQP URI format, and returns a new Connection
+// over TCP using PlainAuth.
+func Dial(amqp string) (*Connection, error) {
+	uri, err := ParseURI(amqp)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	me, err = NewConnection(conn, &PlainAuth{username, password}, vhost)
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
+	if err != nil {
+		return nil, err
+	}
 
-	return
+	return NewConnection(conn, uri.PlainAuth(), uri.Vhost)
 }
 
 func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *Connection, err error) {
