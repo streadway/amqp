@@ -56,7 +56,7 @@ func TestIntegrationConnectChannel(t *testing.T) {
 func TestIntegrationExchange(t *testing.T) {
 	c1 := integrationConnection(t, "exch")
 	if c1 != nil {
-		// defer c1.Close() // TODO fix TestIntegrationConnectClose
+		defer c1.Close()
 
 		channel, err := c1.Channel()
 		if err != nil {
@@ -104,7 +104,7 @@ func TestIntegrationExchange(t *testing.T) {
 func TestIntegrationBasicQueueOperations(t *testing.T) {
 	c1 := integrationConnection(t, "queue")
 	if c1 != nil {
-		// defer c1.Close() // TODO fix TestIntegrationConnectClose
+		defer c1.Close()
 
 		channel, err := c1.Channel()
 		if err != nil {
@@ -205,7 +205,7 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 func TestIntegrationChannelClosing(t *testing.T) {
 	c1 := integrationConnection(t, "closings")
 	if c1 != nil {
-		// defer c1.Close() // TODO fix TestIntegrationConnectClose
+		defer c1.Close()
 
 		// This function is run on every channel after it is successfully
 		// opened. It can do something to verify something. It should be
@@ -304,7 +304,7 @@ func TestIntegrationConnectBadVhost(t *testing.T) {
 func TestIntegrationNonBlockingClose(t *testing.T) {
 	c1 := integrationConnection(t, "pub")
 	if c1 != nil {
-		// defer c1.Close() // TODO fix TestIntegrationConnectClose
+		defer c1.Close()
 
 		ch, err := c1.Channel()
 		if err != nil {
@@ -387,8 +387,8 @@ func TestIntegrationPublishConsume(t *testing.T) {
 	c2 := integrationConnection(t, "sub")
 
 	if c1 != nil && c2 != nil {
-		// defer c1.Close() // TODO fix TestIntegrationConnectClose
-		// defer c2.Close() // TODO fix TestIntegrationConnectClose
+		defer c1.Close()
+		defer c2.Close()
 
 		pub, _ := c1.Channel()
 		sub, _ := c2.Channel()
@@ -620,8 +620,8 @@ func TestCorruptedMessageRegression(t *testing.T) {
 	c2 := integrationConnection(t, "corrupt-sub")
 
 	if c1 != nil && c2 != nil {
-		// defer c1.Close() // TODO fix TestIntegrationConnectClose
-		// defer c2.Close() // TODO fix TestIntegrationConnectClose
+		defer c1.Close()
+		defer c2.Close()
 
 		ch1, err := c1.Channel()
 		if err != nil {
@@ -674,7 +674,7 @@ func TestCorruptedMessageRegression(t *testing.T) {
 func TestExchangeDeclarePrecondition(t *testing.T) {
 	c1 := integrationConnection(t, "exchange-double-declare")
 	if c1 != nil {
-		//defer c1.Close()
+		// defer c1.Close() // TODO stalls; see TODO below
 
 		ch, err := c1.Channel()
 		if err != nil {
@@ -693,8 +693,6 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Could not initially declare exchange")
 		}
-		// TODO currently stalls
-		// defer e.Delete(false, false)
 
 		err = e.Declare(
 			UntilDeleted, // lifetime
@@ -706,14 +704,10 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Expected to fail a redeclare with different lifetime, didn't receive an error")
 		}
+		t.Logf("good: got error: %s", err)
 
-		t.Logf("------------")
-		time.Sleep(250 * time.Millisecond)
-		e.Delete(
-			false, // ifUnused (false=be aggressive)
-			false, // noWait
-		)
-		time.Sleep(2000 * time.Millisecond)
-
+		// TODO stalls
+		// (I'm guessing the connection becomes invalid after the redeclare.)
+		// e.Delete(false, false)
 	}
 }
