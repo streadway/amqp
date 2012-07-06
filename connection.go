@@ -15,12 +15,13 @@ import (
 type Connection struct {
 	conn io.ReadWriteCloser
 
-	in chan message
+	in            chan message
+	shutdownMutex sync.Mutex
 
-	state state
+	state state // TODO not goroutine-safe; refactor with stateMutex?
 
-	writer *writer
-	muw    sync.Mutex
+	writer      *writer
+	writerMutex sync.Mutex
 
 	VersionMajor int
 	VersionMinor int
@@ -138,10 +139,15 @@ func (me *Connection) nextChannelId() uint16 {
 
 func (me *Connection) Close() (err error) {
 	if me.state != closed {
-		if err = me.send(&methodFrame{
-			ChannelId: 0,
-			Method:    &connectionClose{ReplyCode: ReplySuccess, ReplyText: "bye"},
-		}); err != nil {
+		if err = me.send(
+			&methodFrame{
+				ChannelId: 0,
+				Method: &connectionClose{
+					ReplyCode: ReplySuccess,
+					ReplyText: "bye",
+				},
+			},
+		); err != nil {
 			return
 		}
 
@@ -159,16 +165,19 @@ func (me *Connection) Close() (err error) {
 
 func (me *Connection) dispatch() {
 	for {
-		switch (<-me.in).(type) {
+
+		switch msg := <-me.in; msg.(type) {
 		// handle the 4 way shutdown
-		case *connectionClose:
+		case *connectionClose: // request from server
 			me.send(&methodFrame{
 				ChannelId: 0,
 				Method:    &connectionCloseOk{},
 			})
 			me.Close()
-		case nil:
-			// closed
+		case *connectionCloseOk: // response to our Close() request
+			me.in <- msg // forward to Close() method
+			return
+		case nil: // closed
 			return
 		}
 	}
@@ -177,8 +186,8 @@ func (me *Connection) dispatch() {
 func (me *Connection) send(f frame) (err error) {
 	//fmt.Println("send:", f)
 
-	me.muw.Lock()
-	defer me.muw.Unlock()
+	me.writerMutex.Lock()
+	defer me.writerMutex.Unlock()
 
 	if me.state > open {
 		return ErrAlreadyClosed
@@ -193,6 +202,9 @@ func (me *Connection) send(f frame) (err error) {
 }
 
 func (me *Connection) shutdown() {
+	me.shutdownMutex.Lock()
+	defer me.shutdownMutex.Unlock()
+
 	if me.state != closed {
 		me.state = closing
 		for i, c := range me.channels {
