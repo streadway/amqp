@@ -25,18 +25,18 @@ for up-to-the-minute documentation and usage.
 * (Better) propagate closing of IO in Framing
 * leaks of go routines
 
-S:C ConnectionClose
-S:C ConnectionCloseOk
-S:C ChannelClose
-S:C ChannelCloseOk
-Read EOF -> ignore
-Write EOF
+    S:C ConnectionClose
+    S:C ConnectionCloseOk
+    S:C ChannelClose
+    S:C ChannelCloseOk
+    Read EOF -> ignore
+    Write EOF
 
-close(chan(id).rpc)
-close(chan(id).deliveries)
-close(conn.in)
-close(conn.out)
-conn.rw.Close()
+    close(chan(id).rpc)
+    close(chan(id).deliveries)
+    close(conn.in)
+    close(conn.out)
+    conn.rw.Close()
 
 ## Tests
 
