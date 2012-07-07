@@ -1,13 +1,29 @@
-# AMQP client for Go
+# AMQP
 
-Work in progress.  Check the development branch for how much work is in progress.
+Beta-class AMQP 0.9.1 client in Go.
 
 # Goals
 
 Provide an low level interface that abstracts the wire protocol and IO,
 exposing methods specific to the 0.9.1 specification.
 
-# Shutdown
+# Usage
+
+See the 'examples' subdirectory for simple producers and consumers. If you have
+a use-case in mind which isn't well-represented by the examples, please file an
+issue, and I'll try to create one.
+
+# Documentation
+
+See [the gopkgdoc page](http://gopkgdoc.appspot.com/github.com/streadway/amqp)
+for up-to-the-minute documentation and usage.
+
+# Areas that need work
+
+## Shutdown
+
+* (Better) propagate closing of IO in Framing
+* leaks of go routines
 
 S:C ConnectionClose
 S:C ConnectionCloseOk
@@ -22,24 +38,21 @@ close(conn.in)
 close(conn.out)
 conn.rw.Close()
 
-# TODO
-
-## Shutdown
-  * Propagate closing of IO in Framing
-  * leaks of go routines
-
 ## Tests
 
-	* wire round trip equality
-	* concurrency
-	* interruption of synchronous messages
+* wire round trip equality
+* concurrency
+* interruption of synchronous messages
+* handle "noise on the line" safely
 
 # Non-goals
 
-  * Reconnect and re-establishment of state
-	* Multiple consumers on a single channel
+Things not intended to be supported (at this stage).
 
-# Low level
+* Auto reconnect and re-establishment of state
+* Multiple consumers on a single channel
+
+# Low level details
 
 There are 2 primary data interfaces, `Message` and `Frame`.  A `Message`
 represents either a synchronous or asychronous request or response that
@@ -49,4 +62,5 @@ constructing and deconstructing a `Message` into `Frames`.  The `Frames` are
 multiplexed and demultiplexed on a `ReadWriteCloser` network socket by the
 `Connection`.
 
-The `Connection` and `Channel` handlers capture some basic use cases for establishing and closing the io session and logical channel.
+The `Connection` and `Channel` handlers capture some basic use cases for
+establishing and closing the io session and logical channel.
