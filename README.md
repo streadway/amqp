@@ -52,15 +52,6 @@ Things not intended to be supported (at this stage).
 * Auto reconnect and re-establishment of state
 * Multiple consumers on a single channel
 
-# Low level details
+# License
 
-There are 2 primary data interfaces, `Message` and `Frame`.  A `Message`
-represents either a synchronous or asychronous request or response that
-optionally contains `ContentProperties` and a byte array as a `ContentBody`.
-`Messages` are sent and received on a `Channel`. A `Channel` is responsible for
-constructing and deconstructing a `Message` into `Frames`.  The `Frames` are
-multiplexed and demultiplexed on a `ReadWriteCloser` network socket by the
-`Connection`.
-
-The `Connection` and `Channel` handlers capture some basic use cases for
-establishing and closing the io session and logical channel.
+All Rights Reserved http://github.com/streadway (for now).
