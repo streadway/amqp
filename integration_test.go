@@ -14,21 +14,6 @@ import (
 	"time"
 )
 
-func init() {
-	c := make(chan os.Signal)
-
-	go func() {
-		for {
-			if _, ok := <-c; !ok {
-				return
-			}
-			panic("ohai")
-		}
-	}()
-
-	signal.Notify(c, syscall.SIGINFO)
-}
-
 func TestIntegrationConnect(t *testing.T) {
 	if c := integrationConnection(t, "connect"); c != nil {
 		t.Logf("have connection")
