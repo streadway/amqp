@@ -5,8 +5,7 @@
 package main
 
 import (
-	"github.com/peterbourgon/amqp-rpc"
-	// "github.com/streadway/amqp"
+	"github.com/streadway/amqp"
 	"fmt"
 	"log"
 	"flag"
