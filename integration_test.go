@@ -391,9 +391,9 @@ func TestIntegrationPublishConsume(t *testing.T) {
 		pub.E("").Publish(queue, false, false, Publishing{Body: []byte("pub 2")})
 		pub.E("").Publish(queue, false, false, Publishing{Body: []byte("pub 3")})
 
-		assertMessageBody(t, <-messages, []byte("pub 1"))
-		assertMessageBody(t, <-messages, []byte("pub 2"))
-		assertMessageBody(t, <-messages, []byte("pub 3"))
+		assertConsumeBody(t, messages, []byte("pub 1"))
+		assertConsumeBody(t, messages, []byte("pub 2"))
+		assertConsumeBody(t, messages, []byte("pub 3"))
 	}
 }
 

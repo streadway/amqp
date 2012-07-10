@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"testing"
+	"time"
 )
 
 // Returns a conneciton to the AMQP if the AMQP_URL environment
@@ -47,12 +48,19 @@ func integrationConnection(t *testing.T, name string) *Connection {
 	return c
 }
 
-func assertMessageBody(t *testing.T, msg Delivery, body []byte) bool {
-	if bytes.Compare(msg.Body, body) != 0 {
-		t.Errorf("Message body does not match have: %v expect %v", msg.Body, body)
+func assertConsumeBody(t *testing.T, messages chan Delivery, body []byte) bool {
+	select {
+	case msg := <-messages:
+		if bytes.Compare(msg.Body, body) != 0 {
+			t.Errorf("Message body does not match have: %v expect %v", msg.Body, body)
+			return false
+		}
+		return true
+	case <-time.After(200 * time.Millisecond):
+		t.Errorf("Timeout waiting for %s", body)
 		return false
 	}
-	return true
+	panic("unreachable")
 }
 
 // Pulls out the CRC and verifies the remaining content against the CRC
