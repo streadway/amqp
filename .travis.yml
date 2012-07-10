@@ -12,5 +12,5 @@ install:
 
 script:
  - cd $HOME/src/amqp && pwd && echo $GOPATH && go build -v .
- - cd $HOME/src/amqp && pwd && echo $GOPATH && AMQP_URL=amqp://guest:guest@localhost:5672/ go test -v .
+ - cd $HOME/src/amqp && pwd && echo $GOPATH && AMQP_URL=amqp://guest:guest@localhost:5672/ go test .
 
