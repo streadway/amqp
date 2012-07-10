@@ -3,9 +3,9 @@ language: erlang # wither art thou, Go?
 before_install:
  - sudo service rabbitmq-server start
  - sudo tail -F /var/log/rabbitmq/* &
- - sudo rabbitmqctl add_vhost /
- - sudo rabbitmqctl add_user guest guest
- - sudo rabbitmqctl set_permissions -p / guest ".*" ".*" ".*"
+ - sudo rabbitmqctl add_vhost /                               || true
+ - sudo rabbitmqctl add_user guest guest                      || true
+ - sudo rabbitmqctl set_permissions -p / guest ".*" ".*" ".*" || true
 
 install:
  - hg clone -r go1.0.2 https://code.google.com/p/go $HOME/go
