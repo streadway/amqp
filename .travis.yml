@@ -18,6 +18,7 @@ install:
  - ln -s $HOME/builds/streadway/amqp $HOME/src/amqp
 
 script:
+ - sh -c "sleep 120 && killall -QUIT amqp.test" &
  - cd $HOME/src/amqp && go build -v .
  - cd $HOME/src/amqp && AMQP_URL=amqp://guest:guest@127.0.0.1:5672/ go test .
 
