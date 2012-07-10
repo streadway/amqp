@@ -1,5 +1,12 @@
 language: erlang # wither art thou, Go?
 
+before_install:
+ - sudo service rabbitmq-server start
+ - sudo tail -F /var/log/rabbitmq/* &
+ - sudo rabbitmqctl add_vhost /
+ - sudo rabbitmqctl add_user guest guest
+ - sudo rabbitmqctl set_permissions -p / guest ".*" ".*" ".*"
+
 install:
  - hg clone -r go1.0.2 https://code.google.com/p/go $HOME/go
  - cd $HOME/go/src && ./make.bash
@@ -11,6 +18,6 @@ install:
  - ln -s $HOME/builds/streadway/amqp $HOME/src/amqp
 
 script:
- - cd $HOME/src/amqp && pwd && echo $GOPATH && go build -v .
- - cd $HOME/src/amqp && pwd && echo $GOPATH && AMQP_URL=amqp://guest:guest@localhost:5672/ go test .
+ - cd $HOME/src/amqp && go build -v .
+ - cd $HOME/src/amqp && AMQP_URL=amqp://guest:guest@127.0.0.1:5672/ go test .
 
