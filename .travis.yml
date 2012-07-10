@@ -2,10 +2,11 @@ language: go
 
 before_install:
  - sudo service rabbitmq-server start
- - sudo rabbitmqctl add_vhost /                               || true
- - sudo rabbitmqctl add_user guest guest                      || true
- - sudo rabbitmqctl set_permissions -p / guest ".*" ".*" ".*" || true
+ - sleep 1
+ - sudo service rabbitmq-server status
+
+env:
+ - AMQP_URL="amqp://guest:guest@127.0.0.1:5672/"
 
 before_script:
- - export AMQP_URL=amqp://guest:guest@127.0.0.1:5672/
  - sh -c "sleep 120 && killall -QUIT amqp.test" &
