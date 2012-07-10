@@ -38,9 +38,14 @@ for up-to-the-minute documentation and usage.
     close(conn.out)
     conn.rw.Close()
 
+## API
+
+* Internal API should model multiple subscribers for nowait=0 messages including handling closes
+* External API should look at extra channel parameter for Consume
+* Review whether the Q() and E() methods make sense
+
 ## Tests
 
-* wire round trip equality
 * concurrency
 * interruption of synchronous messages
 * handle "noise on the line" safely
@@ -52,6 +57,11 @@ Things not intended to be supported (at this stage).
 * Auto reconnect and re-establishment of state
 * Multiple consumers on a single channel
 
+# Credits
+
+[Sean Treadway](https://github.com/streadway)
+[Peter Bourgon](https://github.com/peterbourgon)
+
 # License
 
-All Rights Reserved http://github.com/streadway (for now).
+BSD 2 clause - see LICENSE file for more details.
