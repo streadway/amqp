@@ -66,15 +66,15 @@ func TestIntegrationExchange(t *testing.T) {
 
 		// I'm not sure if this behavior is actually well-defined.
 		// if err := exchange.Declare(
-		// 	UntilUnused, // lifetime
-		// 	"direct",    // type
-		// 	false,       // internal
-		// 	false,       // nowait
-		// 	nil,         // args
+		//      UntilUnused, // lifetime
+		//      "direct",    // type
+		//      false,       // internal
+		//      false,       // nowait
+		//      nil,         // args
 		// ); err == nil {
-		// 	t.Fatalf("re-declare same exchange didn't fail (it should have!)")
+		//      t.Fatalf("re-declare same exchange didn't fail (it should have!)")
 		// } else {
-		// 	t.Logf("re-declare same exchange: got expected error: %s", err)
+		//      t.Logf("re-declare same exchange: got expected error: %s", err)
 		// }
 
 		if err := exchange.Delete(false, false); err != nil {
@@ -661,9 +661,9 @@ func TestCorruptedMessageRegression(t *testing.T) {
 
 func TestExchangeDeclarePrecondition(t *testing.T) {
 	c1 := integrationConnection(t, "exchange-double-declare")
+	c2 := integrationConnection(t, "exchange-double-declare-cleanup")
 	if c1 != nil {
-		// defer c1.Close() // TODO stalls; see TODO below
-
+		defer c2.Close()
 		ch, err := c1.Channel()
 		if err != nil {
 			t.Fatalf("Create channel")
@@ -694,8 +694,9 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 		}
 		t.Logf("good: got error: %s", err)
 
-		// TODO stalls
-		// (I'm guessing the connection becomes invalid after the redeclare.)
-		// e.Delete(false, false)
+		// after the redeclaration above, channel exception is raised (406) and it is closed
+		// so we use a different connection and channel to clean up.
+		ch2, err := c2.Channel()
+		ch2.E("test-mismatched-redeclare").Delete(false, false)
 	}
 }
