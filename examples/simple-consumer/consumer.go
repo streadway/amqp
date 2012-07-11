@@ -73,10 +73,10 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 
 	log.Printf("got Channel, declaring Exchange (%s)", exchange)
 	noArgs := amqp.Table{}
-	e := c.Channel.E(exchange)
-	if err := e.Declare(
+	if err := c.Channel.ExchangeDeclare(
+		exchange,          // name of the exchange
 		amqp.UntilDeleted, // lifetime = durable
-		"direct",          // type
+		Direct,            // type
 		false,             // internal
 		false,             // noWait
 		noArgs,            // arguments
@@ -86,8 +86,8 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 	}
 
 	log.Printf("declared Exchange, declaring Queue (%s)", queue)
-	q := channel.Q(queue)
-	queueState, err := q.Declare(
+	queueState, err := channel.QueueDeclare(
+		queue,            // name of the queue
 		amqp.UntilUnused, // lifetime = auto-delete
 		false,            // exclusive
 		false,            // noWait
@@ -103,7 +103,8 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 	}
 
 	log.Printf("declared Queue, binding to Exchange (routing '%s')", routing)
-	if err := q.Bind(
+	if err := channel.QueueBind(
+		queue,    // name of the queue
 		routing,  // routingKey
 		exchange, // sourceExchange
 		false,    // noWait
@@ -114,7 +115,8 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 	}
 
 	log.Printf("Queue bound to Exchange, starting Consume")
-	deliveries, err := q.Consume(
+	deliveries, err := channel.Consume(
+		queue,  // name
 		false,  // noAck
 		false,  // exclusive
 		false,  // noLocal
