@@ -132,7 +132,7 @@ func (me *Lifetime) autoDelete() bool {
 }
 
 // AMQP defined exchange types.  You may use these constants or provide your
-// own exchange types to Exchange.Declare
+// own exchange types to ExchangeDeclare
 const (
 	Direct  = "direct"
 	Topic   = "topic"
@@ -140,27 +140,7 @@ const (
 	Headers = "headers"
 )
 
-// A receiver for the protocol messages that make sense in the Exchage class.
-// Primarily for segmenting API related activities and reducing the parameter
-// lists for the methods.
-//
-// In AMQP - you Publish to Exchanges
-type Exchange struct {
-	channel *Channel
-	name    string
-}
-
-// A receiver for the protocol messages that make sense in the Queue class.
-// Primarily for segmenting API related activities and reducing the parameter
-// lists for the methods.
-//
-// In AMQP - you Consume from Queues
-type Queue struct {
-	channel *Channel
-	name    string
-}
-
-// Server state about the existence of a Queue.  This can be from a Declare or Inspect
+// Server state about the existence of a Queue.  This can be from a QueueDeclare or QueueInspect
 type QueueState struct {
 	Declared      bool
 	MessageCount  int

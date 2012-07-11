@@ -52,8 +52,10 @@ func TestIntegrationExchange(t *testing.T) {
 		}
 		t.Logf("create channel OK")
 
-		exchange := channel.E("test-basic-ops-exchange")
-		if err := exchange.Declare(
+		exchange := "test-basic-ops-exchange"
+
+		if err := channel.ExchangeDeclare(
+			exchange,    // name
 			UntilUnused, // lifetime
 			"direct",    // type
 			false,       // internal
@@ -77,7 +79,7 @@ func TestIntegrationExchange(t *testing.T) {
 		//      t.Logf("re-declare same exchange: got expected error: %s", err)
 		// }
 
-		if err := exchange.Delete(false, false); err != nil {
+		if err := channel.ExchangeDelete(exchange, false, false); err != nil {
 			t.Fatalf("delete exchange: %s", err)
 		}
 		t.Logf("delete exchange OK")
@@ -106,8 +108,8 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 		deleteQueueFirstOptions := []bool{true, false}
 		for _, deleteQueueFirst := range deleteQueueFirstOptions {
 
-			exchange := channel.E(exchangeName)
-			if err := exchange.Declare(
+			if err := channel.ExchangeDeclare(
+				exchangeName, // name
 				UntilDeleted, // lifetime (note: not UntilUnused)
 				"direct",     // type
 				false,        // internal
@@ -118,8 +120,8 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 			}
 			t.Logf("declare exchange OK")
 
-			queue := channel.Q(queueName)
-			if queueState, err := queue.Declare(
+			if queueState, err := channel.QueueDeclare(
+				queueName,    // name
 				UntilDeleted, // lifetime (note: not UntilUnused)
 				false,        // exclusive
 				false,        // noWait
@@ -131,7 +133,8 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 			}
 			t.Logf("declare queue OK")
 
-			if err := queue.Bind(
+			if err := channel.QueueBind(
+				queueName,    // name
 				"",           // routingKey
 				exchangeName, // sourceExchange
 				false,        // noWait
@@ -142,36 +145,36 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 			t.Logf("queue bind OK")
 
 			if deleteQueueFirst {
-
-				if err := queue.Delete(
-					false, // ifUnused (false=be aggressive)
-					false, // ifEmpty (false=be aggressive)
-					false, // noWait
+				if err := channel.QueueDelete(
+					queueName, // name
+					false,     // ifUnused (false=be aggressive)
+					false,     // ifEmpty (false=be aggressive)
+					false,     // noWait
 				); err != nil {
 					t.Fatalf("delete queue (first): %s", err)
 				}
 				t.Logf("delete queue (first) OK")
 
-				if err := exchange.Delete(false, false); err != nil {
+				if err := channel.ExchangeDelete(exchangeName, false, false); err != nil {
 					t.Fatalf("delete exchange (after delete queue): %s", err)
 				}
 				t.Logf("delete exchange (after delete queue) OK")
 
 			} else { // deleteExchangeFirst
-
-				if err := exchange.Delete(false, false); err != nil {
+				if err := channel.ExchangeDelete(exchangeName, false, false); err != nil {
 					t.Fatalf("delete exchange (first): %s", err)
 				}
 				t.Logf("delete exchange (first) OK")
 
-				if queueState, err := queue.Inspect(); err != nil {
+				if queueState, err := channel.QueueInspect(queueName); err != nil {
 					t.Fatalf("inspect queue state after deleting exchange: %s", err)
 				} else if !queueState.Declared {
 					t.Fatalf("after deleting exchange, queue disappeared")
 				}
 				t.Logf("queue properly remains after exchange is deleted")
 
-				if err := queue.Delete(
+				if err := channel.QueueDelete(
+					queueName,
 					false, // ifUnused
 					false, // ifEmpty
 					false, // noWait
@@ -179,7 +182,6 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 					t.Fatalf("delete queue (after delete exchange): %s", err)
 				}
 				t.Logf("delete queue (after delete exchange) OK")
-
 			}
 		}
 
@@ -299,14 +301,14 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 			t.Fatalf("Could not create channel")
 		}
 
-		queue := ch.Q("test.integration.blocking.close")
+		queue := "test.integration.blocking.close"
 
-		_, err = queue.Declare(UntilUnused, false, false, nil)
+		_, err = ch.QueueDeclare(queue, UntilUnused, false, false, nil)
 		if err != nil {
 			t.Fatalf("Could not declare")
 		}
 
-		msgs, err := queue.Consume(false, false, false, false, "", nil, nil)
+		msgs, err := ch.Consume(queue, false, false, false, false, "", nil, nil)
 		if err != nil {
 			t.Fatalf("Could not consume")
 		}
@@ -381,15 +383,15 @@ func TestIntegrationPublishConsume(t *testing.T) {
 		pub, _ := c1.Channel()
 		sub, _ := c2.Channel()
 
-		pub.Q(queue).Declare(UntilUnused, false, false, nil)
-		sub.Q(queue).Declare(UntilUnused, false, false, nil)
-		defer pub.Q(queue).Delete(false, false, false)
+		pub.QueueDeclare(queue, UntilUnused, false, false, nil)
+		sub.QueueDeclare(queue, UntilUnused, false, false, nil)
+		defer pub.QueueDelete(queue, false, false, false)
 
-		messages, _ := sub.Q(queue).Consume(false, false, false, false, "", nil, nil)
+		messages, _ := sub.Consume(queue, false, false, false, false, "", nil, nil)
 
-		pub.E("").Publish(queue, false, false, Publishing{Body: []byte("pub 1")})
-		pub.E("").Publish(queue, false, false, Publishing{Body: []byte("pub 2")})
-		pub.E("").Publish(queue, false, false, Publishing{Body: []byte("pub 3")})
+		pub.Publish("", queue, false, false, Publishing{Body: []byte("pub 1")})
+		pub.Publish("", queue, false, false, Publishing{Body: []byte("pub 2")})
+		pub.Publish("", queue, false, false, Publishing{Body: []byte("pub 3")})
 
 		assertConsumeBody(t, messages, []byte("pub 1"))
 		assertConsumeBody(t, messages, []byte("pub 2"))
@@ -472,17 +474,17 @@ func TestQuickPublishOnly(t *testing.T) {
 	if c := integrationConnection(t, "quick"); c != nil {
 		defer c.Close()
 		pub, err := c.Channel()
-		q := pub.Q("test-publish")
+		queue := "test-publish"
 
-		if _, err = q.Declare(UntilUnused, false, false, nil); err != nil {
+		if _, err = pub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
 			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
-		defer q.Delete(false, false, false)
+		defer pub.QueueDelete(queue, false, false, false)
 
 		quick.Check(func(msg Publishing) bool {
-			return pub.Q("test-publish").Publish(false, false, msg) == nil
+			return pub.Publish("", queue, false, false, msg) == nil
 		}, nil)
 	}
 }
@@ -492,26 +494,35 @@ func TestPublishEmptyBody(t *testing.T) {
 	if c1 != nil {
 		defer c1.Close()
 
-		pub, err := c1.Channel()
+		ch, err := c1.Channel()
 		if err != nil {
 			t.Errorf("Failed to create channel")
 			return
 		}
 
-		p := pub.Q("test-TestPublishEmptyBody")
-		p.Declare(UntilUnused, false, false, nil)
+		queue := "test-TestPublishEmptyBody"
 
-		ch, err := p.Consume(false, false, false, false, "", nil, nil)
-
-		err = p.Publish(false, false, Publishing{})
-
-		if err != nil {
-			t.Errorf("Failed to publish")
-			return
+		if _, err := ch.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+			t.Fatalf("Could not declare")
 		}
-		if len((<-ch).Body) != 0 {
-			t.Errorf("Received non empty body")
-			return
+
+		messages, err := ch.Consume(queue, false, false, false, false, "", nil, nil)
+		if err != nil {
+			t.Fatalf("Could not consume")
+		}
+
+		err = ch.Publish("", queue, false, false, Publishing{})
+		if err != nil {
+			t.Fatalf("Could not publish")
+		}
+
+		select {
+		case msg := <-messages:
+			if len(msg.Body) != 0 {
+				t.Errorf("Received non empty body")
+			}
+		case <-time.After(200 * time.Millisecond):
+			t.Errorf("Timeout on receive")
 		}
 	}
 }
@@ -527,21 +538,21 @@ func TestQuickPublishConsumeOnly(t *testing.T) {
 		pub, err := c1.Channel()
 		sub, err := c2.Channel()
 
-		p := pub.Q("TestPublishConsumeOnly")
-		if _, err = p.Declare(UntilUnused, false, false, nil); err != nil {
+		queue := "TestPublishConsumeOnly"
+
+		if _, err = pub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
 			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
-		s := sub.Q("TestPublishConsumeOnly")
-		if _, err = s.Declare(UntilUnused, false, false, nil); err != nil {
+		if _, err = sub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
 			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
-		defer s.Delete(false, false, false)
+		defer sub.QueueDelete(queue, false, false, false)
 
-		ch, err := s.Consume(false, false, false, false, "", nil, nil)
+		ch, err := sub.Consume(queue, false, false, false, false, "", nil, nil)
 		if err != nil {
 			t.Errorf("Could not sub: %s", err)
 		}
@@ -549,7 +560,7 @@ func TestQuickPublishConsumeOnly(t *testing.T) {
 		quick.CheckEqual(
 			func(msg Publishing) []byte {
 				empty := Publishing{Body: msg.Body}
-				if p.Publish(false, false, empty) != nil {
+				if pub.Publish("", queue, false, false, empty) != nil {
 					return []byte{'X'}
 				}
 				return msg.Body
@@ -574,28 +585,39 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 		pub, err := c1.Channel()
 		sub, err := c2.Channel()
 
-		q := pub.Q("test-pubsub")
-		if _, err = q.Declare(UntilUnused, false, false, nil); err != nil {
+		queue := "test-pubsub"
+
+		if _, err = sub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
 			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
-		ch, err := sub.Q("test-pubsub").Consume(false, false, false, false, "", nil, nil)
+		ch, err := sub.Consume(queue, false, false, false, false, "", nil, nil)
 		if err != nil {
 			t.Errorf("Could not sub: %s", err)
 		}
 
-		msg := Publishing{
+		fixture := Publishing{
 			Body: make([]byte, 1e4+1000),
 		}
 
-		err = pub.Q("test-pubsub").Publish(false, false, msg)
+		if _, err = pub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+			t.Errorf("Failed to declare: %s", err)
+			return
+		}
+
+		err = pub.Publish("", queue, false, false, fixture)
 		if err != nil {
 			t.Errorf("Could not publish big body")
 		}
 
-		if bytes.Compare((<-ch).Body, msg.Body) != 0 {
-			t.Errorf("Consumed big body didn't match")
+		select {
+		case msg := <-ch:
+			if bytes.Compare(msg.Body, fixture.Body) != 0 {
+				t.Errorf("Consumed big body didn't match")
+			}
+		case <-time.After(200 * time.Millisecond):
+			t.Errorf("Timeout on receive")
 		}
 	}
 }
@@ -611,35 +633,33 @@ func TestCorruptedMessageRegression(t *testing.T) {
 		defer c1.Close()
 		defer c2.Close()
 
-		ch1, err := c1.Channel()
+		pub, err := c1.Channel()
 		if err != nil {
 			t.Fatalf("Cannot create Channel")
 		}
 
-		ch2, err := c2.Channel()
+		sub, err := c2.Channel()
 		if err != nil {
 			t.Fatalf("Cannot create Channel")
 		}
 
 		queue := "test-corrupted-message-regression"
 
-		pub := ch1.Q(queue)
-		if _, err := pub.Declare(UntilUnused, false, false, nil); err != nil {
+		if _, err := pub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
 			t.Fatalf("Cannot declare")
 		}
 
-		sub := ch2.Q(queue)
-		if _, err := pub.Declare(UntilUnused, false, false, nil); err != nil {
+		if _, err := sub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
 			t.Fatalf("Cannot declare")
 		}
 
-		msgs, err := sub.Consume(false, false, false, false, "", nil, nil)
+		msgs, err := sub.Consume(queue, false, false, false, false, "", nil, nil)
 		if err != nil {
 			t.Fatalf("Cannot consume")
 		}
 
 		for i := 0; i < messageCount; i++ {
-			err := pub.Publish(false, false, Publishing{
+			err := pub.Publish("", queue, false, false, Publishing{
 				Body: generateCrc32Random(7 * i),
 			})
 
@@ -652,8 +672,8 @@ func TestCorruptedMessageRegression(t *testing.T) {
 			select {
 			case msg := <-msgs:
 				assertMessageCrc32(t, msg.Body, fmt.Sprintf("missed match at %d", i))
-			case <-time.After(1 * time.Second):
-				t.Fatalf("Timed out after 1s")
+			case <-time.After(200 * time.Millisecond):
+				t.Fatalf("Timeout on recv")
 			}
 		}
 	}
@@ -669,9 +689,10 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 			t.Fatalf("Create channel")
 		}
 
-		e := ch.E("test-mismatched-redeclare")
+		exchange := "test-mismatched-redeclare"
 
-		err = e.Declare(
+		err = ch.ExchangeDeclare(
+			exchange,
 			UntilUnused, // lifetime (auto-delete)
 			"direct",    // exchangeType
 			false,       // internal
@@ -682,7 +703,8 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 			t.Fatalf("Could not initially declare exchange")
 		}
 
-		err = e.Declare(
+		err = ch.ExchangeDeclare(
+			exchange,
 			UntilDeleted, // lifetime
 			"direct",
 			false,
