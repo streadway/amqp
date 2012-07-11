@@ -719,6 +719,12 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 		// after the redeclaration above, channel exception is raised (406) and it is closed
 		// so we use a different connection and channel to clean up.
 		ch2, err := c2.Channel()
-		ch2.E("test-mismatched-redeclare").Delete(false, false)
+		if err != nil {
+			t.Fatalf("Could not create channel")
+		}
+
+		if err = ch2.ExchangeDelete(exchange, false, false); err != nil {
+			t.Fatalf("Could not delete exchange")
+		}
 	}
 }
