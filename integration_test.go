@@ -663,6 +663,7 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 	c1 := integrationConnection(t, "exchange-double-declare")
 	c2 := integrationConnection(t, "exchange-double-declare-cleanup")
 	if c1 != nil {
+		defer c2.Close()
 		ch, err := c1.Channel()
 		if err != nil {
 			t.Fatalf("Create channel")
