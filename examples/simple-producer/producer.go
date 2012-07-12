@@ -49,8 +49,8 @@ func publish(amqpURI, exchange, routingKey, body string) error {
 
 	log.Printf("got Channel, declaring Exchange (%s)", exchange)
 	noArgs := amqp.Table{}
-	e := channel.E(exchange)
-	if err := e.Declare(
+	if err := channel.ExchangeDeclare(
+		exchange, // name
 		amqp.UntilDeleted, // lifetime = durable
 		"direct",          // type
 		false,             // internal
@@ -61,8 +61,9 @@ func publish(amqpURI, exchange, routingKey, body string) error {
 	}
 
 	log.Printf("declared Exchange, publishing %dB body (%s)", len(body), body)
-	err = e.Publish(
-		routingKey,
+	err = channel.Publish(
+		exchange, // publish to an exchange
+		routingKey, // routing to 0 or more queues
 		true, // mandatory
 		true, // immediate
 		amqp.Publishing{
