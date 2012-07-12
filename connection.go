@@ -10,9 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/url"
-	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -40,70 +37,6 @@ type Connection struct {
 	sequence  uint16
 
 	channels map[uint16]*Channel
-}
-
-// ParsedURI represents a parsed AMQP URI string.
-type ParsedURI struct {
-	Host     string
-	Port     int
-	Username string
-	Password string
-	Vhost    string
-}
-
-// ParseURI attempts to parse the given AMQP URI according to the spec.
-// See http://www.rabbitmq.com/uri-spec.html.
-//
-// Default values for the fields are:
-//
-//   host: localhost
-//   port: 5672
-//   username: guest
-//   password: guest
-//   vhost: /
-//
-func ParseURI(uri string) (ParsedURI, error) {
-	p := ParsedURI{
-		Host:     "localhost",
-		Port:     5672,
-		Username: "guest",
-		Password: "guest",
-		Vhost:    "/",
-	}
-
-	u, err := url.Parse(uri)
-	if err != nil {
-		return p, err
-	}
-
-	if toks := strings.Split(u.Host, ":"); len(toks) == 2 {
-		p.Host = toks[0]
-		if port32, err := strconv.ParseInt(toks[1], 10, 32); err == nil {
-			p.Port = int(port32)
-		}
-	}
-
-	if u.User != nil {
-		p.Username = u.User.Username()
-		if password, ok := u.User.Password(); ok {
-			p.Password = password
-		}
-	}
-
-	if u.Path != "" {
-		p.Vhost = u.Path
-	}
-
-	return p, nil
-}
-
-// PlainAuth returns a PlainAuth structure based on the parsed URI's
-// Username and Password fields.
-func (p ParsedURI) PlainAuth() *PlainAuth {
-	return &PlainAuth{
-		Username: p.Username,
-		Password: p.Password,
-	}
 }
 
 // Dial accepts a string in the AMQP URI format, and returns a new Connection
