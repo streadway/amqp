@@ -24,9 +24,10 @@ const (
 )
 
 var (
-	ErrBadProtocol    = errors.New("Unexpected protocol message")
-	ErrBadCredentials = errors.New("Credentials were not accepted")
-	ErrBadVhost       = errors.New("Not authorized for vhost or vhost not found")
+	ErrBadProtocol          = errors.New("Unexpected protocol message")
+	ErrBadCredentials       = errors.New("Credentials were valid or not accepted")
+	ErrUnsupportedMechanism = errors.New("SASL could not negotiate a shared mechanism")
+	ErrBadVhost             = errors.New("Not authorized for vhost or vhost not found")
 
 	ErrUnexpectedMethod    = errors.New("Bad protocol: Received out of order method")
 	ErrUnknownMethod       = errors.New("Unknown wire method id")

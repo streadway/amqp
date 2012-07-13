@@ -39,7 +39,7 @@ func integrationConnection(t *testing.T, name string) *Connection {
 		return nil
 	}
 
-	c, err := NewConnection(&logIO{t, name, conn}, uri.PlainAuth(), uri.Vhost)
+	c, err := NewConnection(&logIO{t, name, conn}, Config{SASL: []Authentication{uri.PlainAuth()}, Vhost: uri.Vhost})
 	if err != nil {
 		t.Errorf("Failed to create client against integration server: %s", err)
 		return nil

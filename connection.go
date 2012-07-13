@@ -10,8 +10,24 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 )
+
+// Used along side NewConnection to specify the desired tuning parameters used
+// during a Connection handshake.  The negotiated tuning will be stored in the
+// resultant connection.
+type Config struct {
+	// The SASL mechanisms to try in the client request, and the successful
+	// mechanism used on the Connection object
+	SASL []Authentication
+
+	Vhost string // The Vhost the Auth credentials are permitted to open
+
+	MaxChannels       int // Maximum number of channels the client intends to open - defaults to 0
+	MaxFrameSize      int // Maximum frame size the client intends to send - default to 0
+	HeartbeatInterval int // Frequency in seconds the client wishes the server to send heartbeats - defaults to 0 (no heartbeats)
+}
 
 // Manages the serialization and deserialization of frames from IO and dispatches the frames to the appropriate channel.
 type Connection struct {
@@ -25,18 +41,16 @@ type Connection struct {
 	writer      *writer
 	writerMutex sync.Mutex
 
-	VersionMajor int
-	VersionMinor int
-	Properties   Table
-
-	MaxChannels       int
-	MaxFrameSize      int
-	HeartbeatInterval int
-
 	increment sync.Mutex
 	sequence  uint16
 
 	channels map[uint16]*Channel
+
+	Config Config // The negotiated Config after connection.open
+
+	VersionMajor int   // The server's major version
+	VersionMinor int   // The server's minor version
+	Properties   Table // Server properties
 }
 
 // Dial accepts a string in the AMQP URI format, and returns a new Connection
@@ -52,10 +66,13 @@ func Dial(amqp string) (*Connection, error) {
 		return nil, err
 	}
 
-	return NewConnection(conn, uri.PlainAuth(), uri.Vhost)
+	return NewConnection(conn, Config{
+		SASL:  []Authentication{uri.PlainAuth()},
+		Vhost: uri.Vhost,
+	})
 }
 
-func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *Connection, err error) {
+func NewConnection(conn io.ReadWriteCloser, config Config) (me *Connection, err error) {
 	me = &Connection{
 		conn:     conn,
 		writer:   &writer{bufio.NewWriter(conn)},
@@ -65,7 +82,7 @@ func NewConnection(conn io.ReadWriteCloser, auth *PlainAuth, vhost string) (me *
 
 	go me.reader()
 
-	return me, me.open(auth.Username, auth.Password, vhost)
+	return me, me.open(config)
 }
 
 func (me *Connection) nextChannelId() uint16 {
@@ -217,67 +234,122 @@ func (me *Connection) Channel() (channel *Channel, err error) {
 //    use-Connection      = *channel
 //    close-Connection    = C:CLOSE S:CLOSE-OK
 //                        / S:CLOSE C:CLOSE-OK
-func (me *Connection) open(username, password, vhost string) (err error) {
+func (me *Connection) open(config Config) (err error) {
 	me.state = handshaking
 
 	if _, err = me.conn.Write(protocolHeader); err != nil {
 		return
 	}
 
+	return me.openStart(config)
+}
+
+func (me *Connection) openStart(config Config) (err error) {
 	switch start := (<-me.in).(type) {
 	case *connectionStart:
 		me.VersionMajor = int(start.VersionMajor)
 		me.VersionMinor = int(start.VersionMinor)
 		me.Properties = Table(start.ServerProperties)
 
+		// TODO support challenge/response
+		auth, ok := pickSASLMechanism(config.SASL, strings.Split(start.Mechanisms, " "))
+		if !ok {
+			return ErrUnsupportedMechanism
+		}
+
+		// Save this mechanism off as the one we chose
+		me.Config.SASL = []Authentication{auth}
+
 		if err = me.send(&methodFrame{
 			ChannelId: 0,
 			Method: &connectionStartOk{
-				Mechanism: "PLAIN",
-				Response:  fmt.Sprintf("\000%s\000%s", username, password),
+				Mechanism: auth.Mechanism(),
+				Response:  auth.Response(),
 			},
 		}); err != nil {
 			return
 		}
 
-		switch tune := (<-me.in).(type) {
-		// TODO SECURE HANDSHAKE
-		case *connectionTune:
-			me.MaxChannels = int(tune.ChannelMax)
-			me.HeartbeatInterval = int(tune.Heartbeat)
-			me.MaxFrameSize = int(tune.FrameMax)
-
-			if err = me.send(&methodFrame{
-				ChannelId: 0,
-				Method: &connectionTuneOk{
-					ChannelMax: 10,
-					FrameMax:   FrameMinSize,
-					Heartbeat:  0,
-				},
-			}); err != nil {
-				return
-			}
-
-			if err = me.send(&methodFrame{
-				ChannelId: 0,
-				Method: &connectionOpen{
-					VirtualHost: vhost,
-				},
-			}); err != nil {
-				return
-			}
-
-			switch (<-me.in).(type) {
-			case *connectionOpenOk:
-				me.state = open
-				go me.dispatch()
-				return nil
-			case nil:
-				return ErrBadVhost
-			}
-		case nil:
-			return ErrBadCredentials
-		}
+		return me.openTune(config)
+	case nil:
+		return ErrBadProtocol
 	}
+	return ErrBadProtocol
+}
+
+func (me *Connection) openTune(config Config) (err error) {
+	switch tune := (<-me.in).(type) {
+	// TODO SECURE HANDSHAKE
+	case *connectionTune:
+		// When this is bounded, share the bound.  We're effectively only bounded
+		// by MaxUint16.  If you hit a wrap around bug, throw a small party then
+		// make an github issue.
+		if int(tune.ChannelMax) > 0 {
+			me.Config.MaxChannels = int(tune.ChannelMax)
+		}
+
+		// Frame size includes headers and end byte (len(payload)+8), even if
+		// this is less than FrameMinSize, use what the server sends because the
+		// alternative is to stop the handshake here.
+		if int(tune.FrameMax) > 0 {
+			if config.MaxFrameSize <= 0 || int(tune.FrameMax) < config.MaxFrameSize {
+				me.Config.MaxFrameSize = int(tune.FrameMax)
+			} else {
+				me.Config.MaxFrameSize = config.MaxFrameSize
+			}
+		} else {
+			if config.MaxFrameSize > 0 {
+				me.Config.MaxFrameSize = config.MaxFrameSize
+			} else {
+				// Client and Server are unlimited.  We'll bound the frame size to
+				// 256KB to fit within the bandwidth delay product of a satellite
+				// uplink on a scaled TCP window up to 2Mb/s
+				me.Config.MaxFrameSize = 256 * 1024
+			}
+		}
+
+		// This the interval the server wishes us to send at.  config.Heartbeat
+		// is the interval what the client wishes the server to send at.
+		me.Config.HeartbeatInterval = int(tune.Heartbeat)
+
+		if err = me.send(&methodFrame{
+			ChannelId: 0,
+			Method: &connectionTuneOk{
+				ChannelMax: uint16(me.Config.MaxChannels),
+				FrameMax:   uint32(me.Config.MaxFrameSize),
+				Heartbeat:  uint16(config.HeartbeatInterval),
+			},
+		}); err != nil {
+			return
+		}
+
+		return me.openVhost(config)
+	case nil:
+		return ErrBadCredentials
+	}
+	return ErrBadProtocol
+}
+
+func (me *Connection) openVhost(config Config) (err error) {
+	me.Config.Vhost = config.Vhost
+
+	if err = me.send(&methodFrame{
+		ChannelId: 0,
+		Method: &connectionOpen{
+			VirtualHost: me.Config.Vhost,
+		},
+	}); err != nil {
+		return
+	}
+
+	switch (<-me.in).(type) {
+	case *connectionOpenOk:
+		me.state = open
+		go me.dispatch()
+		return nil // connection.open handshake finished
+	case nil:
+		return ErrBadVhost
+	}
+
 	return ErrBadProtocol
 }

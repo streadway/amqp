@@ -9,6 +9,13 @@ import (
 	"sync"
 )
 
+// 0      1         3             7                  size+7 size+8
+// +------+---------+-------------+  +------------+  +-----------+
+// | type | channel |     size    |  |  payload   |  | frame-end |
+// +------+---------+-------------+  +------------+  +-----------+
+//  octet   short         long         size octets       octet
+const frameHeaderOverhead = 1 + 2 + 4 + 1
+
 // Represents an AMQP channel. Used for concurrent, interleaved publishers and
 // consumers on the same connection.
 type Channel struct {
@@ -101,7 +108,7 @@ func (me *Channel) send(msg message) (err error) {
 	if content, ok := msg.(messageWithContent); ok {
 		props, body := content.getContent()
 		class, _ := content.id()
-		size := me.connection.MaxFrameSize
+		size := me.connection.Config.MaxFrameSize - frameHeaderOverhead
 
 		if err = me.connection.send(&methodFrame{
 			ChannelId: me.id,

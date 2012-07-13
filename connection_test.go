@@ -22,8 +22,8 @@ func driveConnectionOpen(t *testing.T, server io.ReadWriter) {
 		t.Fatalf("bad protocol handshake: %s", handshake)
 	}
 
-	r := reader{server}
-	w := writer{server}
+	r := reader{r: server}
+	w := writer{w: server}
 
 	if err = w.WriteFrame(&methodFrame{
 		ChannelId: 0,
@@ -85,8 +85,8 @@ func driveChannelOpen(t *testing.T, server io.ReadWriteCloser) {
 	var err error
 	var ok bool
 
-	r := reader{server}
-	w := writer{server}
+	r := reader{r: server}
+	w := writer{w: server}
 
 	if f, err = r.ReadFrame(); err != nil {
 		t.Fatalf("bad read: %s", err)
@@ -109,7 +109,7 @@ func TestNewConnectionOpen(t *testing.T) {
 
 	go driveConnectionOpen(t, server)
 
-	c, err := NewConnection(client, &PlainAuth{"guest", "guest"}, "/")
+	c, err := NewConnection(client, Config{SASL: []Authentication{&PlainAuth{"guest", "guest"}}, Vhost: "/"})
 	if err != nil {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
@@ -120,7 +120,7 @@ func TestNewConnectionChannelOpen(t *testing.T) {
 
 	go driveConnectionOpen(t, server)
 
-	c, err := NewConnection(client, &PlainAuth{"guest", "guest"}, "/")
+	c, err := NewConnection(client, Config{SASL: []Authentication{&PlainAuth{"guest", "guest"}}, Vhost: "/"})
 	if err != nil {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}

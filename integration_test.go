@@ -283,8 +283,10 @@ func TestIntegrationConnectBadVhost(t *testing.T) {
 		t.Fatalf("Dial: %s", err)
 	}
 
-	vhost := "lolwat_not_found"
-	_, err = NewConnection(&logIO{t, "badauth", conn}, uri.PlainAuth(), vhost)
+	_, err = NewConnection(&logIO{t, "badauth", conn}, Config{
+		SASL:  []Authentication{uri.PlainAuth()},
+		Vhost: "lolwat_not_found",
+	})
 	if err != ErrBadVhost {
 		t.Errorf("Expected ErrBadVhost, got %s", err)
 	}
@@ -358,14 +360,10 @@ func TestIntegrationConnectBadCredentials(t *testing.T) {
 		t.Fatalf("Dial: %s", err)
 	}
 
-	if _, err = NewConnection(
-		&logIO{t, "badauth", conn},
-		&PlainAuth{
-			Username: "",
-			Password: "",
-		},
-		uri.Vhost,
-	); err != ErrBadCredentials {
+	if _, err = NewConnection(&logIO{t, "badauth", conn}, Config{
+		SASL:  []Authentication{&PlainAuth{Username: "", Password: ""}},
+		Vhost: uri.Vhost,
+	}); err != ErrBadCredentials {
 		t.Errorf("Expected ErrBadCredentials, got %s", err)
 	}
 }
@@ -415,7 +413,7 @@ func (c *Connection) Generate(r *rand.Rand, _ int) reflect.Value {
 		return reflect.ValueOf(nil)
 	}
 
-	c, err = NewConnection(conn, uri.PlainAuth(), uri.Vhost)
+	c, err = NewConnection(conn, Config{SASL: []Authentication{uri.PlainAuth()}, Vhost: uri.Vhost})
 	if err != nil {
 		return reflect.ValueOf(nil)
 	}
