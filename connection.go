@@ -7,9 +7,9 @@ package amqp
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -61,7 +61,9 @@ func Dial(amqp string) (*Connection, error) {
 		return nil, err
 	}
 
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
+	addr := net.JoinHostPort(uri.Host, strconv.FormatInt(int64(uri.Port), 10))
+
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}

@@ -266,29 +266,35 @@ func TestIntegrationChannelClosing(t *testing.T) {
 	}
 }
 
+func TestIntegrationConnectBadCredentials(t *testing.T) {
+	if uri, ok := integrationUri(t); ok {
+		uri.Username = "lolwho"
+
+		if _, err := Dial(uri.String()); err != ErrBadCredentials {
+			t.Errorf("Expected ErrBadCredentials, got %s", err)
+		}
+	}
+}
+
 func TestIntegrationConnectBadVhost(t *testing.T) {
-	urlStr := os.Getenv("AMQP_URL")
-	if urlStr == "" {
-		t.Logf("Skipping; AMQP_URL not found in the environment")
-		return
-	}
+	if uri, ok := integrationUri(t); ok {
+		uri.Vhost = "lolwat"
 
-	uri, err := ParseURI(urlStr)
-	if err != nil {
-		t.Fatalf("Failed to parse URI: %s", err)
+		if _, err := Dial(uri.String()); err != ErrBadVhost {
+			t.Errorf("Expected ErrBadVhost, got %s", err)
+		}
 	}
+}
 
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
-	if err != nil {
-		t.Fatalf("Dial: %s", err)
-	}
+func TestIntegrationConnectHostBrackets(t *testing.T) {
+	if uri, ok := integrationUri(t); ok {
+		uri.Host = "::1"
 
-	_, err = NewConnection(&logIO{t, "badauth", conn}, Config{
-		SASL:  []Authentication{uri.PlainAuth()},
-		Vhost: "lolwat_not_found",
-	})
-	if err != ErrBadVhost {
-		t.Errorf("Expected ErrBadVhost, got %s", err)
+		_, err := Dial(uri.String())
+
+		if e, ok := err.(*net.AddrError); ok {
+			t.Errorf("Expected no AddrError on colon in hostname, got %v", e)
+		}
 	}
 }
 
@@ -343,31 +349,6 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 	}
 }
 
-func TestIntegrationConnectBadCredentials(t *testing.T) {
-	urlStr := os.Getenv("AMQP_URL")
-	if urlStr == "" {
-		t.Logf("Skipping; AMQP_URL not found in the environment")
-		return
-	}
-
-	uri, err := ParseURI(urlStr)
-	if err != nil {
-		t.Fatalf("Failed to parse URI: %s", err)
-	}
-
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
-	if err != nil {
-		t.Fatalf("Dial: %s", err)
-	}
-
-	if _, err = NewConnection(&logIO{t, "badauth", conn}, Config{
-		SASL:  []Authentication{&PlainAuth{Username: "", Password: ""}},
-		Vhost: uri.Vhost,
-	}); err != ErrBadCredentials {
-		t.Errorf("Expected ErrBadCredentials, got %s", err)
-	}
-}
-
 func TestIntegrationPublishConsume(t *testing.T) {
 	queue := "test.integration.publish.consume"
 
@@ -403,22 +384,12 @@ func (c *Connection) Generate(r *rand.Rand, _ int) reflect.Value {
 		return reflect.ValueOf(nil)
 	}
 
-	uri, err := ParseURI(urlStr)
+	conn, err := Dial(urlStr)
 	if err != nil {
 		return reflect.ValueOf(nil)
 	}
 
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
-	if err != nil {
-		return reflect.ValueOf(nil)
-	}
-
-	c, err = NewConnection(conn, Config{SASL: []Authentication{uri.PlainAuth()}, Vhost: uri.Vhost})
-	if err != nil {
-		return reflect.ValueOf(nil)
-	}
-
-	return reflect.ValueOf(c)
+	return reflect.ValueOf(conn)
 }
 
 func (c Publishing) Generate(r *rand.Rand, _ int) reflect.Value {

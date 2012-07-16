@@ -9,43 +9,43 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"hash/crc32"
 	"io"
-	"net"
 	"os"
 	"testing"
 	"time"
 )
 
-// Returns a conneciton to the AMQP if the AMQP_URL environment
-// variable is set and a connnection can be established.
-func integrationConnection(t *testing.T, name string) *Connection {
+func integrationUri(t *testing.T) (*URI, bool) {
 	urlStr := os.Getenv("AMQP_URL")
 	if urlStr == "" {
 		t.Logf("Skipping; AMQP_URL not found in the environment")
-		return nil
+		return nil, false
 	}
 
 	uri, err := ParseURI(urlStr)
 	if err != nil {
-		t.Errorf("Failed to parse URI: %s", err)
-		return nil
+		t.Errorf("Failed to parse integration URI: %s", err)
+		return nil, false
 	}
 
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", uri.Host, uri.Port))
-	if err != nil {
-		t.Errorf("Failed to connect to integration server: %s", err)
-		return nil
+	return &uri, true
+}
+
+// Returns a conneciton to the AMQP if the AMQP_URL environment
+// variable is set and a connnection can be established.
+func integrationConnection(t *testing.T, name string) *Connection {
+	if uri, ok := integrationUri(t); ok {
+		conn, err := Dial(uri.String())
+		if err != nil {
+			t.Errorf("Failed to connect to integration server: %s", err)
+			return nil
+		}
+
+		return conn
 	}
 
-	c, err := NewConnection(&logIO{t, name, conn}, Config{SASL: []Authentication{uri.PlainAuth()}, Vhost: uri.Vhost})
-	if err != nil {
-		t.Errorf("Failed to create client against integration server: %s", err)
-		return nil
-	}
-
-	return c
+	return nil
 }
 
 func assertConsumeBody(t *testing.T, messages chan Delivery, body []byte) bool {
