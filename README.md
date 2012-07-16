@@ -6,7 +6,8 @@ Alpha-class AMQP 0.9.1 client in Go.
 
 [![Build Status](https://secure.travis-ci.org/streadway/amqp.png)](http://travis-ci.org/streadway/amqp)
 
-Under heavy development, including API changes.
+Under heavy development, including API changes.  Check the latest
+[issues](https://github.com/streadway/amqp/issues) for bugs and enhancements.
 
 # Goals
 
@@ -28,27 +29,7 @@ for up-to-the-minute documentation and usage.
 
 ## Shutdown
 
-* (Better) propagate closing of IO in Framing
-* leaks of go routines
-
-    S:C ConnectionClose
-    S:C ConnectionCloseOk
-    S:C ChannelClose
-    S:C ChannelCloseOk
-    Read EOF -> ignore
-    Write EOF
-
-    close(chan(id).rpc)
-    close(chan(id).deliveries)
-    close(conn.in)
-    close(conn.out)
-    conn.rw.Close()
-
-## API
-
-* Internal API should model multiple subscribers for nowait=0 messages including handling closes
-* External API should look at extra channel parameter for Consume
-* Review whether the Q() and E() methods make sense
+* Check leak of go routines after clean shutdown
 
 ## Tests
 
@@ -65,8 +46,9 @@ Things not intended to be supported (at this stage).
 
 # Credits
 
-[Sean Treadway](https://github.com/streadway)
-[Peter Bourgon](https://github.com/peterbourgon)
+ * [Sean Treadway](https://github.com/streadway)
+ * [Peter Bourgon](https://github.com/peterbourgon)
+ * [Michael Klishin](https://github.com/michaelklishin)
 
 # License
 
