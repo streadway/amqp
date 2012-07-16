@@ -1,11 +1,17 @@
 # AMQP
 
-Beta-class AMQP 0.9.1 client in Go.
+Alpha-class AMQP 0.9.1 client in Go.
+
+# Status
+
+[![Build Status](https://secure.travis-ci.org/streadway/amqp.png)](http://travis-ci.org/streadway/amqp)
+
+Under heavy development, including API changes.
 
 # Goals
 
 Provide an low level interface that abstracts the wire protocol and IO,
-exposing methods specific to the 0.9.1 specification.
+exposing methods specific to the 0.9.1 specification targeted to RabbitMQ.
 
 # Usage
 
