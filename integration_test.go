@@ -780,3 +780,46 @@ func TestRabbitMQQueueTTLGet(t *testing.T) {
 		}
 	}
 }
+
+func TestRabbitMQQueueNackMultipleRequeue(t *testing.T) {
+	if c := integrationRabbitMQ(t, "nack"); c != nil {
+		defer c.Close()
+
+		if c.IsCapable("basic.nack") {
+			queue := "test.rabbitmq-basic-nack"
+			channel, err := c.Channel()
+			if err != nil {
+				t.Fatalf("channel: %v", err)
+			}
+
+			if _, err = channel.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+				t.Fatalf("queue declare: %s", err)
+			}
+
+			channel.Publish("", queue, false, false, Publishing{Body: []byte("1")})
+			channel.Publish("", queue, false, false, Publishing{Body: []byte("2")})
+
+			m1, ok, err := channel.Get(queue, false)
+			if !ok || err != nil || m1.Body[0] != '1' {
+				t.Fatalf("could not get message", m1)
+			}
+
+			m2, ok, err := channel.Get(queue, false)
+			if !ok || err != nil || m2.Body[0] != '2' {
+				t.Fatalf("could not get message", m2)
+			}
+
+			channel.Nack(m2.DeliveryTag, true, true)
+
+			m1, ok, err = channel.Get(queue, false)
+			if !ok || err != nil || m1.Body[0] != '1' {
+				t.Fatalf("could not get message", m1)
+			}
+
+			m2, ok, err = channel.Get(queue, false)
+			if !ok || err != nil || m2.Body[0] != '2' {
+				t.Fatalf("could not get message", m2)
+			}
+		}
+	}
+}

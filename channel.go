@@ -708,8 +708,21 @@ func (me *Channel) Get(queueName string, noAck bool) (msg *Delivery, ok bool, er
 	return nil, false, ErrBadProtocol
 }
 
+// RabbitMQ extension - Negatively acknowledge the delivery of message(s)
+// identified by the deliveryTag.  When multiple, nack messages up to and
+// including delivered messages up until the deliveryTag.
+//
+// This method must not be used to select or requeue messages the client wishes
+// not to handle.
+func (me *Channel) Nack(deliveryTag uint64, multiple bool, requeue bool) (err error) {
+	return me.send(&basicNack{
+		DeliveryTag: deliveryTag,
+		Multiple:    multiple,
+		Requeue:     requeue,
+	})
+}
+
 //TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }
-//TODO func (me *Channel) Nack(deliveryTag uint64, requeue bool, multiple bool) error { return nil }
 
 //TODO func (me *Channel) Confirm(noWait bool) error                                  { return nil }
 
