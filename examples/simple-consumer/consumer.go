@@ -5,10 +5,10 @@
 package main
 
 import (
-	"github.com/streadway/amqp"
-	"fmt"
-	"log"
 	"flag"
+	"fmt"
+	"github.com/streadway/amqp"
+	"log"
 	"time"
 )
 
@@ -76,7 +76,7 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 	if err := c.Channel.ExchangeDeclare(
 		exchange,          // name of the exchange
 		amqp.UntilDeleted, // lifetime = durable
-		Direct,            // type
+		amqp.Direct,       // type
 		false,             // internal
 		false,             // noWait
 		noArgs,            // arguments
