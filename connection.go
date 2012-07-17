@@ -218,6 +218,24 @@ func (me *Connection) reader() {
 	}
 }
 
+// Convienence method to inspect the Connection.Properties["capabilities"]
+// Table for server identified capabilities like "basic.ack" or
+// "confirm.select".
+func (me *Connection) IsCapable(featureName string) bool {
+	if me.Properties != nil {
+		if v, ok := me.Properties["capabilities"]; ok {
+			if capabilities, ok := v.(Table); ok {
+				if feature, ok := capabilities[featureName]; ok {
+					if has, ok := feature.(bool); ok && has {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 // Constructs and opens a unique channel for concurrent operations
 func (me *Connection) Channel() (channel *Channel, err error) {
 	id := me.nextChannelId()
