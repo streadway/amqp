@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math"
 	"time"
 )
 
@@ -268,86 +269,122 @@ func writeLongstr(w io.Writer, s string) (err error) {
 }
 
 func writeField(w io.Writer, value interface{}) (err error) {
-	var values []interface{}
+	var buf [9]byte
+	var enc []byte
 
 	switch v := value.(type) {
 	case bool:
+		buf[0] = 't'
 		if v {
-			values = []interface{}{
-				byte('t'),
-				uint8(1),
-			}
+			buf[1] = byte(1)
 		} else {
-			values = []interface{}{
-				byte('t'),
-				uint8(0),
-			}
+			buf[1] = byte(0)
 		}
+		enc = buf[:2]
+
+	case int: // encoded as 8 byte long
+		buf[0] = 'L'
+		binary.BigEndian.PutUint64(buf[1:9], uint64(v))
+		enc = buf[:9]
+
+	case uint:
+		buf[0] = 'l'
+		binary.BigEndian.PutUint64(buf[1:9], uint64(v))
+		enc = buf[:9]
 
 	case int8: // short-short-int
-		values = []interface{}{byte('b'), v}
+		buf[0] = 'b'
+		buf[1] = byte(v)
+		enc = buf[:2]
 
 	case uint8: // short-short-uint
-		values = []interface{}{byte('B'), v}
+		buf[0] = 'B'
+		buf[1] = byte(v)
+		enc = buf[:2]
 
 	case int16: // short-int
-		values = []interface{}{byte('U'), v}
+		buf[0] = 'U'
+		binary.BigEndian.PutUint16(buf[1:3], uint16(v))
+		enc = buf[:3]
 
 	case uint16: // short-uint
-		values = []interface{}{byte('u'), v}
+		buf[0] = 'u'
+		binary.BigEndian.PutUint16(buf[1:3], v)
+		enc = buf[:3]
 
-	case int32: // short-uint
-		values = []interface{}{byte('I'), v}
+	case int32: // long-int
+		buf[0] = 'I'
+		binary.BigEndian.PutUint32(buf[1:5], uint32(v))
+		enc = buf[:5]
 
 	case uint32: // long-uint
-		values = []interface{}{byte('i'), v}
+		buf[0] = 'i'
+		binary.BigEndian.PutUint32(buf[1:5], v)
+		enc = buf[:5]
 
 	case int64: // long-long-int
-		values = []interface{}{byte('L'), v}
+		buf[0] = 'L'
+		binary.BigEndian.PutUint64(buf[1:9], uint64(v))
+		enc = buf[:9]
 
 	case uint64: // long-long-uint
-		values = []interface{}{byte('l'), v}
+		buf[0] = 'l'
+		binary.BigEndian.PutUint64(buf[1:9], v)
+		enc = buf[:9]
 
 	case float32: // float
-		values = []interface{}{byte('f'), v}
+		buf[0] = 'f'
+		binary.BigEndian.PutUint32(buf[1:5], math.Float32bits(v))
+		enc = buf[:5]
 
 	case float64: // double
-		values = []interface{}{byte('d'), v}
+		buf[0] = 'd'
+		binary.BigEndian.PutUint64(buf[1:9], math.Float64bits(v))
+		enc = buf[:9]
 
 	case Decimal: // decimal-value
-		values = []interface{}{byte('d'), v.Scale, v.Value}
+		buf[0] = 'D'
+		buf[1] = byte(v.Scale)
+		binary.BigEndian.PutUint32(buf[2:6], uint32(v.Value))
+		enc = buf[:6]
 
-	case string: // short-string
-		if len(v) < 256 {
-			values = []interface{}{byte('s'), []byte(v)}
-		} else {
-			values = []interface{}{byte('S'), []byte(v)}
-		}
+	case string: // only encode long strings, does not handle overflow
+		buf[0] = 'S'
+		binary.BigEndian.PutUint32(buf[1:5], uint32(len(v)))
+		enc = append(buf[:5], []byte(v)...)
 
 	case []interface{}: // field-array
-		values = []interface{}{'A', uint32(len(v))}
-		if err = binary.Write(w, binary.BigEndian, values); err != nil {
+		buf[0] = 'A'
+		binary.BigEndian.PutUint32(buf[1:5], uint32(len(v)))
+		if _, err = w.Write(buf[:5]); err != nil {
 			return
 		}
 		for _, val := range v {
-			writeField(w, val)
+			if err = writeField(w, val); err != nil {
+				return
+			}
 		}
 		return
 
 	case time.Time: // timestamp
-		values = []interface{}{'T', uint64(v.Unix())}
+		buf[0] = 'T'
+		binary.BigEndian.PutUint64(buf[1:9], uint64(v.Unix()))
+		enc = buf[:9]
 
 	case Table: // field-table
-		if err = binary.Write(w, binary.BigEndian, 'F'); err != nil {
+		if _, err = w.Write([]byte{'F'}); err != nil {
 			return
 		}
 		return writeTable(w, v)
 
 	default: // Unit and unknown types, must exist to maintain offsets for field-array
-		values = []interface{}{'V'}
+		buf[0] = 'V'
+		enc = buf[:1]
 	}
 
-	return binary.Write(w, binary.BigEndian, values)
+	_, err = w.Write(enc)
+
+	return
 }
 
 func writeTable(w io.Writer, table Table) (err error) {

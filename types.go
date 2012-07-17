@@ -212,7 +212,7 @@ type Delivery struct {
 // Scale == 2, Value == 12345, Decimal == 123.45
 type Decimal struct {
 	Scale uint8
-	Value uint32
+	Value int32
 }
 
 // The amqp type that represents a string to field.  Most Go types are supported in

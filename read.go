@@ -179,13 +179,11 @@ func readField(r io.Reader) (v interface{}, err error) {
 
 	switch typ {
 	case 't': // boolean
-		var tmp uint8
-		var value bool
-		if err = binary.Read(r, binary.BigEndian, &tmp); err != nil {
+		var value uint8
+		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return
 		}
-		value = (tmp == 0)
-		return value, nil
+		return (value != 0), nil
 
 	case 'b': // short-short-int
 		var value int8
