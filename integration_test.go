@@ -591,12 +591,59 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 	}
 }
 
+func TestIntegrationGetOk(t *testing.T) {
+	if c := integrationConnection(t, "getok"); c != nil {
+		defer c.Close()
+
+		queue := "test.get-ok"
+		ch, _ := c.Channel()
+
+		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		ch.Publish("", queue, false, false, Publishing{Body: []byte("ok")})
+
+		msg, ok, err := ch.Get(queue, false)
+
+		if err != nil {
+			t.Fatalf("Failed get: %v", err)
+		}
+
+		if !ok {
+			t.Fatalf("Get on a queued message did not find the message")
+		}
+
+		if string(msg.Body) != "ok" {
+			t.Fatalf("Get did not get the correct message")
+		}
+	}
+}
+
+func TestIntegrationGetEmpty(t *testing.T) {
+	if c := integrationConnection(t, "getok"); c != nil {
+		defer c.Close()
+
+		queue := "test.get-ok"
+		ch, _ := c.Channel()
+
+		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+
+		_, ok, err := ch.Get(queue, false)
+
+		if err != nil {
+			t.Fatalf("Failed get: %v", err)
+		}
+
+		if !ok {
+			t.Fatalf("Get on a queued message retrieved a message when it shouldn't have")
+		}
+	}
+}
+
 // https://github.com/streadway/amqp/issues/7
 func TestCorruptedMessageRegression(t *testing.T) {
 	messageCount := 1024
 
-	c1 := integrationConnection(t, "corrupt-pub")
-	c2 := integrationConnection(t, "corrupt-sub")
+	c1 := integrationConnection(t, "")
+	c2 := integrationConnection(t, "")
 
 	if c1 != nil && c2 != nil {
 		defer c1.Close()

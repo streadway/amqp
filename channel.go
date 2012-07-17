@@ -170,7 +170,7 @@ func (me *Channel) Close() (err error) {
 	panic("unreachable")
 }
 
-func (me *Channel) deliver(msg messageWithContent, c chan Delivery) {
+func (me *Channel) newDelivery(msg messageWithContent) *Delivery {
 	props, body := msg.getContent()
 
 	delivery := Delivery{
@@ -211,7 +211,7 @@ func (me *Channel) deliver(msg messageWithContent, c chan Delivery) {
 		delivery.RoutingKey = get.RoutingKey
 	}
 
-	c <- delivery
+	return &delivery
 }
 
 // Eventually called via the state machine from the connection's reader
@@ -235,12 +235,15 @@ func (me *Channel) dispatch(msg message) {
 			me.mutex.Lock()
 			defer me.mutex.Unlock()
 			if c, ok := me.consumers[m.ConsumerTag]; ok {
-				me.deliver(m, c)
+				c <- *me.newDelivery(m)
 			}
-			// TODO log failed consumer
+			// TODO log failed consumer and close channel, this can happen when
+			// deliveries are in flight and a no-wait cancel has happened
 		}
 
 	default:
+		// TODO only deliver on the RPC channel if there the message is
+		// synchronouse (wait()==true)
 		if me.state != closed {
 			me.rpc <- msg
 		}
@@ -683,7 +686,28 @@ func (me *Channel) Publish(exchangeName string, routingKey string, mandatory boo
 	})
 }
 
-//TODO func (me *Channel) Get(queueName string, noAck bool) error                     { return nil }
+// Synchronously fetch a single message from a queue.  In almost all cases,
+// using `Consume` will be preferred.
+func (me *Channel) Get(queueName string, noAck bool) (msg *Delivery, ok bool, err error) {
+	if err = me.send(&basicGet{
+		Queue: queueName,
+		NoAck: noAck,
+	}); err != nil {
+		return
+	}
+
+	switch m := (<-me.rpc).(type) {
+	case *basicGetOk:
+		return me.newDelivery(m), true, nil
+	case *basicGetEmpty:
+		return nil, false, nil
+	case nil:
+		return nil, false, me.Close()
+	}
+
+	return nil, false, ErrBadProtocol
+}
+
 //TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }
 //TODO func (me *Channel) Nack(deliveryTag uint64, requeue bool, multiple bool) error { return nil }
 
