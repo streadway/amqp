@@ -42,7 +42,23 @@ func integrationConnection(t *testing.T, name string) *Connection {
 			return nil
 		}
 
+		if name != "" {
+			conn.conn = &logIO{t, name, conn.conn}
+		}
+
 		return conn
+	}
+
+	return nil
+}
+
+// Delegates to integrationConnection and only returns a connection if the
+// product is RabbitMQ
+func integrationRabbitMQ(t *testing.T, name string) *Connection {
+	if conn := integrationConnection(t, "connect"); conn != nil {
+		if server, ok := conn.Properties["product"]; ok && server == "RabbitMQ" {
+			return conn
+		}
 	}
 
 	return nil

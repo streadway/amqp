@@ -744,3 +744,39 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 		}
 	}
 }
+
+func TestRabbitMQQueueTTLGet(t *testing.T) {
+	if c := integrationRabbitMQ(t, "ttl"); c != nil {
+		defer c.Close()
+
+		queue := "test.rabbitmq-message-ttl"
+		channel, err := c.Channel()
+		if err != nil {
+			t.Fatalf("channel: %v", err)
+		}
+
+		if _, err = channel.QueueDeclare(
+			queue,
+			UntilUnused,
+			false,
+			false,
+			Table{"x-message-ttl": int32(100)}, // in ms
+		); err != nil {
+			t.Fatalf("queue declare: %s", err)
+		}
+
+		channel.Publish("", queue, false, false, Publishing{Body: []byte("ttl")})
+
+		time.Sleep(200 * time.Millisecond)
+
+		_, ok, err := channel.Get(queue, false)
+
+		if ok {
+			t.Fatalf("Expected the message to expire in 100ms, it didn't expire after 200ms")
+		}
+
+		if err != nil {
+			t.Fatalf("Failed to get on ttl queue")
+		}
+	}
+}
