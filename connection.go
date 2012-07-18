@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Used along side NewConnection to specify the desired tuning parameters used
@@ -45,6 +46,7 @@ type Connection struct {
 	sequence  uint16
 
 	channels map[uint16]*Channel
+	sends    chan time.Time // used in place of heartbeats
 
 	Config Config // The negotiated Config after connection.open
 
@@ -53,9 +55,16 @@ type Connection struct {
 	Properties   Table // Server properties
 }
 
+type readDeadliner interface {
+	SetReadDeadline(time.Time) error
+}
+
 // Dial accepts a string in the AMQP URI format, and returns a new Connection
-// over TCP using PlainAuth.
+// over TCP using PlainAuth.  Defaults to a server heartbeat interval of 10
+// seconds and sets the initial read deadline to 30 seconds.
 func Dial(amqp string) (*Connection, error) {
+	timeout := time.Duration(30) * time.Second
+
 	uri, err := ParseURI(amqp)
 	if err != nil {
 		return nil, err
@@ -63,14 +72,19 @@ func Dial(amqp string) (*Connection, error) {
 
 	addr := net.JoinHostPort(uri.Host, strconv.FormatInt(int64(uri.Port), 10))
 
-	conn, err := net.Dial("tcp", addr)
+	conn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return nil, err
 	}
 
+	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		return nil, err
+	}
+
 	return NewConnection(conn, Config{
-		SASL:  []Authentication{uri.PlainAuth()},
-		Vhost: uri.Vhost,
+		SASL:              []Authentication{uri.PlainAuth()},
+		Vhost:             uri.Vhost,
+		HeartbeatInterval: 10, // seconds
 	})
 }
 
@@ -80,6 +94,7 @@ func NewConnection(conn io.ReadWriteCloser, config Config) (me *Connection, err 
 		writer:   &writer{bufio.NewWriter(conn)},
 		in:       make(chan message),
 		channels: make(map[uint16]*Channel),
+		sends:    make(chan time.Time), // buffered - heartbeat() is reentrant via send()
 	}
 
 	go me.reader()
@@ -120,26 +135,6 @@ func (me *Connection) Close() (err error) {
 	return ErrAlreadyClosed
 }
 
-func (me *Connection) dispatch() {
-	for {
-
-		switch msg := <-me.in; msg.(type) {
-		// handle the 4 way shutdown
-		case *connectionClose: // request from server
-			me.send(&methodFrame{
-				ChannelId: 0,
-				Method:    &connectionCloseOk{},
-			})
-			me.Close()
-		case *connectionCloseOk: // response to our Close() request
-			me.in <- msg // forward to Close() method
-			return
-		case nil: // closed
-			return
-		}
-	}
-}
-
 func (me *Connection) send(f frame) (err error) {
 	//fmt.Println("send:", f)
 
@@ -153,9 +148,21 @@ func (me *Connection) send(f frame) (err error) {
 	if err = me.writer.WriteFrame(f); err != nil {
 		// TODO handle write failure to cleanly shutdown the connection
 		me.shutdown()
+	} else {
+		me.sent()
 	}
 
 	return nil
+}
+
+// Broadcast when sent some bytes, reducing heartbeats, only
+// if there is something that can receive - like a non-reentrant
+// call or if the heartbeater is running
+func (me *Connection) sent() {
+	select {
+	case me.sends <- time.Now():
+	default: // drop
+	}
 }
 
 func (me *Connection) shutdown() {
@@ -174,6 +181,17 @@ func (me *Connection) shutdown() {
 	}
 }
 
+// Reset the blocking read deadline on the underlying connection when it
+// implements SetReadDeadline to three times the requested heartbeat interval.
+// On error, resort to blocking reads.
+func (me *Connection) resetDeadline() {
+	if beat := time.Duration(me.Config.HeartbeatInterval); beat > 0 {
+		if c, ok := me.conn.(readDeadliner); ok {
+			c.SetReadDeadline(time.Now().Add(beat * time.Second))
+		}
+	}
+}
+
 // All methods sent to the connection channel should be synchronous so we
 // can handle them directly without a framing component
 func (me *Connection) demux(f frame) {
@@ -183,8 +201,10 @@ func (me *Connection) demux(f frame) {
 			switch mf := f.(type) {
 			case *methodFrame:
 				me.in <- mf.Method
+			case *heartbeatFrame:
+				// kthxbai - all reads reset our deadline.  just drop this one.
 			default:
-				panic("TODO close with hard-error")
+				panic("TODO close with hard-error on unhandled connection frame type")
 			}
 		} else {
 			channel, ok := me.channels[f.channel()]
@@ -195,6 +215,25 @@ func (me *Connection) demux(f frame) {
 				println("XXX unknown channel", f.channel())
 				panic("XXX unknown channel")
 			}
+		}
+	}
+}
+
+func (me *Connection) dispatch() {
+	for {
+		switch msg := <-me.in; msg.(type) {
+		// handle the 4 way shutdown
+		case *connectionClose: // request from server
+			me.send(&methodFrame{
+				ChannelId: 0,
+				Method:    &connectionCloseOk{},
+			})
+			me.Close()
+		case *connectionCloseOk: // response to our Close() request
+			me.in <- msg // forward to Close() method
+			return
+		case nil: // closed
+			return
 		}
 	}
 }
@@ -215,6 +254,30 @@ func (me *Connection) reader() {
 		}
 
 		me.demux(frame)
+
+		me.resetDeadline()
+	}
+}
+
+// Ensures that at least one frame is being sent at the tuned interval with a
+// jitter tolerance of 250ms
+func (me *Connection) heartbeat(interval time.Duration) {
+	last := time.Now()
+	tick := time.Tick(interval)
+
+	for {
+		select {
+		case at := <-tick:
+			if at.Sub(last) > interval-250*time.Millisecond {
+				if err := me.send(&heartbeatFrame{}); err != nil {
+					// send heartbeats even after close/closeOk so we
+					// tick until we can't tick no more.
+					return
+				}
+			}
+		case at := <-me.sends:
+			last = at
+		}
 	}
 }
 
@@ -328,9 +391,14 @@ func (me *Connection) openTune(config Config) (err error) {
 			}
 		}
 
-		// This the interval the server wishes us to send at.  config.Heartbeat
-		// is the interval what the client wishes the server to send at.
-		me.Config.HeartbeatInterval = int(tune.Heartbeat)
+		// Save this off for resetDeadline()
+		me.Config.HeartbeatInterval = config.HeartbeatInterval
+
+		// "The client should start sending heartbeats after receiving a
+		// Connection.Tune method"
+		if tune.Heartbeat > 0 {
+			go me.heartbeat(time.Duration(tune.Heartbeat) * time.Second)
+		}
 
 		if err = me.send(&methodFrame{
 			ChannelId: 0,
