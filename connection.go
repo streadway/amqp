@@ -94,7 +94,7 @@ func NewConnection(conn io.ReadWriteCloser, config Config) (me *Connection, err 
 		writer:   &writer{bufio.NewWriter(conn)},
 		in:       make(chan message),
 		channels: make(map[uint16]*Channel),
-		sends:    make(chan time.Time), // buffered - heartbeat() is reentrant via send()
+		sends:    make(chan time.Time),
 	}
 
 	go me.reader()
