@@ -40,3 +40,17 @@ func (me *Delivery) Cancel(noWait bool) (consumerTag string, err error) {
 
 	return
 }
+
+// RabbitMQ extension - Negatively acknowledge the delivery of message(s)
+// identified by the deliveryTag.  When multiple, nack messages up to and
+// including delivered messages up until the deliveryTag.
+//
+// This method must not be used to select or requeue messages the client wishes
+// not to handle.
+func (me *Delivery) Nack(multiple, requeue bool) error {
+	return me.channel.send(&basicNack{
+		DeliveryTag: me.DeliveryTag,
+		Multiple:    multiple,
+		Requeue:     requeue,
+	})
+}

@@ -809,7 +809,7 @@ func TestRabbitMQQueueNackMultipleRequeue(t *testing.T) {
 				t.Fatalf("could not get message", m2)
 			}
 
-			channel.Nack(m2.DeliveryTag, true, true)
+			m2.Nack(true, true)
 
 			m1, ok, err = channel.Get(queue, false)
 			if !ok || err != nil || m1.Body[0] != '1' {
