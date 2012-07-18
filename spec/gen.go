@@ -6,134 +6,134 @@
 package main
 
 import (
-  "encoding/xml"
-  "errors"
-  "fmt"
-  "io/ioutil"
-  "log"
-  "os"
-  "regexp"
-  "strings"
-  "bytes"
-  "text/template"
+	"bytes"
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
+	"regexp"
+	"strings"
+	"text/template"
 )
 
 var (
-  ErrUnknownType   = errors.New("Unknown field type in gen")
-  ErrUnknownDomain = errors.New("Unknown domain type in gen")
+	ErrUnknownType   = errors.New("Unknown field type in gen")
+	ErrUnknownDomain = errors.New("Unknown domain type in gen")
 )
 
 var amqpTypeToNative = map[string]string{
-  "bit":        "bool",
-  "octet":      "byte",
-  "shortshort": "uint8",
-  "short":      "uint16",
-  "long":       "uint32",
-  "longlong":   "uint64",
-  "timestamp":  "time.Time",
-  "table":      "Table",
-  "shortstr":   "string",
-  "longstr":    "string",
+	"bit":        "bool",
+	"octet":      "byte",
+	"shortshort": "uint8",
+	"short":      "uint16",
+	"long":       "uint32",
+	"longlong":   "uint64",
+	"timestamp":  "time.Time",
+	"table":      "Table",
+	"shortstr":   "string",
+	"longstr":    "string",
 }
 
 type Rule struct {
-  Name string   `xml:"name,attr"`
-  Docs []string `xml:"doc"`
+	Name string   `xml:"name,attr"`
+	Docs []string `xml:"doc"`
 }
 
 type Doc struct {
-  Type string `xml:"type,attr"`
-  Body string `xml:",innerxml"`
+	Type string `xml:"type,attr"`
+	Body string `xml:",innerxml"`
 }
 
 type Chassis struct {
-  Name      string `xml:"name,attr"`
-  Implement string `xml:"implement,attr"`
+	Name      string `xml:"name,attr"`
+	Implement string `xml:"implement,attr"`
 }
 
 type Assert struct {
-  Check  string `xml:"check,attr"`
-  Value  string `xml:"value,attr"`
-  Method string `xml:"method,attr"`
+	Check  string `xml:"check,attr"`
+	Value  string `xml:"value,attr"`
+	Method string `xml:"method,attr"`
 }
 
 type Field struct {
-  Name     string   `xml:"name,attr"`
-  Domain   string   `xml:"domain,attr"`
-  Type     string   `xml:"type,attr"`
-  Label    string   `xml:"label,attr"`
-  Reserved bool     `xml:"reserved,attr"`
-  Docs     []Doc    `xml:"doc"`
-  Asserts  []Assert `xml:"assert"`
+	Name     string   `xml:"name,attr"`
+	Domain   string   `xml:"domain,attr"`
+	Type     string   `xml:"type,attr"`
+	Label    string   `xml:"label,attr"`
+	Reserved bool     `xml:"reserved,attr"`
+	Docs     []Doc    `xml:"doc"`
+	Asserts  []Assert `xml:"assert"`
 }
 
 type Method struct {
-  Name        string    `xml:"name,attr"`
-  Response    string    `xml:"response>name,attr"`
-  Synchronous bool      `xml:"synchronous,attr"`
-  Content     bool      `xml:"content,attr"`
-  Index       string    `xml:"index,attr"`
-  Label       string    `xml:"label,attr"`
-  Docs        []Doc     `xml:"doc"`
-  Rules       []Rule    `xml:"rule"`
-  Fields      []Field   `xml:"field"`
-  Chassis     []Chassis `xml:"chassis"`
+	Name        string    `xml:"name,attr"`
+	Response    string    `xml:"response>name,attr"`
+	Synchronous bool      `xml:"synchronous,attr"`
+	Content     bool      `xml:"content,attr"`
+	Index       string    `xml:"index,attr"`
+	Label       string    `xml:"label,attr"`
+	Docs        []Doc     `xml:"doc"`
+	Rules       []Rule    `xml:"rule"`
+	Fields      []Field   `xml:"field"`
+	Chassis     []Chassis `xml:"chassis"`
 }
 
 type Class struct {
-  Name    string    `xml:"name,attr"`
-  Handler string    `xml:"handler,attr"`
-  Index   string    `xml:"index,attr"`
-  Label   string    `xml:"label,attr"`
-  Docs    []Doc     `xml:"doc"`
-  Methods []Method  `xml:"method"`
-  Chassis []Chassis `xml:"chassis"`
+	Name    string    `xml:"name,attr"`
+	Handler string    `xml:"handler,attr"`
+	Index   string    `xml:"index,attr"`
+	Label   string    `xml:"label,attr"`
+	Docs    []Doc     `xml:"doc"`
+	Methods []Method  `xml:"method"`
+	Chassis []Chassis `xml:"chassis"`
 }
 
 type Domain struct {
-  Name  string `xml:"name,attr"`
-  Type  string `xml:"type,attr"`
-  Label string `xml:"label,attr"`
-  Rules []Rule `xml:"rule"`
-  Docs  []Doc  `xml:"doc"`
+	Name  string `xml:"name,attr"`
+	Type  string `xml:"type,attr"`
+	Label string `xml:"label,attr"`
+	Rules []Rule `xml:"rule"`
+	Docs  []Doc  `xml:"doc"`
 }
 
 type Constant struct {
-  Name  string `xml:"name,attr"`
-  Value int    `xml:"value,attr"`
-  Doc   []Doc  `xml:"doc"`
+	Name  string `xml:"name,attr"`
+	Value int    `xml:"value,attr"`
+	Doc   []Doc  `xml:"doc"`
 }
 
 type Amqp struct {
-  Major   int    `xml:"major,attr"`
-  Minor   int    `xml:"minor,attr"`
-  Port    int    `xml:"port,attr"`
-  Comment string `xml:"comment,attr"`
+	Major   int    `xml:"major,attr"`
+	Minor   int    `xml:"minor,attr"`
+	Port    int    `xml:"port,attr"`
+	Comment string `xml:"comment,attr"`
 
-  Constants []Constant `xml:"constant"`
-  Domains   []Domain   `xml:"domain"`
-  Classes   []Class    `xml:"class"`
+	Constants []Constant `xml:"constant"`
+	Domains   []Domain   `xml:"domain"`
+	Classes   []Class    `xml:"class"`
 }
 
 type renderer struct {
-  Root       Amqp
-  bitcounter int
+	Root       Amqp
+	bitcounter int
 }
 
 type fieldset struct {
-  AmqpType string
-  NativeType string
-  Fields []Field
-  *renderer
+	AmqpType   string
+	NativeType string
+	Fields     []Field
+	*renderer
 }
 
 var (
-  helpers = template.FuncMap{
-    "camel": camel,
-    "clean": clean,
-  }
+	helpers = template.FuncMap{
+		"camel": camel,
+		"clean": clean,
+	}
 
-  packageTemplate = template.Must(template.New("package").Funcs(helpers).Parse(`
+	packageTemplate = template.Must(template.New("package").Funcs(helpers).Parse(`
 	// Copyright (c) 2012, Sean Treadway, SoundCloud Ltd.
 	// Use of this source code is governed by a BSD-style
 	// license that can be found in the LICENSE file.
@@ -332,23 +332,23 @@ var (
 )
 
 func (me *renderer) Partial(prefix string, fields []fieldset) (s string, err error) {
-  var buf bytes.Buffer
-  for _, set := range fields {
-    name := prefix + set.AmqpType
-    t := packageTemplate.Lookup(name)
-    if t == nil {
-      return "", errors.New(fmt.Sprintf("Missing template: %s", name))
-    }
-    if err = t.Execute(&buf, set); err != nil {
-      return
-    }
-  }
-  return string(buf.Bytes()), nil
+	var buf bytes.Buffer
+	for _, set := range fields {
+		name := prefix + set.AmqpType
+		t := packageTemplate.Lookup(name)
+		if t == nil {
+			return "", errors.New(fmt.Sprintf("Missing template: %s", name))
+		}
+		if err = t.Execute(&buf, set); err != nil {
+			return
+		}
+	}
+	return string(buf.Bytes()), nil
 }
 
 // Groups the fields so that the right encoder/decoder can be called
 func (me *renderer) Fieldsets(fields []Field) (f []fieldset, err error) {
-  if len(fields) > 0 {
+	if len(fields) > 0 {
 		for _, field := range fields {
 			cur := fieldset{}
 			cur.AmqpType, err = me.FieldType(field)
@@ -366,18 +366,18 @@ func (me *renderer) Fieldsets(fields []Field) (f []fieldset, err error) {
 
 		i, j := 0, 1
 		for j < len(f) {
-      if f[i].AmqpType == f[j].AmqpType {
+			if f[i].AmqpType == f[j].AmqpType {
 				f[i].Fields = append(f[i].Fields, f[j].Fields...)
-      } else {
+			} else {
 				i++
 				f[i] = f[j]
-      }
+			}
 			j++
-    }
+		}
 		return f[:i+1], nil
-  }
+	}
 
-  return
+	return
 }
 
 func (me *renderer) HasType(typ string, method Method) bool {
@@ -401,59 +401,59 @@ func (me *renderer) HasField(field string, method Method) bool {
 }
 
 func (me *renderer) Domain(field Field) (domain Domain, err error) {
-  for _, domain = range me.Root.Domains {
-    if field.Domain == domain.Name {
-      return
-    }
-  }
-  return domain, nil
-  //return domain, ErrUnknownDomain
+	for _, domain = range me.Root.Domains {
+		if field.Domain == domain.Name {
+			return
+		}
+	}
+	return domain, nil
+	//return domain, ErrUnknownDomain
 }
 
 func (me *renderer) FieldName(field Field) (t string) {
-  t = camel(field.Name)
+	t = camel(field.Name)
 
-  if field.Reserved {
-    t = strings.ToLower(t)
-  }
+	if field.Reserved {
+		t = strings.ToLower(t)
+	}
 
-  return
+	return
 }
 
 func (me *renderer) FieldType(field Field) (t string, err error) {
-  t = field.Type
+	t = field.Type
 
-  if t == "" {
-    var domain Domain
-    domain, err = me.Domain(field)
-    if err != nil {
-      return "", err
-    }
-    t = domain.Type
-  }
+	if t == "" {
+		var domain Domain
+		domain, err = me.Domain(field)
+		if err != nil {
+			return "", err
+		}
+		t = domain.Type
+	}
 
-  return
+	return
 }
 
 func (me *renderer) NativeType(amqpType string) (t string, err error) {
-  if t, ok := amqpTypeToNative[amqpType]; ok {
-    return t, nil
-  }
-  return "", ErrUnknownType
+	if t, ok := amqpTypeToNative[amqpType]; ok {
+		return t, nil
+	}
+	return "", ErrUnknownType
 }
 
 func (me *renderer) Tag(d Domain) string {
-  label := "`"
+	label := "`"
 
-  label += `domain:"` + d.Name + `"`
+	label += `domain:"` + d.Name + `"`
 
-  if len(d.Type) > 0 {
-    label += `,type:"` + d.Type + `"`
-  }
+	if len(d.Type) > 0 {
+		label += `,type:"` + d.Type + `"`
+	}
 
-  label += "`"
+	label += "`"
 
-  return label
+	return label
 }
 
 func (me *renderer) StructName(parts ...string) string {
@@ -461,42 +461,42 @@ func (me *renderer) StructName(parts ...string) string {
 }
 
 func clean(body string) (res string) {
-  return strings.Replace(body, "\r", "", -1)
+	return strings.Replace(body, "\r", "", -1)
 }
 
 func camel(parts ...string) (res string) {
-  for _, in := range parts {
-    delim := regexp.MustCompile(`^\w|[-_]\w`)
+	for _, in := range parts {
+		delim := regexp.MustCompile(`^\w|[-_]\w`)
 
-    res += delim.ReplaceAllStringFunc(in, func(match string) string {
-      switch len(match) {
-      case 1:
-        return strings.ToUpper(match)
-      case 2:
-        return strings.ToUpper(match[1:])
-      }
-      panic("unreachable")
-    })
-  }
+		res += delim.ReplaceAllStringFunc(in, func(match string) string {
+			switch len(match) {
+			case 1:
+				return strings.ToUpper(match)
+			case 2:
+				return strings.ToUpper(match[1:])
+			}
+			panic("unreachable")
+		})
+	}
 
-  return
+	return
 }
 
 func main() {
-  var r renderer
+	var r renderer
 
-  spec, err := ioutil.ReadAll(os.Stdin)
-  if err != nil {
-    log.Fatalln("Please pass spec on stdin", err)
-  }
+	spec, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		log.Fatalln("Please pass spec on stdin", err)
+	}
 
-  err = xml.Unmarshal(spec, &r.Root)
+	err = xml.Unmarshal(spec, &r.Root)
 
-  if err != nil {
-    log.Fatalln("Could not parse XML:", err)
-  }
+	if err != nil {
+		log.Fatalln("Could not parse XML:", err)
+	}
 
-  if err = packageTemplate.Execute(os.Stdout, &r); err != nil {
-    log.Fatalln("Generate error: ", err)
-  }
+	if err = packageTemplate.Execute(os.Stdout, &r); err != nil {
+		log.Fatalln("Generate error: ", err)
+	}
 }

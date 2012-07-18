@@ -4,10 +4,10 @@
 package main
 
 import (
-	"github.com/streadway/amqp"
-	"fmt"
-	"log"
 	"flag"
+	"fmt"
+	"github.com/streadway/amqp"
+	"log"
 )
 
 var (
@@ -50,7 +50,7 @@ func publish(amqpURI, exchange, routingKey, body string) error {
 	log.Printf("got Channel, declaring Exchange (%s)", exchange)
 	noArgs := amqp.Table{}
 	if err := channel.ExchangeDeclare(
-		exchange, // name
+		exchange,          // name
 		amqp.UntilDeleted, // lifetime = durable
 		"direct",          // type
 		false,             // internal
@@ -62,10 +62,10 @@ func publish(amqpURI, exchange, routingKey, body string) error {
 
 	log.Printf("declared Exchange, publishing %dB body (%s)", len(body), body)
 	err = channel.Publish(
-		exchange, // publish to an exchange
+		exchange,   // publish to an exchange
 		routingKey, // routing to 0 or more queues
-		true, // mandatory
-		true, // immediate
+		true,       // mandatory
+		true,       // immediate
 		amqp.Publishing{
 			Headers:         amqp.Table{},
 			ContentType:     "text/plain",
