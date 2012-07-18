@@ -638,6 +638,68 @@ func TestIntegrationGetEmpty(t *testing.T) {
 	}
 }
 
+func TestIntegrationTxCommit(t *testing.T) {
+	if c := integrationConnection(t, "txcommit"); c != nil {
+		defer c.Close()
+
+		queue := "test.tx.commit"
+		ch, _ := c.Channel()
+
+		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+
+		if err := ch.TxSelect(); err != nil {
+			t.Fatalf("tx.select failed")
+		}
+
+		ch.Publish("", queue, false, false, Publishing{Body: []byte("ok")})
+
+		if err := ch.TxCommit(); err != nil {
+			t.Fatalf("tx.commit failed")
+		}
+
+		msg, ok, err := ch.Get(queue, false)
+
+		if err != nil || !ok {
+			t.Fatalf("Failed get: %v", err)
+		}
+
+		if string(msg.Body) != "ok" {
+			t.Fatalf("Get did not get the correct message from the transaction")
+		}
+	}
+}
+
+func TestIntegrationTxRollback(t *testing.T) {
+	if c := integrationConnection(t, "txrollback"); c != nil {
+		defer c.Close()
+
+		queue := "test.tx.rollback"
+		ch, _ := c.Channel()
+
+		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+
+		if err := ch.TxSelect(); err != nil {
+			t.Fatalf("tx.select failed")
+		}
+
+		ch.Publish("", queue, false, false, Publishing{Body: []byte("ok")})
+
+		if err := ch.TxRollback(); err != nil {
+			t.Fatalf("tx.rollback failed")
+		}
+
+		_, ok, err := ch.Get(queue, false)
+
+		if err != nil {
+			t.Fatalf("Failed get: %v", err)
+		}
+
+		if ok {
+			t.Fatalf("message was published when it should have been rolled back")
+		}
+	}
+}
+
 // https://github.com/streadway/amqp/issues/7
 func TestCorruptedMessageRegression(t *testing.T) {
 	messageCount := 1024

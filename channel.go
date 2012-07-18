@@ -708,11 +708,53 @@ func (me *Channel) Get(queueName string, noAck bool) (msg *Delivery, ok bool, er
 	return nil, false, ErrBadProtocol
 }
 
+func (me *Channel) TxSelect() (err error) {
+	if err = me.send(&txSelect{}); err != nil {
+		return
+	}
+
+	switch (<-me.rpc).(type) {
+	case *txSelectOk:
+		return
+	case nil:
+		return me.Close()
+	}
+
+	return ErrBadProtocol
+}
+
+func (me *Channel) TxCommit() (err error) {
+	if err = me.send(&txCommit{}); err != nil {
+		return
+	}
+
+	switch (<-me.rpc).(type) {
+	case *txCommitOk:
+		return
+	case nil:
+		return me.Close()
+	}
+
+	return ErrBadProtocol
+}
+
+func (me *Channel) TxRollback() (err error) {
+	if err = me.send(&txRollback{}); err != nil {
+		return
+	}
+
+	switch (<-me.rpc).(type) {
+	case *txRollbackOk:
+		return
+	case nil:
+		return me.Close()
+	}
+
+	return ErrBadProtocol
+}
+
 //TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }
 
 //TODO func (me *Channel) Confirm(noWait bool) error                                  { return nil }
 
-//TODO func (me *Channel) TxSelect() error   { return nil }
-//TODO func (me *Channel) TxCommit() error   { return nil }
-//TODO func (me *Channel) TxRollback() error { return nil }
 //TODO func (me *Channel) Flow(active bool) error { return nil }
