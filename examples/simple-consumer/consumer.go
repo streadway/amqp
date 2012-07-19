@@ -81,7 +81,7 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 		false,             // noWait
 		noArgs,            // arguments
 	); err != nil {
-		closeChannel(c.Channel)
+		c.closeChannel()
 		return nil, fmt.Errorf("Exchange Declare: %s", err)
 	}
 
@@ -94,11 +94,11 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 		noArgs,           // arguments
 	)
 	if err != nil {
-		closeChannel(c.Channel)
+		c.closeChannel()
 		return nil, fmt.Errorf("Queue Declare: %s", err)
 	}
 	if !queueState.Declared {
-		closeChannel(c.Channel)
+		c.closeChannel()
 		return nil, fmt.Errorf("Queue Declare: somehow Undeclared")
 	}
 
@@ -110,7 +110,7 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 		false,    // noWait
 		noArgs,   // arguments
 	); err != nil {
-		closeChannel(c.Channel)
+		c.closeChannel()
 		return nil, fmt.Errorf("Queue Bind: %s", err)
 	}
 
@@ -126,7 +126,7 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 		nil,    // deliveries (ie. create a deliveries channel for me)
 	)
 	if err != nil {
-		closeChannel(c.Channel)
+		c.closeChannel()
 		return nil, fmt.Errorf("Queue Consume: %s", err)
 	}
 
@@ -144,14 +144,14 @@ func (c *Consumer) handle(deliveries chan amqp.Delivery) {
 	for {
 		select {
 		case q := <-c.quit:
-			closeChannel(c.Channel)
+			c.closeChannel()
 			q <- true
 			return
 		case d, ok := <-deliveries:
 			if !ok {
 				log.Printf("delivery channel closed")
-				closeChannel(c.Channel)
-				return
+				c.closeChannel()
+				break // we still want to handle Shutdown()
 			}
 			log.Printf(
 				"got %dB delivery: [%v] %s",
@@ -163,8 +163,17 @@ func (c *Consumer) handle(deliveries chan amqp.Delivery) {
 	}
 }
 
-func closeChannel(c *amqp.Channel) {
-	if err := c.Close(); err != nil {
-		log.Printf("AMQP Channel Close error: %s", err)
+func (c *Consumer) closeChannel() {
+	if c.Channel == nil {
+		log.Printf("AMQP channel already closed")
+		return
 	}
+	defer func() { c.Channel = nil }()
+
+	if err := c.Channel.Close(); err != nil {
+		log.Printf("AMQP channel close error: %s", err)
+		return
+	}
+
+	log.Printf("AMQP channel closed OK")
 }
