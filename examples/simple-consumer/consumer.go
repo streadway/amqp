@@ -147,13 +147,19 @@ func (c *Consumer) handle(deliveries chan amqp.Delivery) {
 			closeChannel(c.Channel)
 			q <- true
 			return
-		case d := <-deliveries:
-			log.Printf(
-				"got %dB delivery: [%v] %s",
-				len(d.Body),
-				d.DeliveryTag,
-				d.Body,
-			)
+		case d, ok := <-deliveries:
+			if ok {
+				log.Printf(
+					"got %dB delivery: [%v] %s",
+					len(d.Body),
+					d.DeliveryTag,
+					d.Body,
+				)
+			} else {
+				log.Printf("delivery channel closed")
+				c.Shutdown()
+				return
+			}
 		}
 	}
 }
