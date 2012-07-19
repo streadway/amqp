@@ -5,10 +5,6 @@
 
 package amqp
 
-import (
-	"sync"
-)
-
 // 0      1         3             7                  size+7 size+8
 // +------+---------+-------------+  +------------+  +-----------+
 // | type | channel |     size    |  |  payload   |  | frame-end |
@@ -23,10 +19,8 @@ type Channel struct {
 
 	connection *Connection
 
-	rpc chan message
-
-	mutex     sync.Mutex
-	consumers map[string]chan Delivery
+	rpc       chan message
+	consumers consumers
 
 	id    uint16
 	state state
@@ -46,39 +40,19 @@ func newChannel(c *Connection, id uint16) (me *Channel, err error) {
 		connection: c,
 		id:         id,
 		rpc:        make(chan message),
-		consumers:  make(map[string]chan Delivery),
+		consumers:  makeConsumers(),
 		recv:       (*Channel).recvMethod,
 	}
 
 	return me, nil
 }
 
-func (me *Channel) addConsumer(tag string, ch chan Delivery) string {
-	if tag == "" {
-		tag = randomTag()
-	}
-
-	me.mutex.Lock()
-	defer me.mutex.Unlock()
-	me.consumers[tag] = ch
-
-	return tag
-}
-
 func (me *Channel) shutdown() {
 	me.state = closing
 
 	delete(me.connection.channels, me.id)
-
-	me.mutex.Lock()
-	defer me.mutex.Unlock()
-	for tag, ch := range me.consumers {
-		delete(me.consumers, tag)
-		me.Cancel(tag, false)
-		close(ch)
-	}
-
 	close(me.rpc)
+	me.consumers.closeAll()
 	me.state = closed
 }
 
@@ -224,7 +198,7 @@ func (me *Channel) dispatch(msg message) {
 		}
 		me.send(&channelCloseOk{})
 		if me.state == open {
-			me.Close()
+			me.shutdown()
 		}
 
 	case *channelFlow:
@@ -232,11 +206,7 @@ func (me *Channel) dispatch(msg message) {
 
 	case *basicDeliver:
 		if me.state == open {
-			me.mutex.Lock()
-			defer me.mutex.Unlock()
-			if c, ok := me.consumers[m.ConsumerTag]; ok {
-				c <- *me.newDelivery(m)
-			}
+			me.consumers.send(m.ConsumerTag, me.newDelivery(m))
 			// TODO log failed consumer and close channel, this can happen when
 			// deliveries are in flight and a no-wait cancel has happened
 		}
@@ -359,8 +329,9 @@ func (me *Channel) Cancel(consumerTag string, noWait bool) (err error) {
 	}
 
 	if !noWait {
-		switch (<-me.rpc).(type) {
+		switch ok := (<-me.rpc).(type) {
 		case *basicCancelOk:
+			me.consumers.close(ok.ConsumerTag)
 			return
 		default:
 			return ErrBadProtocol
@@ -532,7 +503,10 @@ func (me *Channel) Consume(queueName string, noAck bool, exclusive bool, noLocal
 
 	// when we won't wait for the server, add the consumer channel now
 	if noWait {
-		consumerTag = me.addConsumer(consumerTag, ch)
+		if consumerTag == "" {
+			consumerTag = randomConsumerTag()
+		}
+		me.consumers.add(consumerTag, ch)
 	}
 
 	if err = me.send(&basicConsume{
@@ -550,7 +524,7 @@ func (me *Channel) Consume(queueName string, noAck bool, exclusive bool, noLocal
 	if !noWait {
 		switch ok := (<-me.rpc).(type) {
 		case *basicConsumeOk:
-			me.addConsumer(ok.ConsumerTag, ch)
+			me.consumers.add(ok.ConsumerTag, ch)
 			return
 		case nil:
 			return ch, me.Close()

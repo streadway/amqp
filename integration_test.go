@@ -378,6 +378,43 @@ func TestIntegrationPublishConsume(t *testing.T) {
 	}
 }
 
+func TestIntegrationConsumeCancel(t *testing.T) {
+	queue := "test.integration.consume-cancel"
+
+	c := integrationConnection(t, "pub")
+
+	if c != nil {
+		defer c.Close()
+
+		ch, _ := c.Channel()
+
+		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		defer ch.QueueDelete(queue, false, false, false)
+
+		messages, _ := ch.Consume(queue, false, false, false, false, "integration-tag", nil, nil)
+
+		ch.Publish("", queue, false, false, Publishing{Body: []byte("1")})
+
+		assertConsumeBody(t, messages, []byte("1"))
+
+		err := ch.Cancel("integration-tag", false)
+		if err != nil {
+			t.Fatalf("error cancelling the consumer: %v", err)
+		}
+
+		ch.Publish("", queue, false, false, Publishing{Body: []byte("2")})
+
+		select {
+		case <-time.After(100 * time.Millisecond):
+			t.Fatalf("Timeout on Close")
+		case _, ok := <-messages:
+			if ok {
+				t.Fatalf("Extra message on consumer when consumer should have been closed")
+			}
+		}
+	}
+}
+
 func (c *Connection) Generate(r *rand.Rand, _ int) reflect.Value {
 	urlStr := os.Getenv("AMQP_URL")
 	if urlStr == "" {
