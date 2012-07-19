@@ -84,6 +84,6 @@ func publish(amqpURI, exchange, routingKey, body string) error {
 
 func closeChannel(c *amqp.Channel) {
 	if err := c.Close(); err != nil {
-		log.Printf("AMQP Channel Close error: %s", err)
+		log.Printf("AMQP channel close error: %s", err)
 	}
 }
