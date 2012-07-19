@@ -187,7 +187,7 @@ func (me *Connection) shutdown() {
 func (me *Connection) resetDeadline() {
 	if beat := time.Duration(me.Config.HeartbeatInterval); beat > 0 {
 		if c, ok := me.conn.(readDeadliner); ok {
-			c.SetReadDeadline(time.Now().Add(beat * time.Second))
+			c.SetReadDeadline(time.Now().Add(3 * beat * time.Second))
 		}
 	}
 }
@@ -360,6 +360,25 @@ func (me *Connection) openStart(config Config) (err error) {
 	return ErrBadProtocol
 }
 
+func negotiate(client, server int) int {
+	if client == 0 || server == 0 {
+		// max
+		if client > server {
+			return client
+		} else {
+			return server
+		}
+	} else {
+		// min
+		if client > server {
+			return server
+		} else {
+			return client
+		}
+	}
+	panic("unreachable")
+}
+
 func (me *Connection) openTune(config Config) (err error) {
 	switch tune := (<-me.in).(type) {
 	// TODO SECURE HANDSHAKE
@@ -367,37 +386,20 @@ func (me *Connection) openTune(config Config) (err error) {
 		// When this is bounded, share the bound.  We're effectively only bounded
 		// by MaxUint16.  If you hit a wrap around bug, throw a small party then
 		// make an github issue.
-		if int(tune.ChannelMax) > 0 {
-			me.Config.MaxChannels = int(tune.ChannelMax)
-		}
+		me.Config.MaxChannels = negotiate(config.MaxChannels, int(tune.ChannelMax))
 
 		// Frame size includes headers and end byte (len(payload)+8), even if
 		// this is less than FrameMinSize, use what the server sends because the
 		// alternative is to stop the handshake here.
-		if int(tune.FrameMax) > 0 {
-			if config.MaxFrameSize <= 0 || int(tune.FrameMax) < config.MaxFrameSize {
-				me.Config.MaxFrameSize = int(tune.FrameMax)
-			} else {
-				me.Config.MaxFrameSize = config.MaxFrameSize
-			}
-		} else {
-			if config.MaxFrameSize > 0 {
-				me.Config.MaxFrameSize = config.MaxFrameSize
-			} else {
-				// Client and Server are unlimited.  We'll bound the frame size to
-				// 256KB to fit within the bandwidth delay product of a satellite
-				// uplink on a scaled TCP window up to 2Mb/s
-				me.Config.MaxFrameSize = 256 * 1024
-			}
-		}
+		me.Config.MaxFrameSize = negotiate(config.MaxFrameSize, int(tune.FrameMax))
 
 		// Save this off for resetDeadline()
-		me.Config.HeartbeatInterval = config.HeartbeatInterval
+		me.Config.HeartbeatInterval = negotiate(config.HeartbeatInterval, int(tune.Heartbeat))
 
 		// "The client should start sending heartbeats after receiving a
 		// Connection.Tune method"
-		if tune.Heartbeat > 0 {
-			go me.heartbeat(time.Duration(tune.Heartbeat) * time.Second)
+		if me.Config.HeartbeatInterval > 0 {
+			go me.heartbeat(time.Duration(me.Config.HeartbeatInterval) * time.Second)
 		}
 
 		if err = me.send(&methodFrame{
@@ -405,7 +407,7 @@ func (me *Connection) openTune(config Config) (err error) {
 			Method: &connectionTuneOk{
 				ChannelMax: uint16(me.Config.MaxChannels),
 				FrameMax:   uint32(me.Config.MaxFrameSize),
-				Heartbeat:  uint16(config.HeartbeatInterval),
+				Heartbeat:  uint16(me.Config.HeartbeatInterval),
 			},
 		}); err != nil {
 			return
