@@ -64,17 +64,17 @@ func integrationRabbitMQ(t *testing.T, name string) *Connection {
 	return nil
 }
 
-func assertConsumeBody(t *testing.T, messages chan Delivery, body []byte) bool {
+func assertConsumeBody(t *testing.T, messages chan Delivery, body []byte) *Delivery {
 	select {
 	case msg := <-messages:
 		if bytes.Compare(msg.Body, body) != 0 {
-			t.Errorf("Message body does not match have: %v expect %v", msg.Body, body)
-			return false
+			t.Fatalf("Message body does not match have: %v expect %v", msg.Body, body)
+			return &msg
 		}
-		return true
+		return &msg
 	case <-time.After(200 * time.Millisecond):
-		t.Errorf("Timeout waiting for %s", body)
-		return false
+		t.Fatalf("Timeout waiting for %s", body)
+		return nil
 	}
 	panic("unreachable")
 }
