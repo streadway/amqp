@@ -1011,24 +1011,24 @@ func TestRabbitMQQueueNackMultipleRequeue(t *testing.T) {
 
 			m1, ok, err := channel.Get(queue, false)
 			if !ok || err != nil || m1.Body[0] != '1' {
-				t.Fatalf("could not get message", m1)
+				t.Fatalf("could not get message %v", m1)
 			}
 
 			m2, ok, err := channel.Get(queue, false)
 			if !ok || err != nil || m2.Body[0] != '2' {
-				t.Fatalf("could not get message", m2)
+				t.Fatalf("could not get message %v", m2)
 			}
 
 			m2.Nack(true, true)
 
 			m1, ok, err = channel.Get(queue, false)
 			if !ok || err != nil || m1.Body[0] != '1' {
-				t.Fatalf("could not get message", m1)
+				t.Fatalf("could not get message %v", m1)
 			}
 
 			m2, ok, err = channel.Get(queue, false)
 			if !ok || err != nil || m2.Body[0] != '2' {
-				t.Fatalf("could not get message", m2)
+				t.Fatalf("could not get message %v", m2)
 			}
 		}
 	}
