@@ -5,6 +5,10 @@
 
 package amqp
 
+import (
+	"reflect"
+)
+
 // 0      1         3             7                  size+7 size+8
 // +------+---------+-------------+  +------------+  +-----------+
 // | type | channel |     size    |  |  payload   |  | frame-end |
@@ -57,25 +61,49 @@ func (me *Channel) shutdown() {
 }
 
 func (me *Channel) open() (err error) {
+	req := &channelOpen{}
+	res := &channelOpenOk{}
+
 	me.state = handshaking
 
-	if err = me.send(&channelOpen{}); err != nil {
+	if err = me.call(req, res); err != nil {
 		return
 	}
 
-	switch (<-me.rpc).(type) {
-	case *channelOpenOk:
-		me.state = open
+	me.state = open
+
+	return
+}
+
+// Performs a request/response call for when the message is not NoWait and is
+// specified as Synchronous.
+func (me *Channel) call(req, res message) (err error) {
+	if err = me.send(req); err != nil {
 		return
-	default:
-		return ErrBadProtocol
 	}
 
-	panic("unreachable")
+	if req.wait() {
+		msg, ok := <-me.rpc
+		if !ok {
+			me.shutdown()
+			err = ErrAlreadyClosed
+		} else if reflect.TypeOf(msg) == reflect.TypeOf(res) {
+			// *res = *msg
+			vres := reflect.ValueOf(res).Elem()
+			vmsg := reflect.ValueOf(msg).Elem()
+			vres.Set(vmsg)
+		} else {
+			// Unexpected message in the response
+			// TODO close this channel with 503
+			err = ErrBadProtocol
+		}
+	}
+
+	return
 }
 
 func (me *Channel) send(msg message) (err error) {
-	if me.state != open && me.state != handshaking {
+	if me.state != open && me.state != handshaking && me.state != closing {
 		return ErrAlreadyClosed
 	}
 
@@ -128,20 +156,10 @@ func (me *Channel) Close() (err error) {
 		return ErrAlreadyClosed
 	}
 
-	me.send(&channelClose{ReplyCode: ReplySuccess})
+	err = me.call(&channelClose{ReplyCode: ReplySuccess}, &channelCloseOk{})
+	me.shutdown()
 
-	me.state = closing
-
-	switch (<-me.rpc).(type) {
-	case *channelCloseOk:
-		return
-	case nil:
-		return
-	default:
-		return ErrBadProtocol
-	}
-
-	panic("unreachable")
+	return
 }
 
 func (me *Channel) newDelivery(msg messageWithContent) *Delivery {
@@ -167,22 +185,21 @@ func (me *Channel) newDelivery(msg messageWithContent) *Delivery {
 		Body: body,
 	}
 
-	// Properties for the delivery
-	if deliver, ok := msg.(*basicDeliver); ok {
-		delivery.ConsumerTag = deliver.ConsumerTag
-		delivery.DeliveryTag = deliver.DeliveryTag
-		delivery.Redelivered = deliver.Redelivered
-		delivery.Exchange = deliver.Exchange
-		delivery.RoutingKey = deliver.RoutingKey
+	// Properties for the delivery types
+	switch m := msg.(type) {
+	case *basicDeliver:
+		delivery.ConsumerTag = m.ConsumerTag
+		delivery.DeliveryTag = m.DeliveryTag
+		delivery.Redelivered = m.Redelivered
+		delivery.Exchange = m.Exchange
+		delivery.RoutingKey = m.RoutingKey
 
-	}
-
-	if get, ok := msg.(*basicGetOk); ok {
-		delivery.MessageCount = get.MessageCount
-		delivery.DeliveryTag = get.DeliveryTag
-		delivery.Redelivered = get.Redelivered
-		delivery.Exchange = get.Exchange
-		delivery.RoutingKey = get.RoutingKey
+	case *basicGetOk:
+		delivery.MessageCount = m.MessageCount
+		delivery.DeliveryTag = m.DeliveryTag
+		delivery.Redelivered = m.Redelivered
+		delivery.Exchange = m.Exchange
+		delivery.RoutingKey = m.RoutingKey
 	}
 
 	return &delivery
@@ -302,47 +319,39 @@ func (me *Channel) recvContent(f frame) error {
 }
 
 func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (err error) {
-	if err = me.send(&basicQos{
-		PrefetchSize:  prefetchSize,
-		PrefetchCount: prefetchCount,
-		Global:        global,
-	}); err != nil {
-		return
-	}
-
-	switch (<-me.rpc).(type) {
-	case *basicQosOk:
-		return
-	default:
-		return ErrBadProtocol
-	}
-
-	panic("unreachable")
+	return me.call(
+		&basicQos{
+			PrefetchSize:  prefetchSize,
+			PrefetchCount: prefetchCount,
+			Global:        global,
+		},
+		&basicQosOk{},
+	)
 }
 
 func (me *Channel) Cancel(consumerTag string, noWait bool) (err error) {
-	if err = me.send(&basicCancel{
+	req := &basicCancel{
 		ConsumerTag: consumerTag,
 		NoWait:      noWait,
-	}); err != nil {
+	}
+	res := &basicCancelOk{}
+
+	if err = me.call(req, res); err != nil {
 		return
 	}
 
-	if !noWait {
-		switch ok := (<-me.rpc).(type) {
-		case *basicCancelOk:
-			me.consumers.close(ok.ConsumerTag)
-			return
-		default:
-			return ErrBadProtocol
-		}
+	if req.wait() {
+		me.consumers.close(res.ConsumerTag)
+	} else {
+		// Potentially could drop deliveries in flight
+		me.consumers.close(consumerTag)
 	}
 
 	return
 }
 
 func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive bool, noWait bool, arguments Table) (state QueueState, err error) {
-	if err = me.send(&queueDeclare{
+	req := &queueDeclare{
 		Queue:      name,
 		Passive:    false,
 		Durable:    lifetime.durable(),
@@ -350,144 +359,92 @@ func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive bool, 
 		Exclusive:  exclusive,
 		NoWait:     noWait,
 		Arguments:  arguments,
-	}); err != nil {
+	}
+	res := &queueDeclareOk{}
+
+	if err = me.call(req, res); err != nil {
 		return
 	}
 
-	if !noWait {
-		switch ok := (<-me.rpc).(type) {
-		case *queueDeclareOk:
-			return QueueState{
-				Declared:      true,
-				MessageCount:  int(ok.MessageCount),
-				ConsumerCount: int(ok.ConsumerCount),
-			}, nil
-		case nil:
-			return QueueState{Declared: false}, me.Close()
-		default:
-			return QueueState{Declared: false}, ErrBadProtocol
+	if req.wait() {
+		state = QueueState{
+			Declared:      (res.Queue == name),
+			MessageCount:  int(res.MessageCount),
+			ConsumerCount: int(res.ConsumerCount),
 		}
-	}
-
-	return QueueState{Declared: true}, nil
-}
-
-func (me *Channel) QueueInspect(name string) (state QueueState, err error) {
-	if err = me.send(&queueDeclare{
-		Queue:   name,
-		Passive: true,
-	}); err != nil {
-		return
-	}
-
-	switch ok := (<-me.rpc).(type) {
-	case *queueDeclareOk:
-		return QueueState{
-			Declared:      true,
-			MessageCount:  int(ok.MessageCount),
-			ConsumerCount: int(ok.ConsumerCount),
-		}, nil
-		// TODO: handle when it's not declared?
-	case nil:
-		return QueueState{Declared: false}, me.Close()
-	default:
-		return QueueState{Declared: false}, ErrBadProtocol
-	}
-
-	panic("unreachable")
-}
-
-func (me *Channel) QueueBind(name string, routingKey string, sourceExchange string, noWait bool, arguments Table) (err error) {
-	if err = me.send(&queueBind{
-		Queue:      name,
-		Exchange:   sourceExchange,
-		RoutingKey: routingKey,
-		NoWait:     noWait,
-		Arguments:  arguments,
-	}); err != nil {
-		return
-	}
-
-	if !noWait {
-		switch (<-me.rpc).(type) {
-		case *queueBindOk:
-			return
-		case nil:
-			return me.Close()
-		default:
-			return ErrBadProtocol
-		}
+	} else {
+		state = QueueState{Declared: true}
 	}
 
 	return
 }
 
+func (me *Channel) QueueInspect(name string) (state QueueState, err error) {
+	req := &queueDeclare{
+		Queue:   name,
+		Passive: true,
+	}
+	res := &queueDeclareOk{}
+
+	err = me.call(req, res)
+
+	state = QueueState{
+		Declared:      (res.Queue == name),
+		MessageCount:  int(res.MessageCount),
+		ConsumerCount: int(res.ConsumerCount),
+	}
+
+	return
+}
+
+func (me *Channel) QueueBind(name string, routingKey string, sourceExchange string, noWait bool, arguments Table) (err error) {
+	return me.call(
+		&queueBind{
+			Queue:      name,
+			Exchange:   sourceExchange,
+			RoutingKey: routingKey,
+			NoWait:     noWait,
+			Arguments:  arguments,
+		},
+		&queueBindOk{},
+	)
+}
+
 func (me *Channel) QueueUnbind(name string, routingKey string, sourceExchange string, arguments Table) (err error) {
-	if err = me.send(&queueUnbind{
-		Queue:      name,
-		Exchange:   sourceExchange,
-		RoutingKey: routingKey,
-		Arguments:  arguments,
-	}); err != nil {
-		return
-	}
-
-	switch (<-me.rpc).(type) {
-	case *queueUnbindOk:
-		return
-	case nil:
-		return me.Close()
-	default:
-		return ErrBadProtocol
-	}
-
-	panic("unreachable")
+	return me.call(
+		&queueUnbind{
+			Queue:      name,
+			Exchange:   sourceExchange,
+			RoutingKey: routingKey,
+			Arguments:  arguments,
+		},
+		&queueUnbindOk{},
+	)
 }
 
 func (me *Channel) QueuePurge(name string, noWait bool) (messageCount int, err error) {
-	if err = me.send(&queuePurge{
+	req := &queuePurge{
 		Queue:  name,
 		NoWait: noWait,
-	}); err != nil {
-		return
 	}
+	res := &queuePurgeOk{}
 
-	if !noWait {
-		switch ok := (<-me.rpc).(type) {
-		case *queuePurgeOk:
-			return int(ok.MessageCount), nil
-		case nil:
-			return 0, me.Close()
-		default:
-			return 0, ErrBadProtocol
-		}
-	}
+	err = me.call(req, res)
+	messageCount = int(res.MessageCount)
 
 	return
 }
 
 func (me *Channel) QueueDelete(name string, ifUnused bool, ifEmpty bool, noWait bool) (err error) {
-	if err = me.send(&queueDelete{
-		Queue:    name,
-		IfUnused: ifUnused,
-		IfEmpty:  ifEmpty,
-		NoWait:   noWait,
-	}); err != nil {
-		return
-	}
-
-	if !noWait {
-		switch (<-me.rpc).(type) {
-		case *queueDeleteOk:
-			return
-		case nil:
-			return me.Close()
-		default:
-			return ErrBadProtocol
-		}
-	}
-
-	return
+	return me.call(
+		&queueDelete{
+			Queue:    name,
+			IfUnused: ifUnused,
+			IfEmpty:  ifEmpty,
+			NoWait:   noWait,
+		},
+		&queueDeleteOk{},
+	)
 }
 
 // Will deliver on the chan passed or this will make a new chan. The
@@ -509,7 +466,7 @@ func (me *Channel) Consume(queueName string, noAck bool, exclusive bool, noLocal
 		me.consumers.add(consumerTag, ch)
 	}
 
-	if err = me.send(&basicConsume{
+	req := &basicConsume{
 		Queue:       queueName,
 		ConsumerTag: consumerTag,
 		NoLocal:     noLocal,
@@ -517,121 +474,69 @@ func (me *Channel) Consume(queueName string, noAck bool, exclusive bool, noLocal
 		Exclusive:   exclusive,
 		NoWait:      noWait,
 		Arguments:   arguments,
-	}); err != nil {
-		return
 	}
+	res := &basicConsumeOk{}
+
+	err = me.call(req, res)
 
 	if !noWait {
-		switch ok := (<-me.rpc).(type) {
-		case *basicConsumeOk:
-			me.consumers.add(ok.ConsumerTag, ch)
-			return
-		case nil:
-			return ch, me.Close()
-		default:
-			return ch, ErrBadProtocol
-		}
+		me.consumers.add(res.ConsumerTag, ch)
 	}
 
 	return
 }
 
 func (me *Channel) ExchangeDeclare(name string, lifetime Lifetime, exchangeType string, internal bool, noWait bool, arguments Table) (err error) {
-	if err = me.send(&exchangeDeclare{
-		Exchange:   name,
-		Type:       exchangeType,
-		Passive:    false,
-		Durable:    lifetime.durable(),
-		AutoDelete: lifetime.autoDelete(),
-		Internal:   internal,
-		NoWait:     noWait,
-		Arguments:  arguments,
-	}); err != nil {
-		return
-	}
-
-	if !noWait {
-		switch (<-me.rpc).(type) {
-		case *exchangeDeclareOk:
-			return
-		default:
-			return ErrBadProtocol
-		}
-	}
-
-	return
+	return me.call(
+		&exchangeDeclare{
+			Exchange:   name,
+			Type:       exchangeType,
+			Passive:    false,
+			Durable:    lifetime.durable(),
+			AutoDelete: lifetime.autoDelete(),
+			Internal:   internal,
+			NoWait:     noWait,
+			Arguments:  arguments,
+		},
+		&exchangeDeclareOk{},
+	)
 }
 
 func (me *Channel) ExchangeDelete(name string, ifUnused bool, noWait bool) (err error) {
-	if err = me.send(&exchangeDelete{
-		Exchange: name,
-		IfUnused: ifUnused,
-		NoWait:   noWait,
-	}); err != nil {
-		return
-	}
-
-	if !noWait {
-		switch (<-me.rpc).(type) {
-		case *exchangeDeleteOk:
-			return
-		case nil:
-			return me.Close()
-		default:
-			return ErrBadProtocol
-		}
-	}
-
-	return
+	return me.call(
+		&exchangeDelete{
+			Exchange: name,
+			IfUnused: ifUnused,
+			NoWait:   noWait,
+		},
+		&exchangeDeleteOk{},
+	)
 }
 
 func (me *Channel) ExchangeBind(name string, routingKey string, destinationExchange string, noWait bool, arguments Table) (err error) {
-	if err = me.send(&exchangeBind{
-		Destination: destinationExchange,
-		Source:      name,
-		RoutingKey:  routingKey,
-		NoWait:      noWait,
-		Arguments:   arguments,
-	}); err != nil {
-		return
-	}
-
-	if !noWait {
-		switch (<-me.rpc).(type) {
-		case *exchangeBindOk:
-			return
-		case nil:
-			return me.Close()
-		default:
-			return ErrBadProtocol
-		}
-	}
-
-	return
+	return me.call(
+		&exchangeBind{
+			Destination: destinationExchange,
+			Source:      name,
+			RoutingKey:  routingKey,
+			NoWait:      noWait,
+			Arguments:   arguments,
+		},
+		&exchangeBindOk{},
+	)
 }
 
 func (me *Channel) ExchangeUnbind(name string, routingKey string, destinationExchange string, noWait bool, arguments Table) (err error) {
-	if err = me.send(&exchangeUnbind{
-		Destination: destinationExchange,
-		Source:      name,
-		RoutingKey:  routingKey,
-		NoWait:      noWait,
-		Arguments:   arguments,
-	}); err != nil {
-		return
-	}
-
-	if !noWait {
-		switch (<-me.rpc).(type) {
-		case *exchangeUnbindOk:
-			return
-		case nil:
-			return me.Close()
-		default:
-			return ErrBadProtocol
-		}
-	}
-	return
+	return me.call(
+		&exchangeUnbind{
+			Destination: destinationExchange,
+			Source:      name,
+			RoutingKey:  routingKey,
+			NoWait:      noWait,
+			Arguments:   arguments,
+		},
+		&exchangeUnbindOk{},
+	)
 }
 
 // Publishes a message to an exchange.
@@ -663,10 +568,9 @@ func (me *Channel) Publish(exchangeName string, routingKey string, mandatory boo
 // Synchronously fetch a single message from a queue.  In almost all cases,
 // using `Consume` will be preferred.
 func (me *Channel) Get(queueName string, noAck bool) (msg *Delivery, ok bool, err error) {
-	if err = me.send(&basicGet{
-		Queue: queueName,
-		NoAck: noAck,
-	}); err != nil {
+	// Special case where 'call' cannot be used because of the variant return type
+	// *** needs to mirror any changes to .call
+	if err = me.send(&basicGet{Queue: queueName, NoAck: noAck}); err != nil {
 		return
 	}
 
@@ -676,55 +580,32 @@ func (me *Channel) Get(queueName string, noAck bool) (msg *Delivery, ok bool, er
 	case *basicGetEmpty:
 		return nil, false, nil
 	case nil:
-		return nil, false, me.Close()
+		me.shutdown()
+		return nil, false, ErrAlreadyClosed
 	}
 
 	return nil, false, ErrBadProtocol
 }
 
 func (me *Channel) TxSelect() (err error) {
-	if err = me.send(&txSelect{}); err != nil {
-		return
-	}
-
-	switch (<-me.rpc).(type) {
-	case *txSelectOk:
-		return
-	case nil:
-		return me.Close()
-	}
-
-	return ErrBadProtocol
+	return me.call(
+		&txSelect{},
+		&txSelectOk{},
+	)
 }
 
 func (me *Channel) TxCommit() (err error) {
-	if err = me.send(&txCommit{}); err != nil {
-		return
-	}
-
-	switch (<-me.rpc).(type) {
-	case *txCommitOk:
-		return
-	case nil:
-		return me.Close()
-	}
-
-	return ErrBadProtocol
+	return me.call(
+		&txCommit{},
+		&txCommitOk{},
+	)
 }
 
 func (me *Channel) TxRollback() (err error) {
-	if err = me.send(&txRollback{}); err != nil {
-		return
-	}
-
-	switch (<-me.rpc).(type) {
-	case *txRollbackOk:
-		return
-	case nil:
-		return me.Close()
-	}
-
-	return ErrBadProtocol
+	return me.call(
+		&txRollback{},
+		&txRollbackOk{},
+	)
 }
 
 //TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }
