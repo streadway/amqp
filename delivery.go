@@ -20,25 +20,7 @@ func (me *Delivery) Reject(requeue bool) error {
 }
 
 func (me *Delivery) Cancel(noWait bool) (consumerTag string, err error) {
-	if err = me.channel.send(&basicCancel{
-		ConsumerTag: me.ConsumerTag,
-		NoWait:      noWait,
-	}); err != nil {
-		return
-	}
-
-	if !noWait {
-		switch ok := (<-me.channel.rpc).(type) {
-		case *basicCancelOk:
-			return ok.ConsumerTag, nil
-		case nil:
-			return "", me.channel.Close()
-		default:
-			return "", ErrBadProtocol
-		}
-	}
-
-	return
+	return me.ConsumerTag, me.channel.Cancel(me.ConsumerTag, noWait)
 }
 
 // RabbitMQ extension - Negatively acknowledge the delivery of message(s)

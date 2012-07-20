@@ -378,6 +378,93 @@ func TestIntegrationPublishConsume(t *testing.T) {
 	}
 }
 
+func TestIntegrationConsumeFlow(t *testing.T) {
+	queue := "test.integration.consumer-flow"
+
+	c1 := integrationConnection(t, "pub-flow")
+	c2 := integrationConnection(t, "sub-flow")
+
+	if c1 != nil && c2 != nil {
+		defer c1.Close()
+		defer c2.Close()
+
+		pub, _ := c1.Channel()
+		sub, _ := c2.Channel()
+
+		pub.QueueDeclare(queue, UntilUnused, false, false, nil)
+		sub.QueueDeclare(queue, UntilUnused, false, false, nil)
+		defer pub.QueueDelete(queue, false, false, false)
+
+		sub.Qos(1, 0, false)
+
+		messages, _ := sub.Consume(queue, false, false, false, false, "", nil, nil)
+
+		pub.Publish("", queue, false, false, Publishing{Body: []byte("pub 1")})
+		pub.Publish("", queue, false, false, Publishing{Body: []byte("pub 2")})
+
+		msg := assertConsumeBody(t, messages, []byte("pub 1"))
+
+		sub.Flow(false)
+
+		msg.Ack(false)
+
+		select {
+		case <-messages:
+			t.Fatalf("message was delivered when flow was not active")
+		default:
+		}
+
+		sub.Flow(true)
+
+		msg = assertConsumeBody(t, messages, []byte("pub 2"))
+		msg.Ack(false)
+	}
+}
+
+// This test is driven by a private API to simulate the server sending a channelFlow message
+func TestIntegrationPublishFlow(t *testing.T) {
+	// TODO - no idea how to test without affecting the server or mucking internal APIs
+	// i'd like to make sure the RW lock can be held by multiple publisher threads
+	// and that multiple channelFlow messages do not block the dispatch thread
+}
+
+func TestIntegrationConsumeCancel(t *testing.T) {
+	queue := "test.integration.consume-cancel"
+
+	c := integrationConnection(t, "pub")
+
+	if c != nil {
+		defer c.Close()
+
+		ch, _ := c.Channel()
+
+		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		defer ch.QueueDelete(queue, false, false, false)
+
+		messages, _ := ch.Consume(queue, false, false, false, false, "integration-tag", nil, nil)
+
+		ch.Publish("", queue, false, false, Publishing{Body: []byte("1")})
+
+		assertConsumeBody(t, messages, []byte("1"))
+
+		err := ch.Cancel("integration-tag", false)
+		if err != nil {
+			t.Fatalf("error cancelling the consumer: %v", err)
+		}
+
+		ch.Publish("", queue, false, false, Publishing{Body: []byte("2")})
+
+		select {
+		case <-time.After(100 * time.Millisecond):
+			t.Fatalf("Timeout on Close")
+		case _, ok := <-messages:
+			if ok {
+				t.Fatalf("Extra message on consumer when consumer should have been closed")
+			}
+		}
+	}
+}
+
 func (c *Connection) Generate(r *rand.Rand, _ int) reflect.Value {
 	urlStr := os.Getenv("AMQP_URL")
 	if urlStr == "" {
