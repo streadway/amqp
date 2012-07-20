@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	uri          *string = flag.String("uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
-	exchangeName *string = flag.String("exchange", "test-exchange", "AMQP exchange name")
-	routingKey   *string = flag.String("routing-key", "test-key", "AMQP routing key")
-	body         *string = flag.String("body", "foobar", "Body of message")
+	uri          = flag.String("uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
+	exchangeName = flag.String("exchange", "test-exchange", "AMQP exchange name")
+	routingKey   = flag.String("routing-key", "test-key", "AMQP routing key")
+	body         = flag.String("body", "foobar", "Body of message")
 )
 
 func init() {
@@ -61,7 +61,7 @@ func publish(amqpURI, exchange, routingKey, body string) error {
 	}
 
 	log.Printf("declared Exchange, publishing %dB body (%s)", len(body), body)
-	err = channel.Publish(
+	if err = channel.Publish(
 		exchange,   // publish to an exchange
 		routingKey, // routing to 0 or more queues
 		true,       // mandatory
@@ -75,8 +75,7 @@ func publish(amqpURI, exchange, routingKey, body string) error {
 			Priority:        0, // 0-9
 			// a bunch of application/implementation-specific fields
 		},
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("Exchange Publish: %s", err)
 	}
 
