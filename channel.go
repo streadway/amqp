@@ -7,6 +7,7 @@ package amqp
 
 import (
 	"reflect"
+	"sync"
 )
 
 // 0      1         3             7                  size+7 size+8
@@ -28,6 +29,10 @@ type Channel struct {
 
 	id    uint16
 	state state
+
+	// active is true when flow control is locked
+	active bool
+	flow   sync.RWMutex
 
 	// State machine that manages frame order
 	recv func(*Channel, frame) error
@@ -219,7 +224,17 @@ func (me *Channel) dispatch(msg message) {
 		}
 
 	case *channelFlow:
-		// unhandled
+		switch {
+		case m.Active && !me.active:
+			me.flow.Lock()
+			me.active = true
+		case !m.Active && me.active:
+			// assumes a single writer from the Connection
+			me.active = false
+			me.flow.Unlock()
+		}
+
+		me.send(&channelFlowOk{Active: m.Active})
 
 	case *basicDeliver:
 		if me.state == open {
@@ -230,7 +245,7 @@ func (me *Channel) dispatch(msg message) {
 
 	default:
 		// TODO only deliver on the RPC channel if there the message is
-		// synchronouse (wait()==true)
+		// synchronous (wait()==true)
 		if me.state != closed {
 			me.rpc <- msg
 		}
@@ -541,6 +556,9 @@ func (me *Channel) ExchangeUnbind(name string, routingKey string, destinationExc
 
 // Publishes a message to an exchange.
 func (me *Channel) Publish(exchangeName string, routingKey string, mandatory bool, immediate bool, msg Publishing) (err error) {
+	me.flow.RLock()
+	defer me.flow.RUnlock()
+
 	return me.send(&basicPublish{
 		Exchange:   exchangeName,
 		RoutingKey: routingKey,
@@ -608,8 +626,13 @@ func (me *Channel) TxRollback() (err error) {
 	)
 }
 
+func (me *Channel) Flow(active bool) (err error) {
+	return me.call(
+		&channelFlow{Active: active},
+		&channelFlowOk{},
+	)
+}
+
 //TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }
 
 //TODO func (me *Channel) Confirm(noWait bool) error                                  { return nil }
-
-//TODO func (me *Channel) Flow(active bool) error { return nil }
