@@ -13,11 +13,12 @@ import (
 )
 
 var (
-	uri          *string = flag.String("uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
-	exchangeName *string = flag.String("exchange", "test-exchange", "AMQP exchange name")
-	queueName    *string = flag.String("queue", "test-queue", "AMQP queue name")
-	routingKey   *string = flag.String("routing-key", "test-key", "AMQP routing key")
-	lifetimeStr  *string = flag.String("lifetime", "5s", "lifetime of process before shutdown (0s=infinite)")
+	uri          = flag.String("uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
+	exchangeName = flag.String("exchange", "test-exchange", "AMQP exchange name")
+	queueName    = flag.String("queue", "test-queue", "AMQP queue name")
+	routingKey   = flag.String("routing-key", "test-key", "AMQP routing key")
+	consumerTag  = flag.String("consumer-tag", "simple-consumer", "AMQP consumer tag (should not be blank)")
+	lifetimeStr  = flag.String("lifetime", "5s", "lifetime of process before shutdown (0s=infinite)")
 	lifetime     time.Duration
 )
 
@@ -30,7 +31,7 @@ func init() {
 }
 
 func main() {
-	c, err := NewConsumer(*uri, *exchangeName, *queueName, *routingKey)
+	c, err := NewConsumer(*uri, *exchangeName, *queueName, *routingKey, *consumerTag)
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
@@ -49,13 +50,15 @@ func main() {
 
 type Consumer struct {
 	Channel *amqp.Channel
-	quit    chan chan bool
+	tag     string
+	done    chan bool
 }
 
-func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
+func NewConsumer(amqpURI, exchange, queue, routing, ctag string) (*Consumer, error) {
 	c := &Consumer{
 		Channel: nil,
-		quit:    make(chan chan bool),
+		tag:     ctag,
+		done:    make(chan bool),
 	}
 
 	log.Printf("dialing %s", amqpURI)
@@ -86,7 +89,7 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 	}
 
 	log.Printf("declared Exchange, declaring Queue (%s)", queue)
-	queueState, err := channel.QueueDeclare(
+	queueState, err := c.Channel.QueueDeclare(
 		queue,            // name of the queue
 		amqp.UntilUnused, // lifetime = auto-delete
 		false,            // exclusive
@@ -103,7 +106,7 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 	}
 
 	log.Printf("declared Queue, binding to Exchange (routing '%s')", routing)
-	if err := channel.QueueBind(
+	if err := c.Channel.QueueBind(
 		queue,    // name of the queue
 		routing,  // routingKey
 		exchange, // sourceExchange
@@ -114,14 +117,14 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 		return nil, fmt.Errorf("Queue Bind: %s", err)
 	}
 
-	log.Printf("Queue bound to Exchange, starting Consume")
-	deliveries, err := channel.Consume(
+	log.Printf("Queue bound to Exchange, starting Consume (consumer tag '%s')", c.tag)
+	deliveries, err := c.Channel.Consume(
 		queue,  // name
 		false,  // noAck
 		false,  // exclusive
 		false,  // noLocal
 		false,  // noWait
-		"",     // consumerTag,
+		c.tag,  // consumerTag,
 		noArgs, // arguments
 		nil,    // deliveries (ie. create a deliveries channel for me)
 	)
@@ -135,32 +138,21 @@ func NewConsumer(amqpURI, exchange, queue, routing string) (*Consumer, error) {
 }
 
 func (c *Consumer) Shutdown() {
-	q := make(chan bool)
-	c.quit <- q
-	<-q
+	c.Channel.Cancel(c.tag, true) // will Close() the channel
+	<-c.done                      // wait for handle() to exit
 }
 
 func (c *Consumer) handle(deliveries chan amqp.Delivery) {
-	for {
-		select {
-		case q := <-c.quit:
-			c.closeChannel()
-			q <- true
-			return
-		case d, ok := <-deliveries:
-			if !ok {
-				log.Printf("delivery channel closed")
-				c.closeChannel()
-				break // we still want to handle Shutdown()
-			}
-			log.Printf(
-				"got %dB delivery: [%v] %s",
-				len(d.Body),
-				d.DeliveryTag,
-				d.Body,
-			)
-		}
+	for d := range deliveries {
+		log.Printf(
+			"got %dB delivery: [%v] %s",
+			len(d.Body),
+			d.DeliveryTag,
+			d.Body,
+		)
 	}
+	log.Printf("handle: deliveries channel closed")
+	c.done <- true
 }
 
 func (c *Consumer) closeChannel() {
