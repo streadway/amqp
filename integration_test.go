@@ -787,6 +787,58 @@ func TestIntegrationTxRollback(t *testing.T) {
 	}
 }
 
+func TestIntegrationReturn(t *testing.T) {
+	if c, ch := integrationQueue(t, "return"); c != nil {
+		defer c.Close()
+
+		ret := make(chan Return, 1)
+
+		ch.NotifyReturn(ret)
+
+		// without any consumers this should be returned
+		ch.Publish("", "confirm", false, true, Publishing{Body: []byte("immediate")})
+
+		select {
+		case res := <-ret:
+			if string(res.Body) != "immediate" {
+				t.Fatalf("expected return of the same message")
+			}
+
+			if res.ReplyCode != 313 {
+				t.Fatalf("expected no consumers reply code on the Return result")
+			}
+
+		case <-time.After(200 * time.Millisecond):
+			t.Fatalf("no return was received within 200ms")
+		}
+	}
+}
+
+func TestIntegrationConfirm(t *testing.T) {
+	if c, ch := integrationQueue(t, "confirm"); c != nil {
+		defer c.Close()
+
+		ack, nack := make(chan uint64, 1), make(chan uint64, 1)
+
+		ch.NotifyConfirm(ack, nack)
+
+		if err := ch.Confirm(false); err != nil {
+			t.Fatalf("could not confirm")
+		}
+
+		ch.Publish("", "confirm", false, false, Publishing{Body: []byte("confirm")})
+
+		select {
+		case tag := <-ack:
+			if tag != 1 {
+				t.Fatalf("expected ack starting with delivery tag of 1")
+			}
+		case <-time.After(200 * time.Millisecond):
+			t.Fatalf("no ack was received within 200ms")
+		}
+	}
+}
+
 // https://github.com/streadway/amqp/issues/7
 func TestCorruptedMessageRegression(t *testing.T) {
 	messageCount := 1024

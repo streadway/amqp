@@ -52,6 +52,18 @@ func integrationConnection(t *testing.T, name string) *Connection {
 	return nil
 }
 
+// Returns a connection, channel and delcares a queue when the AMQP_URL is in the environment
+func integrationQueue(t *testing.T, name string) (*Connection, *Channel) {
+	if conn := integrationConnection(t, name); conn != nil {
+		if channel, err := conn.Channel(); err == nil {
+			if _, err = channel.QueueDeclare(name, UntilUnused, false, false, nil); err == nil {
+				return conn, channel
+			}
+		}
+	}
+	return nil, nil
+}
+
 // Delegates to integrationConnection and only returns a connection if the
 // product is RabbitMQ
 func integrationRabbitMQ(t *testing.T, name string) *Connection {

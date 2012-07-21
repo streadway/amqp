@@ -30,9 +30,22 @@ type Channel struct {
 	id    uint16
 	state state
 
-	// active is true when flow control is locked
-	active bool
-	flow   sync.RWMutex
+	// Writer lock for the notify arrays
+	notify sync.Mutex
+
+	// Listeners for active=true flow control.  When true is sent to a listener,
+	// publishing should pause until false is sent to listeners.
+	flows []chan bool
+
+	// Listeners for returned publishings for unroutable messages on mandatory
+	// publishings or undeliverable messages on immediate publishings.
+	returns []chan Return
+
+	// Listeners for Acks/Nacks when the channel is in Confirm mode
+	// the value is the sequentially increasing delivery tag
+	// starting at 1 immediately after the Confirm
+	acks  []chan uint64
+	nacks []chan uint64
 
 	// State machine that manages frame order
 	recv func(*Channel, frame) error
@@ -59,9 +72,29 @@ func newChannel(c *Connection, id uint16) (me *Channel, err error) {
 func (me *Channel) shutdown() {
 	me.state = closing
 
+	me.notify.Lock()
+	defer me.notify.Unlock()
+
 	delete(me.connection.channels, me.id)
 	close(me.rpc)
 	me.consumers.closeAll()
+
+	for _, c := range me.flows {
+		close(c)
+	}
+
+	for _, c := range me.returns {
+		close(c)
+	}
+
+	for _, c := range me.acks {
+		close(c)
+	}
+
+	for _, c := range me.nacks {
+		close(c)
+	}
+
 	me.state = closed
 }
 
@@ -155,61 +188,6 @@ func (me *Channel) send(msg message) (err error) {
 	return
 }
 
-// Initiate a clean channel closure by sending a close message with the error code set to '200'
-func (me *Channel) Close() (err error) {
-	if me.state != open {
-		return ErrAlreadyClosed
-	}
-
-	err = me.call(&channelClose{ReplyCode: ReplySuccess}, &channelCloseOk{})
-	me.shutdown()
-
-	return
-}
-
-func (me *Channel) newDelivery(msg messageWithContent) *Delivery {
-	props, body := msg.getContent()
-
-	delivery := Delivery{
-		channel: me,
-
-		Headers:         props.Headers,
-		ContentType:     props.ContentType,
-		ContentEncoding: props.ContentEncoding,
-		DeliveryMode:    props.DeliveryMode,
-		Priority:        props.Priority,
-		CorrelationId:   props.CorrelationId,
-		ReplyTo:         props.ReplyTo,
-		Expiration:      props.Expiration,
-		MessageId:       props.MessageId,
-		Timestamp:       props.Timestamp,
-		Type:            props.Type,
-		UserId:          props.UserId,
-		AppId:           props.AppId,
-
-		Body: body,
-	}
-
-	// Properties for the delivery types
-	switch m := msg.(type) {
-	case *basicDeliver:
-		delivery.ConsumerTag = m.ConsumerTag
-		delivery.DeliveryTag = m.DeliveryTag
-		delivery.Redelivered = m.Redelivered
-		delivery.Exchange = m.Exchange
-		delivery.RoutingKey = m.RoutingKey
-
-	case *basicGetOk:
-		delivery.MessageCount = m.MessageCount
-		delivery.DeliveryTag = m.DeliveryTag
-		delivery.Redelivered = m.Redelivered
-		delivery.Exchange = m.Exchange
-		delivery.RoutingKey = m.RoutingKey
-	}
-
-	return &delivery
-}
-
 // Eventually called via the state machine from the connection's reader
 // goroutine, so assumes serialized access.
 func (me *Channel) dispatch(msg message) {
@@ -224,21 +202,30 @@ func (me *Channel) dispatch(msg message) {
 		}
 
 	case *channelFlow:
-		switch {
-		case m.Active && !me.active:
-			me.flow.Lock()
-			me.active = true
-		case !m.Active && me.active:
-			// assumes a single writer from the Connection
-			me.active = false
-			me.flow.Unlock()
+		for _, c := range me.flows {
+			c <- m.Active
+		}
+		me.send(&channelFlowOk{Active: m.Active})
+
+	case *basicReturn:
+		ret := newReturn(*m)
+		for _, c := range me.returns {
+			c <- *ret
 		}
 
-		me.send(&channelFlowOk{Active: m.Active})
+	case *basicAck:
+		for _, c := range me.acks {
+			c <- m.DeliveryTag
+		}
+
+	case *basicNack:
+		for _, c := range me.nacks {
+			c <- m.DeliveryTag
+		}
 
 	case *basicDeliver:
 		if me.state == open {
-			me.consumers.send(m.ConsumerTag, me.newDelivery(m))
+			me.consumers.send(m.ConsumerTag, newDelivery(me, m))
 			// TODO log failed consumer and close channel, this can happen when
 			// deliveries are in flight and a no-wait cancel has happened
 		}
@@ -331,6 +318,61 @@ func (me *Channel) recvContent(f frame) error {
 	}
 
 	panic("unreachable")
+}
+
+// Initiate a clean channel closure by sending a close message with the error
+// code set to '200'
+func (me *Channel) Close() (err error) {
+	if me.state != open {
+		return ErrAlreadyClosed
+	}
+
+	err = me.call(&channelClose{ReplyCode: ReplySuccess}, &channelCloseOk{})
+	me.shutdown()
+
+	return
+}
+
+// Add a listener channel for when server initiated basic.flow requests are
+// sent.  When `true` is sent on one of the listener channels, all publishes
+// should pause until a `false` is sent.
+func (me *Channel) NotifyFlow(c chan bool) {
+	me.notify.Lock()
+	defer me.notify.Unlock()
+
+	me.flows = append(me.flows, c)
+}
+
+// Add a listener for basic.return messages.  These can be sent from the server
+// when a publish with the `immediate` flag lands on a queue that does not have
+// any ready consumers or when a publish with the `mandatory` flag does not
+// have a route.
+//
+// A return struct has a copy of the Publishing type along with some error
+// information about why the publishing failed.
+func (me *Channel) NotifyReturn(c chan Return) {
+	me.notify.Lock()
+	defer me.notify.Unlock()
+
+	me.returns = append(me.returns, c)
+}
+
+// Intended for reliable publishing.  Add a listener for basic.ack and
+// basic.nack messages.  These will be sent by the server for every publish
+// after `channel.Confirm(...)` has been called.  The value sent on these
+// channels are the sequence number of the publishing.  It is up to client of
+// this channel to maintain the sequence number and handle resends.
+//
+// The order of acknowledgements is not bound to the order of deliveries.
+//
+// It's advisable to wait for all acks or nacks to arrive before closing the
+// channel on completion.
+func (me *Channel) NotifyConfirm(ack chan uint64, nack chan uint64) {
+	me.notify.Lock()
+	defer me.notify.Unlock()
+
+	me.acks = append(me.acks, ack)
+	me.nacks = append(me.nacks, nack)
 }
 
 func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (err error) {
@@ -556,9 +598,6 @@ func (me *Channel) ExchangeUnbind(name string, routingKey string, destinationExc
 
 // Publishes a message to an exchange.
 func (me *Channel) Publish(exchangeName string, routingKey string, mandatory bool, immediate bool, msg Publishing) (err error) {
-	me.flow.RLock()
-	defer me.flow.RUnlock()
-
 	return me.send(&basicPublish{
 		Exchange:   exchangeName,
 		RoutingKey: routingKey,
@@ -594,7 +633,7 @@ func (me *Channel) Get(queueName string, noAck bool) (msg *Delivery, ok bool, er
 
 	switch m := (<-me.rpc).(type) {
 	case *basicGetOk:
-		return me.newDelivery(m), true, nil
+		return newDelivery(me, m), true, nil
 	case *basicGetEmpty:
 		return nil, false, nil
 	case nil:
@@ -626,6 +665,8 @@ func (me *Channel) TxRollback() (err error) {
 	)
 }
 
+// On `true`, requests the server to pause delivery.  On `false` requests the
+// server to resume delivery.
 func (me *Channel) Flow(active bool) (err error) {
 	return me.call(
 		&channelFlow{Active: active},
@@ -633,6 +674,16 @@ func (me *Channel) Flow(active bool) (err error) {
 	)
 }
 
-//TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }
+// Put this channel into confirm mode.  The server will then send either a
+// basic.ack or basic.nack message with the deliver tag set to a 1 based index
+// corresponding to every publishing received after the this method returns.
+//
+// The order of acknowledgements is not bound to the order of deliveries.
+func (me *Channel) Confirm(noWait bool) (err error) {
+	return me.call(
+		&confirmSelect{Nowait: noWait},
+		&confirmSelectOk{},
+	)
+}
 
-//TODO func (me *Channel) Confirm(noWait bool) error                                  { return nil }
+//TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }

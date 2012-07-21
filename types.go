@@ -171,43 +171,6 @@ type Publishing struct {
 	Body []byte
 }
 
-// A delivery from the server to a consumer created with Queue.Consume or Queue.Get.  The
-// types have been promoted from the framing and the method so to provide flat,
-// typed access to everything the channel knows about this message.
-type Delivery struct {
-	channel *Channel
-
-	Headers Table // Application or header exchange table
-
-	// Properties for the message
-	ContentType     string    // MIME content type
-	ContentEncoding string    // MIME content encoding
-	DeliveryMode    uint8     // queue implemention use - non-persistent (1) or persistent (2)
-	Priority        uint8     // queue implementation use - 0 to 9
-	CorrelationId   string    // application use - correlation identifier
-	ReplyTo         string    // application use - address to to reply to (ex: RPC)
-	Expiration      string    // implementation use - message expiration spec
-	MessageId       string    // application use - message identifier
-	Timestamp       time.Time // application use - message timestamp
-	Type            string    // application use - message type name
-	UserId          string    // application use - creating user idA - should be authenticated user
-	AppId           string    // application use - creating application id
-
-	// only meaningful from a Channel.Consume or Queue.Consume
-	ConsumerTag string
-
-	// only meaningful on Channel.Get
-	MessageCount uint32
-
-	// Only meaningful when this is a result of a message consumption
-	DeliveryTag uint64
-	Redelivered bool
-	Exchange    string
-	RoutingKey  string // Message routing key
-
-	Body []byte
-}
-
 // The golang type that matches the amqp type.  Scale is the number of decimal digits
 // Scale == 2, Value == 12345, Decimal == 123.45
 type Decimal struct {
