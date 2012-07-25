@@ -15,12 +15,14 @@ import (
 // | type | channel |     size    |  |  payload   |  | frame-end |
 // +------+---------+-------------+  +------------+  +-----------+
 //  octet   short         long         size octets       octet
-const frameHeaderOverhead = 1 + 2 + 4 + 1
+const frameHeaderSize = 1 + 2 + 4 + 1
 
 // Represents an AMQP channel. Used for concurrent, interleaved publishers and
 // consumers on the same connection.
 type Channel struct {
-	Closed *Closed
+	// Mutex for notify listeners
+	destructor sync.Once
+	m          sync.Mutex
 
 	connection *Connection
 
@@ -30,8 +32,11 @@ type Channel struct {
 	id    uint16
 	state state
 
-	// Writer lock for the notify arrays
+	// Writer lock for the notify slices
 	notify sync.Mutex
+
+	// Channel and Connection exceptions will be broadcast on these listeners.
+	closes []chan *Error
 
 	// Listeners for active=true flow control.  When true is sent to a listener,
 	// publishing should pause until false is sent to listeners.
@@ -47,10 +52,14 @@ type Channel struct {
 	acks  []chan uint64
 	nacks []chan uint64
 
-	// State machine that manages frame order
+	// State machine that manages frame order, must only be mutated by the connection
 	recv func(*Channel, frame) error
 
-	// Current state for frame re-assembly
+	// State that manages the send behavior after before and after shutdown, must
+	// only be mutated in shutdown()
+	send func(*Channel, message) error
+
+	// Current state for frame re-assembly, only mutated from recv
 	message messageWithContent
 	header  *headerFrame
 	body    []byte
@@ -64,91 +73,110 @@ func newChannel(c *Connection, id uint16) (me *Channel, err error) {
 		rpc:        make(chan message),
 		consumers:  makeConsumers(),
 		recv:       (*Channel).recvMethod,
+		send:       (*Channel).sendOpen,
 	}
 
 	return me, nil
 }
 
-func (me *Channel) shutdown() {
-	me.state = closing
+func (me *Channel) shutdown(e *Error) {
+	me.destructor.Do(func() {
+		// Broadcast abnormal shutdown
+		if e != nil {
+			for _, c := range me.closes {
+				c <- e
+			}
+		}
 
-	me.notify.Lock()
-	defer me.notify.Unlock()
+		delete(me.connection.channels, me.id)
 
-	delete(me.connection.channels, me.id)
-	close(me.rpc)
-	me.consumers.closeAll()
+		me.send = (*Channel).sendClosed
 
-	for _, c := range me.flows {
-		close(c)
-	}
+		close(me.rpc)
 
-	for _, c := range me.returns {
-		close(c)
-	}
+		me.consumers.closeAll()
 
-	for _, c := range me.acks {
-		close(c)
-	}
+		for _, c := range me.closes {
+			close(c)
+		}
 
-	for _, c := range me.nacks {
-		close(c)
-	}
+		for _, c := range me.flows {
+			close(c)
+		}
 
-	me.state = closed
+		for _, c := range me.returns {
+			close(c)
+		}
+
+		for _, c := range me.acks {
+			close(c)
+		}
+
+		for _, c := range me.nacks {
+			close(c)
+		}
+	})
 }
 
 func (me *Channel) open() (err error) {
-	req := &channelOpen{}
-	res := &channelOpenOk{}
-
-	me.state = handshaking
-
-	if err = me.call(req, res); err != nil {
-		return
+	if err = me.call(&channelOpen{}, &channelOpenOk{}); err != nil {
+		me.state = closed
 	}
-
-	me.state = open
 
 	return
 }
 
 // Performs a request/response call for when the message is not NoWait and is
 // specified as Synchronous.
-func (me *Channel) call(req, res message) (err error) {
-	if err = me.send(req); err != nil {
-		return
+func (me *Channel) call(req message, res ...message) error {
+	if err := me.send(me, req); err != nil {
+		return err
 	}
 
 	if req.wait() {
-		msg, ok := <-me.rpc
-		if !ok {
-			me.shutdown()
-			err = ErrAlreadyClosed
-		} else if reflect.TypeOf(msg) == reflect.TypeOf(res) {
-			// *res = *msg
-			vres := reflect.ValueOf(res).Elem()
-			vmsg := reflect.ValueOf(msg).Elem()
-			vres.Set(vmsg)
+		if msg, ok := <-me.rpc; ok {
+			// Try to match one of the result types
+			for _, try := range res {
+				if reflect.TypeOf(msg) == reflect.TypeOf(try) {
+					// *res = *msg
+					vres := reflect.ValueOf(try).Elem()
+					vmsg := reflect.ValueOf(msg).Elem()
+					vres.Set(vmsg)
+					return nil
+				}
+			}
+			return ErrCommandInvalid
 		} else {
-			// Unexpected message in the response
-			// TODO close this channel with 503
-			err = ErrBadProtocol
+			// RPC channel has been closed, likely due to a hard error on the
+			// Connection.  This indicates we have already been shutdown.
+			return ErrClosed
 		}
 	}
 
-	return
+	return nil
 }
 
-func (me *Channel) send(msg message) (err error) {
-	if me.state != open && me.state != handshaking && me.state != closing {
-		return ErrAlreadyClosed
+func (me *Channel) sendClosed(msg message) (err error) {
+	// After a 'channel.close' is sent or received the only valid response is
+	// channel.close-ok
+	if _, ok := msg.(*channelCloseOk); ok {
+		return me.connection.send(&methodFrame{
+			ChannelId: me.id,
+			Method:    msg,
+		})
 	}
+
+	return ErrClosed
+}
+
+func (me *Channel) sendOpen(msg message) (err error) {
+	me.m.Lock()
+	defer me.m.Unlock()
 
 	if content, ok := msg.(messageWithContent); ok {
 		props, body := content.getContent()
 		class, _ := content.id()
-		size := me.connection.Config.MaxFrameSize - frameHeaderOverhead
+		size := me.connection.Config.MaxFrameSize - frameHeaderSize
 
 		if err = me.connection.send(&methodFrame{
 			ChannelId: me.id,
@@ -193,19 +221,14 @@ func (me *Channel) send(msg message) (err error) {
 func (me *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
-		if me.state != closed {
-			me.rpc <- msg
-		}
-		me.send(&channelCloseOk{})
-		if me.state == open {
-			me.shutdown()
-		}
+		me.shutdown(newError(m.ReplyCode, m.ReplyText))
+		me.send(me, &channelCloseOk{})
 
 	case *channelFlow:
 		for _, c := range me.flows {
 			c <- m.Active
 		}
-		me.send(&channelFlowOk{Active: m.Active})
+		me.send(me, &channelFlowOk{Active: m.Active})
 
 	case *basicReturn:
 		ret := newReturn(*m)
@@ -231,11 +254,7 @@ func (me *Channel) dispatch(msg message) {
 		}
 
 	default:
-		// TODO only deliver on the RPC channel if there the message is
-		// synchronous (wait()==true)
-		if me.state != closed {
-			me.rpc <- msg
-		}
+		me.rpc <- msg
 	}
 }
 
@@ -322,38 +341,52 @@ func (me *Channel) recvContent(f frame) error {
 
 // Initiate a clean channel closure by sending a close message with the error
 // code set to '200'
-func (me *Channel) Close() (err error) {
-	if me.state != open {
-		return ErrAlreadyClosed
-	}
-
-	err = me.call(&channelClose{ReplyCode: ReplySuccess}, &channelCloseOk{})
-	me.shutdown()
-
-	return
+func (me *Channel) Close() error {
+	err := me.call(&channelClose{ReplyCode: ReplySuccess}, &channelCloseOk{})
+	me.shutdown(nil)
+	return err
 }
 
-// Add a listener channel for when server initiated basic.flow requests are
-// sent.  When `true` is sent on one of the listener channels, all publishes
-// should pause until a `false` is sent.
-func (me *Channel) NotifyFlow(c chan bool) {
-	me.notify.Lock()
-	defer me.notify.Unlock()
+// Add a chan for when the server sends a channel or connection exception in
+// the form of a connection.close or channel.close method.  Connection
+// exceptions will be broadcast to all open channels and all channels will be
+// closed, where channel exceptions will only be broadcast to listeners to this
+// channel.
+//
+// The chan provided will be closed when the Channel is closed and on a
+// graceful close, no error will be sent.
+//
+func (me *Channel) NotifyClose(c chan *Error) {
+	me.m.Lock()
+	defer me.m.Unlock()
+	me.closes = append(me.closes, c)
+}
 
+// Listens for basic.flow methods sent by the server.  When `true` is sent on
+// one of the listener channels, all publishes should pause until a `false` is
+// sent.
+//
+// RabbitMQ will rather use TCP pushback on the network connection instead of
+// sending basic.flow.  This means that if a single channel is producing too
+// much on the same connection, all channels using that connection will suffer,
+// including acknowlegements from deliveries.
+//
+func (me *Channel) NotifyFlow(c chan bool) {
+	me.m.Lock()
+	defer me.m.Unlock()
 	me.flows = append(me.flows, c)
 }
 
-// Add a listener for basic.return messages.  These can be sent from the server
-// when a publish with the `immediate` flag lands on a queue that does not have
+// Listens for basic.return methods.  These can be sent from the server when a
+// publish with the `immediate` flag lands on a queue that does not have
 // any ready consumers or when a publish with the `mandatory` flag does not
 // have a route.
 //
-// A return struct has a copy of the Publishing type along with some error
+// A return struct has a copy of the Publishing along with some error
 // information about why the publishing failed.
 func (me *Channel) NotifyReturn(c chan Return) {
-	me.notify.Lock()
-	defer me.notify.Unlock()
-
+	me.m.Lock()
+	defer me.m.Unlock()
 	me.returns = append(me.returns, c)
 }
 
@@ -368,9 +401,8 @@ func (me *Channel) NotifyReturn(c chan Return) {
 // It's advisable to wait for all acks or nacks to arrive before closing the
 // channel on completion.
 func (me *Channel) NotifyConfirm(ack chan uint64, nack chan uint64) {
-	me.notify.Lock()
-	defer me.notify.Unlock()
-
+	me.m.Lock()
+	defer me.m.Unlock()
 	me.acks = append(me.acks, ack)
 	me.nacks = append(me.nacks, nack)
 }
@@ -436,25 +468,25 @@ func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive bool, 
 	return
 }
 
-func (me *Channel) QueueInspect(name string) (state QueueState, err error) {
+func (me *Channel) QueueInspect(name string) (QueueState, error) {
 	req := &queueDeclare{
 		Queue:   name,
 		Passive: true,
 	}
 	res := &queueDeclareOk{}
 
-	err = me.call(req, res)
+	err := me.call(req, res)
 
-	state = QueueState{
+	state := QueueState{
 		Declared:      (res.Queue == name),
 		MessageCount:  int(res.MessageCount),
 		ConsumerCount: int(res.ConsumerCount),
 	}
 
-	return
+	return state, err
 }
 
-func (me *Channel) QueueBind(name string, routingKey string, sourceExchange string, noWait bool, arguments Table) (err error) {
+func (me *Channel) QueueBind(name string, routingKey string, sourceExchange string, noWait bool, arguments Table) error {
 	return me.call(
 		&queueBind{
 			Queue:      name,
@@ -467,7 +499,7 @@ func (me *Channel) QueueBind(name string, routingKey string, sourceExchange stri
 	)
 }
 
-func (me *Channel) QueueUnbind(name string, routingKey string, sourceExchange string, arguments Table) (err error) {
+func (me *Channel) QueueUnbind(name string, routingKey string, sourceExchange string, arguments Table) error {
 	return me.call(
 		&queueUnbind{
 			Queue:      name,
@@ -598,7 +630,7 @@ func (me *Channel) ExchangeUnbind(name string, routingKey string, destinationExc
 
 // Publishes a message to an exchange.
 func (me *Channel) Publish(exchangeName string, routingKey string, mandatory bool, immediate bool, msg Publishing) (err error) {
-	return me.send(&basicPublish{
+	return me.send(me, &basicPublish{
 		Exchange:   exchangeName,
 		RoutingKey: routingKey,
 		Mandatory:  mandatory,
@@ -624,24 +656,22 @@ func (me *Channel) Publish(exchangeName string, routingKey string, mandatory boo
 
 // Synchronously fetch a single message from a queue.  In almost all cases,
 // using `Consume` will be preferred.
-func (me *Channel) Get(queueName string, noAck bool) (msg *Delivery, ok bool, err error) {
-	// Special case where 'call' cannot be used because of the variant return type
-	// *** needs to mirror any changes to .call
-	if err = me.send(&basicGet{Queue: queueName, NoAck: noAck}); err != nil {
-		return
+//
+// When a message is available on the queue, the 'ok bool' return parameter will be true.
+func (me *Channel) Get(queueName string, noAck bool) (*Delivery, bool, error) {
+	req := &basicGet{Queue: queueName, NoAck: noAck}
+	res := &basicGetOk{}
+	empty := &basicGetEmpty{}
+
+	if err := me.call(req, res, empty); err != nil {
+		return nil, false, err
 	}
 
-	switch m := (<-me.rpc).(type) {
-	case *basicGetOk:
-		return newDelivery(me, m), true, nil
-	case *basicGetEmpty:
-		return nil, false, nil
-	case nil:
-		me.shutdown()
-		return nil, false, ErrAlreadyClosed
+	if res.DeliveryTag > 0 {
+		return newDelivery(me, res), true, nil
 	}
 
-	return nil, false, ErrBadProtocol
+	return nil, false, nil
 }
 
 func (me *Channel) TxSelect() (err error) {

@@ -6,50 +6,51 @@
 package amqp
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"time"
 )
 
 // Connection and channel state
-type state int
+type state uint8
 
 const (
-	initialize state = iota
-	handshaking
-	open
+	open state = iota
 	closing
 	closed
 )
 
 var (
-	ErrBadProtocol          = errors.New("Unexpected protocol message")
-	ErrBadCredentials       = errors.New("Credentials were valid or not accepted")
-	ErrUnsupportedMechanism = errors.New("SASL could not negotiate a shared mechanism")
-	ErrBadVhost             = errors.New("Not authorized for vhost or vhost not found")
-
-	ErrUnexpectedMethod    = errors.New("Bad protocol: Received out of order method")
-	ErrUnknownMethod       = errors.New("Unknown wire method id")
-	ErrUnknownClass        = errors.New("Unknown wire class id")
-	ErrUnknownFrameType    = errors.New("Bad frame: unknown type")
-	ErrUnknownFieldType    = errors.New("Bad frame: unknown table field")
-	ErrBadFrameSize        = errors.New("Bad frame: invalid size")
-	ErrBadFrameTermination = errors.New("Bad frame: invalid terminator")
-
-	ErrAlreadyClosed = errors.New("Connection/Channel has already been closed")
-
-	protocolHeader = []byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1}
+	// Errors that this library could return/emit from a channel or connection
+	ErrClosed          = &Error{Code: ChannelError, Reason: "channel/connection is not open"}
+	ErrSASL            = &Error{Code: AccessRefused, Reason: "SASL could not negotiate a shared mechanism"}
+	ErrCredentials     = &Error{Code: AccessRefused, Reason: "username or password not allowed"}
+	ErrVhost           = &Error{Code: AccessRefused, Reason: "no access to this vhost"}
+	ErrSyntax          = &Error{Code: SyntaxError, Reason: "invalid field or value inside of a frame"}
+	ErrFrame           = &Error{Code: FrameError, Reason: "frame could not be parsed"}
+	ErrCommandInvalid  = &Error{Code: CommandInvalid, Reason: "unexpected command received"}
+	ErrUnexpectedFrame = &Error{Code: UnexpectedFrame, Reason: "unexpected frame received"}
 )
 
 // The code and reason a channel or connection has been closed by the server.
-type Closed struct {
-	Code   uint16
-	Reason string
+type Error struct {
+	Code    int    // constant code from the specification
+	Reason  string // description of the error
+	Server  bool   // true when initiated from the server, false when from this library
+	Recover bool   // true when this error can be recovered by retrying later or with differnet parameters
 }
 
-func (me Closed) Error() string {
-	return fmt.Sprintf("Closed with code (%d) reason: '%s'", me.Code, me.Reason)
+func newError(code uint16, text string) *Error {
+	return &Error{
+		Code:    int(code),
+		Reason:  text,
+		Recover: isSoftExceptionCode(int(code)),
+		Server:  true,
+	}
+}
+
+func (me Error) Error() string {
+	return fmt.Sprintf("Exception (%d) Reason: %q", me.Code, me.Reason)
 }
 
 // Used by header frames to capture routing and header information
@@ -182,23 +183,6 @@ type Decimal struct {
 // table serialization.
 type Table map[string]interface{}
 
-var (
-	// The method in the frame could not be parsed
-	ErrBadMethod = errors.New("Bad frame Method")
-
-	// The content properties in the frame could not be parsed
-	ErrBadHeader = errors.New("Bad frame Header")
-
-	// The content in the frame could not be parsed
-	ErrBadContent = errors.New("Bad frame Content")
-
-	// The frame was not terminated by the special 206 (0xCE) byte
-	ErrBadFrameEnd = errors.New("Bad frame End")
-
-	// The frame type was not recognized
-	ErrBadFrameType = errors.New("Bad frame Type")
-)
-
 type message interface {
 	id() (uint16, uint16)
 	wait() bool
@@ -247,6 +231,18 @@ type reader struct {
 
 type writer struct {
 	w io.Writer
+}
+
+// Implements the frame interface for Connection RPC
+type protocolHeader struct{}
+
+func (protocolHeader) write(w io.Writer) error {
+	_, err := w.Write([]byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1})
+	return err
+}
+
+func (protocolHeader) channel() uint16 {
+	panic("only valid as initial handshake")
 }
 
 /*

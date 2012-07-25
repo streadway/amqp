@@ -4,7 +4,7 @@
 // Source code and contact info at http://github.com/streadway/amqp
 
 /* GENERATED FILE - DO NOT EDIT */
-/* Rebuild from the protocol/gen.go tool */
+/* Rebuild from the spec/gen.go tool */
 
 package amqp
 
@@ -14,126 +14,46 @@ import (
 	"io"
 )
 
+// From the specification.  Used in the Error type.
 const (
-	FrameMethod    = 1
-	FrameHeader    = 2
-	FrameBody      = 3
-	FrameHeartbeat = 8
-	FrameMinSize   = 4096
-	FrameEnd       = 206
-
-	/* 
-	   Indicates that the method completed successfully. This reply code is
-	   reserved for future use - the current protocol design does not use positive
-	   confirmation and reply codes are sent only in case of an error.
-	*/
-	ReplySuccess = 200
-
-	/* 
-	   The client attempted to transfer content larger than the server could accept
-	   at the present time. The client may retry at a later time.
-	*/
-	ContentTooLarge = 311
-
-	/* 
-	   When the exchange cannot deliver to a consumer when the immediate flag is
-	   set. As a result of pending data on the queue or the absence of any
-	   consumers of the queue.
-	*/
-	NoConsumers = 313
-
-	/* 
-	   An operator intervened to close the connection for some reason. The client
-	   may retry at some later date.
-	*/
-	ConnectionForced = 320
-
-	/* 
-	   The client tried to work with an unknown virtual host.
-	*/
-	InvalidPath = 402
-
-	/* 
-	   The client attempted to work with a server entity to which it has no
-	   access due to security settings.
-	*/
-	AccessRefused = 403
-
-	/* 
-	   The client attempted to work with a server entity that does not exist.
-	*/
-	NotFound = 404
-
-	/* 
-	   The client attempted to work with a server entity to which it has no
-	   access because another client is working with it.
-	*/
-	ResourceLocked = 405
-
-	/* 
-	   The client requested a method that was not allowed because some precondition
-	   failed.
-	*/
+	FrameMethod        = 1
+	FrameHeader        = 2
+	FrameBody          = 3
+	FrameHeartbeat     = 8
+	FrameMinSize       = 4096
+	FrameEnd           = 206
+	ReplySuccess       = 200
+	ContentTooLarge    = 311
+	NoConsumers        = 313
+	ConnectionForced   = 320
+	InvalidPath        = 402
+	AccessRefused      = 403
+	NotFound           = 404
+	ResourceLocked     = 405
 	PreconditionFailed = 406
-
-	/* 
-	   The sender sent a malformed frame that the recipient could not decode.
-	   This strongly implies a programming error in the sending peer.
-	*/
-	FrameError = 501
-
-	/* 
-	   The sender sent a frame that contained illegal values for one or more
-	   fields. This strongly implies a programming error in the sending peer.
-	*/
-	SyntaxError = 502
-
-	/* 
-	   The client sent an invalid sequence of frames, attempting to perform an
-	   operation that was considered invalid by the server. This usually implies
-	   a programming error in the client.
-	*/
-	CommandInvalid = 503
-
-	/* 
-	   The client attempted to work with a channel that had not been correctly
-	   opened. This most likely indicates a fault in the client layer.
-	*/
-	ChannelError = 504
-
-	/* 
-	   The peer sent a frame that was not expected, usually in the context of
-	   a content header and body.  This strongly indicates a fault in the peer's
-	   content processing.
-	*/
-	UnexpectedFrame = 505
-
-	/* 
-	   The server could not complete the method because it lacked sufficient
-	   resources. This may be due to the client creating too many of some type
-	   of entity.
-	*/
-	ResourceError = 506
-
-	/* 
-	   The client tried to work with some entity in a manner that is prohibited
-	   by the server, due to security settings or by some other criteria.
-	*/
-	NotAllowed = 530
-
-	/* 
-	   The client tried to use functionality that is not implemented in the
-	   server.
-	*/
-	NotImplemented = 540
-
-	/* 
-	   The server could not complete the method because of an internal error.
-	   The server may require intervention by an operator in order to resume
-	   normal operations.
-	*/
-	InternalError = 541
+	FrameError         = 501
+	SyntaxError        = 502
+	CommandInvalid     = 503
+	ChannelError       = 504
+	UnexpectedFrame    = 505
+	ResourceError      = 506
+	NotAllowed         = 530
+	NotImplemented     = 540
+	InternalError      = 541
 )
+
+func isSoftExceptionCode(code int) bool {
+	switch code {
+	case 311:
+	case 313:
+	case 403:
+	case 404:
+	case 405:
+	case 406:
+		return true
+	}
+	return false
+}
 
 /*  
    This method starts the connection negotiation process by telling the client the

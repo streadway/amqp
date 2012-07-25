@@ -52,7 +52,7 @@ func TestIntegrationExchange(t *testing.T) {
 		}
 		t.Logf("create channel OK")
 
-		exchange := "test-basic-ops-exchange"
+		exchange := "test-integration-exchange"
 
 		if err := channel.ExchangeDeclare(
 			exchange,    // name
@@ -267,21 +267,25 @@ func TestIntegrationChannelClosing(t *testing.T) {
 }
 
 func TestIntegrationConnectBadCredentials(t *testing.T) {
+	t.Parallel()
+
 	if uri, ok := integrationUri(t); ok {
 		uri.Username = "lolwho"
 
-		if _, err := Dial(uri.String()); err != ErrBadCredentials {
-			t.Errorf("Expected ErrBadCredentials, got %s", err)
+		if _, err := Dial(uri.String()); err != ErrCredentials {
+			t.Errorf("Expected ErrCredentials, got %s", err)
 		}
 	}
 }
 
 func TestIntegrationConnectBadVhost(t *testing.T) {
+	t.Parallel()
+
 	if uri, ok := integrationUri(t); ok {
 		uri.Vhost = "lolwat"
 
-		if _, err := Dial(uri.String()); err != ErrBadVhost {
-			t.Errorf("Expected ErrBadVhost, got %s", err)
+		if _, err := Dial(uri.String()); err != ErrVhost {
+			t.Errorf("Expected ErrVhost, got %s", err)
 		}
 	}
 }
@@ -899,8 +903,10 @@ func TestCorruptedMessageRegression(t *testing.T) {
 func TestExchangeDeclarePrecondition(t *testing.T) {
 	c1 := integrationConnection(t, "exchange-double-declare")
 	c2 := integrationConnection(t, "exchange-double-declare-cleanup")
-	if c1 != nil {
+	if c1 != nil && c2 != nil {
+		defer c1.Close()
 		defer c2.Close()
+
 		ch, err := c1.Channel()
 		if err != nil {
 			t.Fatalf("Create channel")
@@ -928,20 +934,23 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 			false,
 			nil,
 		)
+
 		if err == nil {
 			t.Fatalf("Expected to fail a redeclare with different lifetime, didn't receive an error")
 		}
-		t.Logf("good: got error: %s", err)
 
-		// after the redeclaration above, channel exception is raised (406) and it is closed
-		// so we use a different connection and channel to clean up.
-		ch2, err := c2.Channel()
-		if err != nil {
-			t.Fatalf("Could not create channel")
+		if err, ok := err.(Error); ok {
+			if err.Code != PreconditionFailed {
+				t.Fatalf("Expected precondition error")
+			}
+			if !err.Recover {
+				t.Fatalf("Expected to be able to recover")
+			}
 		}
 
+		ch2, _ := c2.Channel()
 		if err = ch2.ExchangeDelete(exchange, false, false); err != nil {
-			t.Fatalf("Could not delete exchange")
+			t.Fatalf("Could not delete exchange: %v", err)
 		}
 	}
 }

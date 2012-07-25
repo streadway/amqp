@@ -90,14 +90,14 @@ func newDelivery(channel *Channel, msg messageWithContent) *Delivery {
 }
 
 func (me *Delivery) Ack(multiple bool) error {
-	return me.channel.send(&basicAck{
+	return me.channel.send(me.channel, &basicAck{
 		DeliveryTag: me.DeliveryTag,
 		Multiple:    multiple,
 	})
 }
 
 func (me *Delivery) Reject(requeue bool) error {
-	return me.channel.send(&basicReject{
+	return me.channel.send(me.channel, &basicReject{
 		DeliveryTag: me.DeliveryTag,
 		Requeue:     requeue,
 	})
@@ -114,7 +114,7 @@ func (me *Delivery) Cancel(noWait bool) (consumerTag string, err error) {
 // This method must not be used to select or requeue messages the client wishes
 // not to handle.
 func (me *Delivery) Nack(multiple, requeue bool) error {
-	return me.channel.send(&basicNack{
+	return me.channel.send(me.channel, &basicNack{
 		DeliveryTag: me.DeliveryTag,
 		Multiple:    multiple,
 		Requeue:     requeue,

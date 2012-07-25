@@ -9,9 +9,11 @@ import (
 	"bufio"
 	"io"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -32,21 +34,16 @@ type Config struct {
 
 // Manages the serialization and deserialization of frames from IO and dispatches the frames to the appropriate channel.
 type Connection struct {
-	conn io.ReadWriteCloser
+	destructor sync.Once
+	m          sync.Mutex // writer and notify mutex
 
-	in            chan message
-	shutdownMutex sync.Mutex
-
-	state state // TODO not goroutine-safe; refactor with stateMutex?
-
-	writer      *writer
-	writerMutex sync.Mutex
-
-	increment sync.Mutex
-	sequence  uint16
-
+	conn     io.ReadWriteCloser
+	rpc      chan message
+	writer   *writer
+	sequence uint32
 	channels map[uint16]*Channel
-	sends    chan time.Time // used in place of heartbeats
+	sends    chan time.Time // timestamps of sends
+	closes   []chan *Error
 
 	Config Config // The negotiated Config after connection.open
 
@@ -92,149 +89,143 @@ func NewConnection(conn io.ReadWriteCloser, config Config) (me *Connection, err 
 	me = &Connection{
 		conn:     conn,
 		writer:   &writer{bufio.NewWriter(conn)},
-		in:       make(chan message),
+		rpc:      make(chan message),
 		channels: make(map[uint16]*Channel),
 		sends:    make(chan time.Time),
 	}
-
 	go me.reader()
-
 	return me, me.open(config)
 }
 
 func (me *Connection) nextChannelId() uint16 {
-	me.increment.Lock()
-	defer me.increment.Unlock()
-	me.sequence++
-	return me.sequence
+	return uint16(atomic.AddUint32(&me.sequence, 1))
 }
 
-func (me *Connection) Close() (err error) {
-	if me.state != closed {
-		if err = me.send(
-			&methodFrame{
-				ChannelId: 0,
-				Method: &connectionClose{
-					ReplyCode: ReplySuccess,
-					ReplyText: "bye",
-				},
-			},
-		); err != nil {
-			return
-		}
-
-		switch (<-me.in).(type) {
-		case *connectionCloseOk:
-			me.shutdown()
-			return nil
-		default:
-			return ErrBadProtocol
-		}
-	}
-
-	return ErrAlreadyClosed
+// Listens for close events either initiated by an error accompaning a
+// connection.close method or by a normal shutdown.
+//
+// On normal shutdowns, the chan will be closed.
+func (me *Connection) NotifyClose(c chan *Error) {
+	me.m.Lock()
+	defer me.m.Unlock()
+	me.closes = append(me.closes, c)
 }
 
-func (me *Connection) send(f frame) (err error) {
-	//fmt.Println("send:", f)
+func (me *Connection) Close() error {
+	defer me.shutdown(nil)
+	return me.call(
+		&connectionClose{
+			ReplyCode: ReplySuccess,
+			ReplyText: "kthxbai",
+		},
+		&connectionCloseOk{},
+	)
+}
 
-	me.writerMutex.Lock()
-	defer me.writerMutex.Unlock()
+func (me *Connection) closeWith(err *Error) error {
+	defer me.shutdown(err)
+	return me.call(
+		&connectionClose{
+			ReplyCode: uint16(err.Code),
+			ReplyText: err.Reason,
+		},
+		&connectionCloseOk{},
+	)
+}
 
-	if me.state > open {
-		return ErrAlreadyClosed
-	}
+func (me *Connection) send(f frame) error {
+	me.m.Lock()
+	err := me.writer.WriteFrame(f)
+	me.m.Unlock()
 
-	if err = me.writer.WriteFrame(f); err != nil {
-		// TODO handle write failure to cleanly shutdown the connection
-		me.shutdown()
+	if err != nil {
+		// Assuming the connection is dead, and closeWith would be re-entrant so
+		// shutdown all the things
+		me.shutdown(&Error{
+			Code:   FrameError,
+			Reason: err.Error(),
+		})
 	} else {
-		me.sent()
-	}
-
-	return nil
-}
-
-// Broadcast when sent some bytes, reducing heartbeats, only
-// if there is something that can receive - like a non-reentrant
-// call or if the heartbeater is running
-func (me *Connection) sent() {
-	select {
-	case me.sends <- time.Now():
-	default: // drop
-	}
-}
-
-func (me *Connection) shutdown() {
-	me.shutdownMutex.Lock()
-	defer me.shutdownMutex.Unlock()
-
-	if me.state != closed {
-		me.state = closing
-		for i, c := range me.channels {
-			delete(me.channels, i)
-			c.shutdown()
+		// Broadcast we sent a frame, reducing heartbeats, only
+		// if there is something that can receive - like a non-reentrant
+		// call or if the heartbeater isn't running
+		select {
+		case me.sends <- time.Now():
+		default:
 		}
-		close(me.in)
+	}
+
+	return err
+}
+
+func (me *Connection) shutdown(err *Error) {
+	me.destructor.Do(func() {
+		if err != nil {
+			for _, c := range me.closes {
+				c <- err
+			}
+		}
+
+		for id, c := range me.channels {
+			delete(me.channels, id)
+			c.shutdown(err)
+		}
+
+		close(me.rpc)
+		close(me.sends)
+
 		me.conn.Close()
-		me.state = closed
-	}
-}
 
-// Reset the blocking read deadline on the underlying connection when it
-// implements SetReadDeadline to three times the requested heartbeat interval.
-// On error, resort to blocking reads.
-func (me *Connection) resetDeadline() {
-	if beat := time.Duration(me.Config.HeartbeatInterval); beat > 0 {
-		if c, ok := me.conn.(readDeadliner); ok {
-			c.SetReadDeadline(time.Now().Add(3 * beat * time.Second))
+		for _, c := range me.closes {
+			close(c)
 		}
-	}
+	})
 }
 
 // All methods sent to the connection channel should be synchronous so we
 // can handle them directly without a framing component
 func (me *Connection) demux(f frame) {
-	if me.state != closed {
-		if f.channel() == 0 {
-			// TODO send hard error if any content frames/async frames are sent here
-			switch mf := f.(type) {
-			case *methodFrame:
-				me.in <- mf.Method
-			case *heartbeatFrame:
-				// kthxbai - all reads reset our deadline.  just drop this one.
-			default:
-				panic("TODO close with hard-error on unhandled connection frame type")
-			}
-		} else {
-			channel, ok := me.channels[f.channel()]
-			if ok {
-				channel.recv(channel, f)
-			} else {
-				// TODO handle unknown channel for now drop
-				println("XXX unknown channel", f.channel())
-				panic("XXX unknown channel")
-			}
-		}
+	if f.channel() == 0 {
+		me.dispatch0(f)
+	} else {
+		me.dispatchN(f)
 	}
 }
 
-func (me *Connection) dispatch() {
-	for {
-		switch msg := <-me.in; msg.(type) {
-		// handle the 4 way shutdown
+func (me *Connection) dispatch0(f frame) {
+	switch mf := f.(type) {
+	case *methodFrame:
+		switch m := mf.Method.(type) {
 		case *connectionClose: // request from server
 			me.send(&methodFrame{
 				ChannelId: 0,
 				Method:    &connectionCloseOk{},
 			})
-			me.Close()
-		case *connectionCloseOk: // response to our Close() request
-			me.in <- msg // forward to Close() method
-			return
-		case nil: // closed
-			return
+
+			// Deliver when we're waiting for a response before we've shut down so
+			// that we can return a meaningful error
+			select {
+			case me.rpc <- m:
+			default:
+			}
+
+			me.shutdown(newError(m.ReplyCode, m.ReplyText))
+		default:
+			me.rpc <- m
 		}
+	case *heartbeatFrame:
+		// kthx - all reads reset our deadline.  so we can drop this
+	default:
+		// lolwat - channel0 only responds to methods and heartbeats
+		me.closeWith(ErrUnexpectedFrame)
+	}
+}
+
+func (me *Connection) dispatchN(f frame) {
+	if channel, ok := me.channels[f.channel()]; ok {
+		channel.recv(channel, f)
+	} else {
+		me.closeWith(ErrClosed)
 	}
 }
 
@@ -249,19 +240,26 @@ func (me *Connection) reader() {
 		frame, err := frames.ReadFrame()
 
 		if err != nil {
-			me.shutdown()
+			me.shutdown(&Error{Code: FrameError, Reason: err.Error()})
 			return
 		}
 
 		me.demux(frame)
 
-		me.resetDeadline()
+		// Reset the blocking read deadline on the underlying connection when it
+		// implements SetReadDeadline to three times the requested heartbeat interval.
+		// On error, resort to blocking reads.
+		if beat := time.Duration(me.Config.HeartbeatInterval); beat > 0 {
+			if c, ok := me.conn.(readDeadliner); ok {
+				c.SetReadDeadline(time.Now().Add(3 * beat * time.Second))
+			}
+		}
 	}
 }
 
 // Ensures that at least one frame is being sent at the tuned interval with a
 // jitter tolerance of 250ms
-func (me *Connection) heartbeat(interval time.Duration) {
+func (me *Connection) heartbeater(interval time.Duration) {
 	last := time.Now()
 	tick := time.Tick(interval)
 
@@ -271,12 +269,16 @@ func (me *Connection) heartbeat(interval time.Duration) {
 			if at.Sub(last) > interval-250*time.Millisecond {
 				if err := me.send(&heartbeatFrame{}); err != nil {
 					// send heartbeats even after close/closeOk so we
-					// tick until we can't tick no more.
+					// tick until the connection starts erroring
 					return
 				}
 			}
-		case at := <-me.sends:
-			last = at
+		case at, open := <-me.sends:
+			if open {
+				last = at
+			} else {
+				return
+			}
 		}
 	}
 }
@@ -307,6 +309,39 @@ func (me *Connection) Channel() (channel *Channel, err error) {
 	return channel, channel.open()
 }
 
+func (me *Connection) call(req message, res ...message) error {
+	// Special case for when the protocol header frame is sent insted of a
+	// request method
+	if req != nil {
+		if err := me.send(&methodFrame{ChannelId: 0, Method: req}); err != nil {
+			return err
+		}
+	}
+
+	if msg, ok := <-me.rpc; ok {
+		if closed, ok := msg.(*connectionClose); ok {
+			return newError(closed.ReplyCode, closed.ReplyText)
+		} else {
+			// Try to match one of the result types
+			for _, try := range res {
+				if reflect.TypeOf(msg) == reflect.TypeOf(try) {
+					// *res = *msg
+					vres := reflect.ValueOf(try).Elem()
+					vmsg := reflect.ValueOf(msg).Elem()
+					vres.Set(vmsg)
+					return nil
+				}
+			}
+			return ErrCommandInvalid
+		}
+	} else {
+		// The incoming message channel has been closed.
+		return ErrClosed
+	}
+
+	panic("unreachable")
+}
+
 //    Connection          = open-Connection *use-Connection close-Connection
 //    open-Connection     = C:protocol-header
 //                          S:START C:START-OK
@@ -317,50 +352,106 @@ func (me *Connection) Channel() (channel *Channel, err error) {
 //    use-Connection      = *channel
 //    close-Connection    = C:CLOSE S:CLOSE-OK
 //                        / S:CLOSE C:CLOSE-OK
-func (me *Connection) open(config Config) (err error) {
-	me.state = handshaking
-
-	if _, err = me.conn.Write(protocolHeader); err != nil {
-		return
+func (me *Connection) open(config Config) error {
+	if err := me.send(&protocolHeader{}); err != nil {
+		return err
 	}
 
 	return me.openStart(config)
 }
 
-func (me *Connection) openStart(config Config) (err error) {
-	switch start := (<-me.in).(type) {
-	case *connectionStart:
-		me.VersionMajor = int(start.VersionMajor)
-		me.VersionMinor = int(start.VersionMinor)
-		me.Properties = Table(start.ServerProperties)
+func (me *Connection) openStart(config Config) error {
+	start := &connectionStart{}
 
-		// TODO support challenge/response
-		auth, ok := pickSASLMechanism(config.SASL, strings.Split(start.Mechanisms, " "))
-		if !ok {
-			return ErrUnsupportedMechanism
-		}
-
-		// Save this mechanism off as the one we chose
-		me.Config.SASL = []Authentication{auth}
-
-		if err = me.send(&methodFrame{
-			ChannelId: 0,
-			Method: &connectionStartOk{
-				Mechanism: auth.Mechanism(),
-				Response:  auth.Response(),
-			},
-		}); err != nil {
-			return
-		}
-
-		return me.openTune(config)
-	case nil:
-		return ErrBadProtocol
+	if err := me.call(nil, start); err != nil {
+		return err
 	}
-	return ErrBadProtocol
+
+	me.VersionMajor = int(start.VersionMajor)
+	me.VersionMinor = int(start.VersionMinor)
+	me.Properties = Table(start.ServerProperties)
+
+	// eventually support challenge/response here by also responding to
+	// connectionSecure.
+	auth, ok := pickSASLMechanism(config.SASL, strings.Split(start.Mechanisms, " "))
+	if !ok {
+		return ErrSASL
+	}
+
+	// Save this mechanism off as the one we chose
+	me.Config.SASL = []Authentication{auth}
+
+	return me.openTune(config, auth)
 }
 
-func negotiate(client, server int) int {
+func (me *Connection) openTune(config Config, auth Authentication) error {
+	ok := &connectionStartOk{
+		Mechanism: auth.Mechanism(),
+		Response:  auth.Response(),
+	}
+	tune := &connectionTune{}
+
+	if err := me.call(ok, tune); err != nil {
+		if err == ErrClosed {
+			// per spec, a connection can only be closed when it has been opened
+			// so at this point, we know it's an auth error, but the socket
+			// was closed instead.  Return a meaningful error.
+			return ErrCredentials
+		}
+		return err
+	}
+
+	// When this is bounded, share the bound.  We're effectively only bounded
+	// by MaxUint16.  If you hit a wrap around bug, throw a small party then
+	// make an github issue.
+	me.Config.MaxChannels = pick(config.MaxChannels, int(tune.ChannelMax))
+
+	// Frame size includes headers and end byte (len(payload)+8), even if
+	// this is less than FrameMinSize, use what the server sends because the
+	// alternative is to stop the handshake here.
+	me.Config.MaxFrameSize = pick(config.MaxFrameSize, int(tune.FrameMax))
+
+	// Save this off for resetDeadline()
+	me.Config.HeartbeatInterval = pick(config.HeartbeatInterval, int(tune.Heartbeat))
+
+	// "The client should start sending heartbeats after receiving a
+	// Connection.Tune method"
+	if me.Config.HeartbeatInterval > 0 {
+		go me.heartbeater(time.Duration(me.Config.HeartbeatInterval) * time.Second)
+	}
+
+	if err := me.send(&methodFrame{
+		ChannelId: 0,
+		Method: &connectionTuneOk{
+			ChannelMax: uint16(me.Config.MaxChannels),
+			FrameMax:   uint32(me.Config.MaxFrameSize),
+			Heartbeat:  uint16(me.Config.HeartbeatInterval),
+		},
+	}); err != nil {
+		return err
+	}
+
+	return me.openVhost(config)
+}
+
+func (me *Connection) openVhost(config Config) error {
+	req := &connectionOpen{VirtualHost: config.Vhost}
+	res := &connectionOpenOk{}
+
+	if err := me.call(req, res); err != nil {
+		if err == ErrClosed {
+			// Cannot be closed yet, but we know it's a vhost problem
+			return ErrVhost
+		}
+		return err
+	}
+
+	me.Config.Vhost = config.Vhost
+
+	return nil
+}
+
+func pick(client, server int) int {
 	if client == 0 || server == 0 {
 		// max
 		if client > server {
@@ -377,69 +468,4 @@ func negotiate(client, server int) int {
 		}
 	}
 	panic("unreachable")
-}
-
-func (me *Connection) openTune(config Config) (err error) {
-	switch tune := (<-me.in).(type) {
-	// TODO SECURE HANDSHAKE
-	case *connectionTune:
-		// When this is bounded, share the bound.  We're effectively only bounded
-		// by MaxUint16.  If you hit a wrap around bug, throw a small party then
-		// make an github issue.
-		me.Config.MaxChannels = negotiate(config.MaxChannels, int(tune.ChannelMax))
-
-		// Frame size includes headers and end byte (len(payload)+8), even if
-		// this is less than FrameMinSize, use what the server sends because the
-		// alternative is to stop the handshake here.
-		me.Config.MaxFrameSize = negotiate(config.MaxFrameSize, int(tune.FrameMax))
-
-		// Save this off for resetDeadline()
-		me.Config.HeartbeatInterval = negotiate(config.HeartbeatInterval, int(tune.Heartbeat))
-
-		// "The client should start sending heartbeats after receiving a
-		// Connection.Tune method"
-		if me.Config.HeartbeatInterval > 0 {
-			go me.heartbeat(time.Duration(me.Config.HeartbeatInterval) * time.Second)
-		}
-
-		if err = me.send(&methodFrame{
-			ChannelId: 0,
-			Method: &connectionTuneOk{
-				ChannelMax: uint16(me.Config.MaxChannels),
-				FrameMax:   uint32(me.Config.MaxFrameSize),
-				Heartbeat:  uint16(me.Config.HeartbeatInterval),
-			},
-		}); err != nil {
-			return
-		}
-
-		return me.openVhost(config)
-	case nil:
-		return ErrBadCredentials
-	}
-	return ErrBadProtocol
-}
-
-func (me *Connection) openVhost(config Config) (err error) {
-	me.Config.Vhost = config.Vhost
-
-	if err = me.send(&methodFrame{
-		ChannelId: 0,
-		Method: &connectionOpen{
-			VirtualHost: me.Config.Vhost,
-		},
-	}); err != nil {
-		return
-	}
-
-	switch (<-me.in).(type) {
-	case *connectionOpenOk:
-		me.state = open
-		go me.dispatch()
-		return nil // connection.open handshake finished
-	case nil:
-		return ErrBadVhost
-	}
-
-	return ErrBadProtocol
 }

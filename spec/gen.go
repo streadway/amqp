@@ -101,7 +101,8 @@ type Domain struct {
 type Constant struct {
 	Name  string `xml:"name,attr"`
 	Value int    `xml:"value,attr"`
-	Doc   []Doc  `xml:"doc"`
+	Class string `xml:"class,attr"`
+	Doc   string `xml:"doc"`
 }
 
 type Amqp struct {
@@ -140,7 +141,7 @@ var (
 	// Source code and contact info at http://github.com/streadway/amqp
 
   /* GENERATED FILE - DO NOT EDIT */
-  /* Rebuild from the protocol/gen.go tool */
+  /* Rebuild from the spec/gen.go tool */
 
   {{with .Root}}
   package amqp
@@ -151,12 +152,19 @@ var (
     "io"
   )
 
+	// From the specification.  Used in the Error type.
   const (
   {{range .Constants}}
-  {{range .Doc}}
-  /* {{.Body | clean}} */
-  {{end}}{{.Name | camel}} = {{.Value}} {{end}}
+	{{.Name | camel}} = {{.Value}}{{end}}
   )
+
+	func isSoftExceptionCode(code int) bool {
+		switch code {
+		{{range $c := .Constants}} {{if $c.IsSoftError}} case {{$c.Value}}:
+		{{end}}{{end}}return true
+		}
+		return false
+	}
 
   {{range .Classes}}
     {{$class := .}}
@@ -330,6 +338,10 @@ var (
 
   `))
 )
+
+func (me *Constant) IsSoftError() bool {
+	return me.Class == "soft-error"
+}
 
 func (me *renderer) Partial(prefix string, fields []fieldset) (s string, err error) {
 	var buf bytes.Buffer

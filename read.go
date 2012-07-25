@@ -8,7 +8,6 @@ package amqp
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"time"
 )
@@ -76,7 +75,7 @@ func (me *reader) ReadFrame() (frame frame, err error) {
 		}
 
 	default:
-		return nil, ErrBadFrameType
+		return nil, ErrFrame
 	}
 
 	if _, err = io.ReadFull(me.r, scratch[:1]); err != nil {
@@ -84,7 +83,7 @@ func (me *reader) ReadFrame() (frame frame, err error) {
 	}
 
 	if scratch[0] != FrameEnd {
-		return nil, ErrBadFrameEnd
+		return nil, ErrFrame
 	}
 
 	return
@@ -287,9 +286,7 @@ func readField(r io.Reader) (v interface{}, err error) {
 		return nil, nil
 	}
 
-	fmt.Println("Table: bad field", typ)
-
-	return nil, ErrUnknownFieldType
+	return nil, ErrSyntax
 }
 
 /*
