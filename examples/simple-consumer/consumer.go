@@ -32,16 +32,13 @@ func main() {
 		log.Fatalf("%s", err)
 	}
 
-	var shutdown <-chan time.Time
-
 	if *lifetime > 0 {
 		log.Printf("running for %s", *lifetime)
-		shutdown = time.Tick(*lifetime)
+		time.Sleep(*lifetime)
 	} else {
 		log.Printf("running forever")
+		select {}
 	}
-
-	<-shutdown
 
 	log.Printf("shutting down")
 
