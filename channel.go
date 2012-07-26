@@ -380,7 +380,28 @@ func (me *Channel) NotifyClose(c chan *Error) chan *Error {
 // one of the listener channels, all publishes should pause until a `false` is
 // sent.
 //
-// RabbitMQ will rather use TCP pushback on the network connection instead of
+// Asks the producer to pause or restart the flow of content data sent by a
+// consumer. This is a simple flow-control mechanism that a server can use to
+// avoid overflowing its queues or otherwise finding itself receiving more
+// messages than it can process. Note that this method is not intended for
+// window control. It does not affect contents returned by basic.get-ok
+// methods.
+// 
+// When a new channel is opened, it is active (flow is active). Some
+// applications assume that channels are inactive until started. To emulate
+// this behaviour a client MAY open the channel, then pause it.
+// 
+// Publishers should respond to a flow messages as rapidly as possible and the
+// server may disconnect over producing channels that do not respect these
+// messages.
+//
+// basic.flow-ok methods will always be returned to the server regardless of
+// the number of listeners there are.
+// 
+// To control the flow of deliveries from the server.  Use the Channel.Flow()
+// method instead.
+// 
+// Note: RabbitMQ will rather use TCP pushback on the network connection instead of
 // sending basic.flow.  This means that if a single channel is producing too
 // much on the same connection, all channels using that connection will suffer,
 // including acknowlegements from deliveries.
@@ -592,7 +613,78 @@ func (me *Channel) Consume(queueName string, noAck bool, exclusive bool, noLocal
 	return
 }
 
-func (me *Channel) ExchangeDeclare(name string, lifetime Lifetime, exchangeType string, internal bool, noWait bool, arguments Table) (err error) {
+/*
+Declares an exchange on the server. If the exchange does not already exist,
+the server will create it.  If the exchange exists, the server verifies
+that it is of the provided type and lifetime.
+
+Errors returned from this method will close the channel.
+
+	name string
+
+Exchange names starting with "amq." are reserved for pre-declared and
+standardized exchanges. The client MAY declare an exchange starting with
+"amq." if the passive option is set, or the exchange already exists.
+
+The exchange name can consists of a non-empty sequence of letters, digits, hyphen, underscore, period, or colon.
+
+	exchangeType string
+
+Each exchange belongs to one of a set of exchange types implemented by the
+server. The exchange types define the functionality of the exchange - i.e. how
+messages are routed through it. It is not valid or meaningful to attempt to
+change the type of an existing exchange.
+
+Exchanges cannot be redeclared with different types.  The client MUST not
+attempt to redeclare an existing exchange with a different type than used
+in the original Exchange.Declare method.
+
+	lifetime Lifetime
+
+One of the following values
+
+		UntilDeleted
+		UntilUnused
+		UntilServerRestarted
+
+The lifetime parameter contains the 'durable' and 'auto-delete' flags for this declaration and can be one of:
+
+UntilDeleted - declares the exchange as durable and not auto-deleted will
+survive server restarts and remain when there are no remaining bindings.  This
+is the lifetime for long-lived exchange configurations like stable routes and
+default exchanges.
+
+UntilUnused - declares the exchange as non-durable and auto-deleted which will
+not be redeclared on server restart and will be deleted when there are no
+remaining bindings.  This lifetime is useful for temporary topologies that
+should not pollute the virtual host on failure or completion.
+
+UntilServerRestarted - declares the exchange as non-durable and not
+auto-deleted which will remain as long as the server is running including when
+there are no remaining bindings.  This is useful for temporary topologies that
+may have long delays between bindings.
+
+Note: RabbitMQ declares the default exchange types like 'amq.fanout' with the
+equivalent Lifetime of UntilDeleted
+
+	internal bool
+
+When true, the exchange may not be used directly by publishers, but only when
+bound to other exchanges. Internal exchanges are used to construct wiring that
+is not visible to applications.
+
+	noWait bool
+
+Declare without waiting for a confirmation from the server.  The channel may
+be closed as a result.  Add a NotifyClose listener to respond to any
+exceptions.
+
+	arguments amqp.Table
+
+An amqp.Table of arguments that are specific to the server's implementation of
+the exchange.  This can be nil when no arguments are required to be sent.
+*/
+func (me *Channel) ExchangeDeclare(name string, lifetime Lifetime, exchangeType string, internal, noWait bool, arguments Table) error {
 	return me.call(
 		&exchangeDeclare{
 			Exchange:   name,
@@ -608,7 +700,28 @@ func (me *Channel) ExchangeDeclare(name string, lifetime Lifetime, exchangeType 
 	)
 }
 
-func (me *Channel) ExchangeDelete(name string, ifUnused bool, noWait bool) (err error) {
+/*
+Deletes an exchange. When an exchange is deleted all queue bindings on the
+exchange are also deleted.
+
+	name string
+
+The name of the exchange to delete.  If this exchange does not exist, the
+channel will be closed with an error.
+
+	ifUnused bool
+
+When true, the server will only delete the exchange if it has no queue
+bindings.  If the exchange has queue bindings the server does not delete it
+but close the channel with an exception instead.
+
+	noWait bool
+
+When true, do not wait for a server confirmation that the exchange has been
+deleted.  Failing to delete the channel could close the channel.  Add a
+NotifyClose listener to respond to these channel exceptions.
+*/
+func (me *Channel) ExchangeDelete(name string, ifUnused, noWait bool) error {
 	return me.call(
 		&exchangeDelete{
 			Exchange: name,
@@ -619,7 +732,48 @@ func (me *Channel) ExchangeDelete(name string, ifUnused bool, noWait bool) (err 
 	)
 }
 
-func (me *Channel) ExchangeBind(name string, routingKey string, destinationExchange string, noWait bool, arguments Table) (err error) {
+/*
+Binds an exchange to another exchange to create inter-exchange routing
+topologies.  This can decouple the private topology from the public publishing
+exchanges.
+
+Binding two exchanges with identical arguments will not create duplicate
+bindings.  The duplicates will be ignored by the server.
+
+Binding one exchange to another with multiple bindings will only deliver a
+message once.  For example if you bind your exchange to `amq.fanout` with two
+different binding keys, only a single message will be delivered to your
+exchange even though multiple bindings will match.
+
+	name string
+
+The source exchange of the binding.  Content published to this exchange may be
+delivered to the `destinationExchange` when the routing key matches.  This
+exchange must be declared, and if blank, will be interpreted as the default
+exchange.
+
+  routingKey string
+
+For exchanges that use a routing key, like amq.direct, forward matched
+deliveries from to the `destinationExchange`.
+
+	destinationExchange string
+
+The receiver exchange of messages that match the routingKey from the source
+exchange.  This exchange must be declared and if blank, will be interpreted as
+the default exchange.
+
+	noWait bool
+
+Do not wait for the server to confirm the binding.  If any error occurs the
+channel will be closed.  Add a listener to NotifyClose to handle these errors.
+
+	arguments amqp.Table
+
+Arguments that are specific to the type of exchanges bound.
+
+*/
+func (me *Channel) ExchangeBind(name, routingKey, destinationExchange string, noWait bool, arguments Table) error {
 	return me.call(
 		&exchangeBind{
 			Destination: destinationExchange,
@@ -632,7 +786,37 @@ func (me *Channel) ExchangeBind(name string, routingKey string, destinationExcha
 	)
 }
 
-func (me *Channel) ExchangeUnbind(name string, routingKey string, destinationExchange string, noWait bool, arguments Table) (err error) {
+/*
+Unbinds one exchange from another that matches the same routingKey.
+
+This is the inverse of ExchangeBind.
+
+	name string
+
+The name of the source exchange that matches the same parameter in
+ExchangeBind.
+
+	routingKey string
+
+The routing key used to identify the binding between source and destination
+exchanges.  Bindings that do not match this key will remain untouched.
+
+	destinationExchange string
+
+The destination exchange that will no longer receive deliveries that matched
+the routing key delivered to the source exchange.
+
+	noWait bool
+
+Do not wait for the server to confirm the deletion of the binding.  If any
+error occurs the channel will be closed.  Add a listener to NotifyClose to
+handle these errors.
+
+	arguments amqp.Table
+
+Arguments that are specific to the type of exchanges bound.  These must match the same arguments specified in ExchangeBind to identify the binding.
+*/
+func (me *Channel) ExchangeUnbind(name, routingKey, destinationExchange string, noWait bool, arguments Table) error {
 	return me.call(
 		&exchangeUnbind{
 			Destination: destinationExchange,
