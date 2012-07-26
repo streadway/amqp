@@ -356,10 +356,11 @@ func (me *Channel) Close() error {
 // The chan provided will be closed when the Channel is closed and on a
 // graceful close, no error will be sent.
 //
-func (me *Channel) NotifyClose(c chan *Error) {
+func (me *Channel) NotifyClose(c chan *Error) chan *Error {
 	me.m.Lock()
 	defer me.m.Unlock()
 	me.closes = append(me.closes, c)
+	return c
 }
 
 // Listens for basic.flow methods sent by the server.  When `true` is sent on
@@ -371,10 +372,11 @@ func (me *Channel) NotifyClose(c chan *Error) {
 // much on the same connection, all channels using that connection will suffer,
 // including acknowlegements from deliveries.
 //
-func (me *Channel) NotifyFlow(c chan bool) {
+func (me *Channel) NotifyFlow(c chan bool) chan bool {
 	me.m.Lock()
 	defer me.m.Unlock()
 	me.flows = append(me.flows, c)
+	return c
 }
 
 // Listens for basic.return methods.  These can be sent from the server when a
@@ -384,10 +386,11 @@ func (me *Channel) NotifyFlow(c chan bool) {
 //
 // A return struct has a copy of the Publishing along with some error
 // information about why the publishing failed.
-func (me *Channel) NotifyReturn(c chan Return) {
+func (me *Channel) NotifyReturn(c chan Return) chan Return {
 	me.m.Lock()
 	defer me.m.Unlock()
 	me.returns = append(me.returns, c)
+	return c
 }
 
 // Intended for reliable publishing.  Add a listener for basic.ack and
@@ -400,11 +403,12 @@ func (me *Channel) NotifyReturn(c chan Return) {
 //
 // It's advisable to wait for all acks or nacks to arrive before closing the
 // channel on completion.
-func (me *Channel) NotifyConfirm(ack chan uint64, nack chan uint64) {
+func (me *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64) {
 	me.m.Lock()
 	defer me.m.Unlock()
 	me.acks = append(me.acks, ack)
 	me.nacks = append(me.nacks, nack)
+	return ack, nack
 }
 
 func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (err error) {
