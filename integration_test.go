@@ -995,7 +995,7 @@ func TestRabbitMQQueueNackMultipleRequeue(t *testing.T) {
 	if c := integrationRabbitMQ(t, "nack"); c != nil {
 		defer c.Close()
 
-		if c.IsCapable("basic.nack") {
+		if c.isCapable("basic.nack") {
 			queue := "test.rabbitmq-basic-nack"
 			channel, err := c.Channel()
 			if err != nil {

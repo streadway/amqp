@@ -286,7 +286,7 @@ func (me *Connection) heartbeater(interval time.Duration) {
 // Convienence method to inspect the Connection.Properties["capabilities"]
 // Table for server identified capabilities like "basic.ack" or
 // "confirm.select".
-func (me *Connection) IsCapable(featureName string) bool {
+func (me *Connection) isCapable(featureName string) bool {
 	if me.Properties != nil {
 		if v, ok := me.Properties["capabilities"]; ok {
 			if capabilities, ok := v.(Table); ok {
