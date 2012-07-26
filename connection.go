@@ -196,7 +196,8 @@ func (me *Connection) dispatch0(f frame) {
 	switch mf := f.(type) {
 	case *methodFrame:
 		switch m := mf.Method.(type) {
-		case *connectionClose: // request from server
+		case *connectionClose:
+			// Send immediately as shutdown will close our side of the writer.
 			me.send(&methodFrame{
 				ChannelId: 0,
 				Method:    &connectionCloseOk{},
@@ -335,7 +336,6 @@ func (me *Connection) call(req message, res ...message) error {
 			return ErrCommandInvalid
 		}
 	} else {
-		// The incoming message channel has been closed.
 		return ErrClosed
 	}
 

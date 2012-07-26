@@ -302,6 +302,44 @@ func TestIntegrationConnectHostBrackets(t *testing.T) {
 	}
 }
 
+func TestIntegrationMeaningfulChannelErrors(t *testing.T) {
+	c := integrationConnection(t, "pub")
+	if c != nil {
+		defer c.Close()
+
+		ch, err := c.Channel()
+		if err != nil {
+			t.Fatalf("Could not create channel")
+		}
+
+		queue := "test.integration.channel.error"
+
+		_, err = ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		if err != nil {
+			t.Fatalf("Could not declare")
+		}
+
+		_, err = ch.QueueDeclare(queue, UntilDeleted, false, false, nil)
+		if err == nil {
+			t.Fatalf("Expected error, got nil")
+		}
+
+		e, ok := err.(*Error)
+		if !ok {
+			t.Fatalf("Expected type Error response, got %T", err)
+		}
+
+		if e.Code != PreconditionFailed {
+			t.Fatalf("Expected PreconditionFailed, got: %+v", e)
+		}
+
+		_, err = ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		if err != ErrClosed {
+			t.Fatalf("Expected channel to be closed, got: %T", err)
+		}
+	}
+}
+
 // https://github.com/streadway/amqp/issues/6
 func TestIntegrationNonBlockingClose(t *testing.T) {
 	c1 := integrationConnection(t, "pub")

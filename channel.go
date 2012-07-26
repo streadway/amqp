@@ -135,17 +135,21 @@ func (me *Channel) call(req message, res ...message) error {
 
 	if req.wait() {
 		if msg, ok := <-me.rpc; ok {
-			// Try to match one of the result types
-			for _, try := range res {
-				if reflect.TypeOf(msg) == reflect.TypeOf(try) {
-					// *res = *msg
-					vres := reflect.ValueOf(try).Elem()
-					vmsg := reflect.ValueOf(msg).Elem()
-					vres.Set(vmsg)
-					return nil
+			if closed, ok := msg.(*channelClose); ok {
+				return newError(closed.ReplyCode, closed.ReplyText)
+			} else {
+				// Try to match one of the result types
+				for _, try := range res {
+					if reflect.TypeOf(msg) == reflect.TypeOf(try) {
+						// *res = *msg
+						vres := reflect.ValueOf(try).Elem()
+						vmsg := reflect.ValueOf(msg).Elem()
+						vres.Set(vmsg)
+						return nil
+					}
 				}
+				return ErrCommandInvalid
 			}
-			return ErrCommandInvalid
 		} else {
 			// RPC channel has been closed, likely due to a hard error on the
 			// Connection.  This indicates we have already been shutdown.
@@ -221,6 +225,15 @@ func (me *Channel) sendOpen(msg message) (err error) {
 func (me *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
+		// Deliver this close message only when this is a synchronous response
+		// (exception) to a waiting RPC call.  This is a touch racy when the call
+		// goroutine is moving from send to receive.  If it doesn't meet the race,
+		// the callee will get an ErrClosed instead of the text from this method.
+		select {
+		case me.rpc <- msg:
+		default:
+		}
+
 		me.shutdown(newError(m.ReplyCode, m.ReplyText))
 		me.send(me, &channelCloseOk{})
 
