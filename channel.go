@@ -620,34 +620,24 @@ that it is of the provided type and lifetime.
 
 Errors returned from this method will close the channel.
 
-	name string
-
 Exchange names starting with "amq." are reserved for pre-declared and
 standardized exchanges. The client MAY declare an exchange starting with
 "amq." if the passive option is set, or the exchange already exists.
 
-The exchange name can consists of a non-empty sequence of letters, digits, hyphen, underscore, period, or colon.
-
-	exchangeType string
+The exchange name can consists of a non-empty sequence of letters, digits,
+hyphen, underscore, period, or colon.
 
 Each exchange belongs to one of a set of exchange types implemented by the
 server. The exchange types define the functionality of the exchange - i.e. how
-messages are routed through it. It is not valid or meaningful to attempt to
-change the type of an existing exchange.
+messages are routed through it. Once an exchange is declared, its type cannot
+be changed.
 
-Exchanges cannot be redeclared with different types.  The client MUST not
-attempt to redeclare an existing exchange with a different type than used
-in the original Exchange.Declare method.
-
-	lifetime Lifetime
-
-One of the following values
+Each exchange has a lifetime that affects the durable and auto-delete flags and
+can be one of the following:
 
 		UntilDeleted
 		UntilUnused
 		UntilServerRestarted
-
-The lifetime parameter contains the 'durable' and 'auto-delete' flags for this declaration and can be one of:
 
 UntilDeleted - declares the exchange as durable and not auto-deleted will
 survive server restarts and remain when there are no remaining bindings.  This
@@ -667,22 +657,16 @@ may have long delays between bindings.
 Note: RabbitMQ declares the default exchange types like 'amq.fanout' with the
 equivalent Lifetime of UntilDeleted
 
-	internal bool
+Exchanges declared as `internal` do not accept accept publishings. Internal
+exchanges are useful for when you wish to implement inter-exchange topologies
+that should not be exposed to users of the broker.
 
-When true, the exchange may not be used directly by publishers, but only when
-bound to other exchanges. Internal exchanges are used to construct wiring that
-is not visible to applications.
+When noWait is true, declare without waiting for a confirmation from the server.
+The channel may be closed as a result of an error.  Add a NotifyClose listener
+to respond to any exceptions.
 
-	noWait bool
-
-Declare without waiting for a confirmation from the server.  The channel may
-be closed as a result.  Add a NotifyClose listener to respond to any
-exceptions.
-
-	arguments amqp.Table
-
-An amqp.Table of arguments that are specific to the server's implementation of
-the exchange.  This can be nil when no arguments are required to be sent.
+Optional amqp.Table of arguments that are specific to the server's implementation of
+the exchange can be sent for exchange types that require extra parameters.
 */
 func (me *Channel) ExchangeDeclare(name string, lifetime Lifetime, exchangeType string, internal, noWait bool, arguments Table) error {
 	return me.call(
@@ -701,24 +685,17 @@ func (me *Channel) ExchangeDeclare(name string, lifetime Lifetime, exchangeType 
 }
 
 /*
-Deletes an exchange. When an exchange is deleted all queue bindings on the
-exchange are also deleted.
+Deletes the named exchange. When an exchange is deleted all queue bindings on
+the exchange are also deleted.  If this exchange does not exist, the channel
+will be closed with an error.
 
-	name string
-
-The name of the exchange to delete.  If this exchange does not exist, the
-channel will be closed with an error.
-
-	ifUnused bool
-
-When true, the server will only delete the exchange if it has no queue
+When ifUnused is true, the server will only delete the exchange if it has no queue
 bindings.  If the exchange has queue bindings the server does not delete it
-but close the channel with an exception instead.
+but close the channel with an exception instead.  Set this to true if you are
+not the sole owner of the exchange.
 
-	noWait bool
-
-When true, do not wait for a server confirmation that the exchange has been
-deleted.  Failing to delete the channel could close the channel.  Add a
+When noWait is true, do not wait for a server confirmation that the exchange has
+been deleted.  Failing to delete the channel could close the channel.  Add a
 NotifyClose listener to respond to these channel exceptions.
 */
 func (me *Channel) ExchangeDelete(name string, ifUnused, noWait bool) error {
@@ -734,50 +711,40 @@ func (me *Channel) ExchangeDelete(name string, ifUnused, noWait bool) error {
 
 /*
 Binds an exchange to another exchange to create inter-exchange routing
-topologies.  This can decouple the private topology from the public publishing
-exchanges.
+topologies.  This can decouple the private topology and routing exchanges from
+exchanges intended solely for publishing endpoints.
 
 Binding two exchanges with identical arguments will not create duplicate
-bindings.  The duplicates will be ignored by the server.
+bindings.
 
 Binding one exchange to another with multiple bindings will only deliver a
 message once.  For example if you bind your exchange to `amq.fanout` with two
 different binding keys, only a single message will be delivered to your
 exchange even though multiple bindings will match.
 
-	name string
+Given a message delivered to the source exchange, the message will be forwarded
+to the destination exchange when the routing key is matched.
 
-The source exchange of the binding.  Content published to this exchange may be
-delivered to the `destinationExchange` when the routing key matches.  This
-exchange must be declared, and if blank, will be interpreted as the default
-exchange.
+  ExchangeBind("trade", "MSFT", "sell", false, nil)
+  ExchangeBind("trade", "AAPL", "buy", false, nil)
 
-  routingKey string
+  Delivery       Source      Key      Destination
+  example        exchange             exchange
+  -----------------------------------------------
+  key: AAPL  --> trade ----> MSFT     sell
+                       \---> AAPL --> buy
 
-For exchanges that use a routing key, like amq.direct, forward matched
-deliveries from to the `destinationExchange`.
+When noWait is true, do not wait for the server to confirm the binding.  If any
+error occurs the channel will be closed.  Add a listener to NotifyClose to
+handle these errors.
 
-	destinationExchange string
-
-The receiver exchange of messages that match the routingKey from the source
-exchange.  This exchange must be declared and if blank, will be interpreted as
-the default exchange.
-
-	noWait bool
-
-Do not wait for the server to confirm the binding.  If any error occurs the
-channel will be closed.  Add a listener to NotifyClose to handle these errors.
-
-	arguments amqp.Table
-
-Arguments that are specific to the type of exchanges bound.
-
+Optional arguments specific to the exchanges bound can also be specified.
 */
-func (me *Channel) ExchangeBind(name, routingKey, destinationExchange string, noWait bool, arguments Table) error {
+func (me *Channel) ExchangeBind(source, routingKey, destination string, noWait bool, arguments Table) error {
 	return me.call(
 		&exchangeBind{
-			Destination: destinationExchange,
-			Source:      name,
+			Destination: destination,
+			Source:      source,
 			RoutingKey:  routingKey,
 			NoWait:      noWait,
 			Arguments:   arguments,
@@ -787,34 +754,17 @@ func (me *Channel) ExchangeBind(name, routingKey, destinationExchange string, no
 }
 
 /*
-Unbinds one exchange from another that matches the same routingKey.
+Unbinds the destination exchange from the source exchange by removing the
+routing key between them.  This is the inverse of ExchangeBind.  If the binding
+does not currently exist, an error will be returned.
 
-This is the inverse of ExchangeBind.
+When noWait is true, do not wait for the server to confirm the deletion of the
+binding.  If any error occurs the channel will be closed.  Add a listener to
+NotifyClose to handle these errors.
 
-	name string
-
-The name of the source exchange that matches the same parameter in
-ExchangeBind.
-
-	routingKey string
-
-The routing key used to identify the binding between source and destination
-exchanges.  Bindings that do not match this key will remain untouched.
-
-	destinationExchange string
-
-The destination exchange that will no longer receive deliveries that matched
-the routing key delivered to the source exchange.
-
-	noWait bool
-
-Do not wait for the server to confirm the deletion of the binding.  If any
-error occurs the channel will be closed.  Add a listener to NotifyClose to
-handle these errors.
-
-	arguments amqp.Table
-
-Arguments that are specific to the type of exchanges bound.  These must match the same arguments specified in ExchangeBind to identify the binding.
+Optional arguments that are specific to the type of exchanges bound can also be
+provided.  These must match the same arguments specified in ExchangeBind to
+identify the binding.
 */
 func (me *Channel) ExchangeUnbind(name, routingKey, destinationExchange string, noWait bool, arguments Table) error {
 	return me.call(
@@ -829,10 +779,39 @@ func (me *Channel) ExchangeUnbind(name, routingKey, destinationExchange string, 
 	)
 }
 
-// Publishes a message to an exchange.
-func (me *Channel) Publish(exchangeName string, routingKey string, mandatory bool, immediate bool, msg Publishing) (err error) {
+/*
+Publishes a Publishing to an exchange.
+
+When you want a single message to be delivered to a single queue, you can
+publish to the default exchange with the routingKey of the queue name.  This is
+because every declared queue gets an implicit route to the default exchange.
+
+Since publishings are asynchronous, any undeliverable message will get returned
+by the server.  Add a listener with Channel.NotifyReturn to handle any
+undeliverable message when calling publish with either the mandatory or
+immediate parameters as true.
+
+Publishings can be undeliverable when the mandatory flag is true and no queue is
+bound that matches the routing key, or when the immediate flag is true and no
+consumer on the matched queue is ready to accept the delivery.
+
+This can return an error when the channel, connection or socket is closed.  The
+error or lack of an error does not indicate whether the server has received this
+publishing.
+
+It is possible for publishing to not reach the broker if the underlying socket
+is shutdown without pending publishing packets being flushed from the kernel
+buffers.  The easy way of making it probable that all publishings reach the
+server is to always call Connection.Close before terminating your publishing
+application.  The way to ensure that all publishings reach the server is to add
+a listener to Channel.NotifyConfirm and keep track of the server acks and nacks
+for every publishing you publish, only exiting when all publishings are
+accounted for.
+
+*/
+func (me *Channel) Publish(exchange, routingKey string, mandatory, immediate bool, msg Publishing) error {
 	return me.send(me, &basicPublish{
-		Exchange:   exchangeName,
+		Exchange:   exchange,
 		RoutingKey: routingKey,
 		Mandatory:  mandatory,
 		Immediate:  immediate,
@@ -858,7 +837,8 @@ func (me *Channel) Publish(exchangeName string, routingKey string, mandatory boo
 // Synchronously fetch a single message from a queue.  In almost all cases,
 // using `Consume` will be preferred.
 //
-// When a message is available on the queue, the 'ok bool' return parameter will be true.
+// When a message is available on the queue, the second 'ok bool' return
+// parameter will be true.
 func (me *Channel) Get(queueName string, noAck bool) (*Delivery, bool, error) {
 	req := &basicGet{Queue: queueName, NoAck: noAck}
 	res := &basicGetOk{}
@@ -875,6 +855,22 @@ func (me *Channel) Get(queueName string, noAck bool) (*Delivery, bool, error) {
 	return nil, false, nil
 }
 
+/*
+Puts the channel into transaction mode.  All publishings and acknowledgments
+following this method will be atomically committed or rolled back for a
+single queue.  Call either Channel.TxCommit or Channel.TxRollback to leave a
+this transaction and immediately start a new transaction.
+
+The atomicity across multiple queues is not defined as queue declarations and
+bindings are not included in the transaction.
+
+The behavior of publishings that are delivered as mandatory or immediate while the channel is
+in a transaction is not defined.
+
+Once a channel has been put into transaction mode, it cannot be taken out of
+transaction mode.  Use a different channel for non-transactional semantics.
+
+*/
 func (me *Channel) TxSelect() (err error) {
 	return me.call(
 		&txSelect{},
@@ -882,6 +878,13 @@ func (me *Channel) TxSelect() (err error) {
 	)
 }
 
+/*
+Atomically commit all publishings and acknowledgments for a single queue and
+immediately start a new transaction.
+
+Calling this method without having called Channel.TxSelect is an error.
+
+*/
 func (me *Channel) TxCommit() (err error) {
 	return me.call(
 		&txCommit{},
@@ -889,6 +892,13 @@ func (me *Channel) TxCommit() (err error) {
 	)
 }
 
+/*
+Atomically roll back all publishings and acknowledgments for a single queue and
+immediately start a new transaction.
+
+Calling this method without having called Channel.TxSelect is an error.
+
+*/
 func (me *Channel) TxRollback() (err error) {
 	return me.call(
 		&txRollback{},
@@ -896,8 +906,30 @@ func (me *Channel) TxRollback() (err error) {
 	)
 }
 
-// On `true`, requests the server to pause delivery.  On `false` requests the
-// server to resume delivery.
+/*
+This method is intended to be used as basic flow control for when the link is
+saturated or the client finds itself receiving more deliveries than it can
+handle.  Channels are opened with flow control not active, to open a channel
+with paused deliveries immediately call this method with true after calling
+Connection.Channel.
+
+When active is true, this method asks the server to temporarily pause deliveries
+until called again with active as false.
+
+Channel.Get methods will not be affected by flow control.
+
+This method is not intended to act as window control.  Use Channel.Qos to limit
+the number of unacknowledged messages or bytes in flight instead.
+
+The server may also send us flow methods to throttle our publishings.  A well
+behaving publishing client should add a listener with Channel.NotifyFlow and
+pause its publishings when true is sent on that channel.
+
+Note: RabbitMQ prefers to use TCP push back to control flow for all channels on
+a connection, so under high volume scenarios, it's wise to open separate
+Connections for publishings and deliveries.
+
+*/
 func (me *Channel) Flow(active bool) (err error) {
 	return me.call(
 		&channelFlow{Active: active},
@@ -905,11 +937,29 @@ func (me *Channel) Flow(active bool) (err error) {
 	)
 }
 
-// Put this channel into confirm mode.  The server will then send either a
-// basic.ack or basic.nack message with the deliver tag set to a 1 based index
-// corresponding to every publishing received after the this method returns.
-//
-// The order of acknowledgements is not bound to the order of deliveries.
+/*
+A RabbitMQ extension that puts this channel into confirm mode so that the client
+can ensure all publishings have successfully been received by the server.  After
+entering this mode, the server will send a basic.ack or basic.nack message with
+the deliver tag set to a 1 based incrementing index corresponding to every
+publishing received after the this method returns.
+
+Add a listener to Channel.NotifyConfirm to respond to the acknowledgments and
+negative acknowledgments.
+
+The order of acknowledgments is not related to the order of deliveries and will
+arrive at some point in the future.
+
+Unroutable mandatory or immediate messages are acknowledged immediately after
+any Channel.NotifyReturn listeners have been notified.  Other messages are
+acknowledged when all queues that should have the message routed to them have
+either have received acknowledgment of delivery or have enqueued the message,
+persisting the message if necessary.
+
+When noWait is true, the client will not wait for a response.  A channel
+exception could occur if the server does not support this method.
+
+*/
 func (me *Channel) Confirm(noWait bool) (err error) {
 	return me.call(
 		&confirmSelect{Nowait: noWait},
