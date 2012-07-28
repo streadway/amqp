@@ -871,7 +871,7 @@ Once a channel has been put into transaction mode, it cannot be taken out of
 transaction mode.  Use a different channel for non-transactional semantics.
 
 */
-func (me *Channel) TxSelect() (err error) {
+func (me *Channel) TxSelect() error {
 	return me.call(
 		&txSelect{},
 		&txSelectOk{},
@@ -885,7 +885,7 @@ immediately start a new transaction.
 Calling this method without having called Channel.TxSelect is an error.
 
 */
-func (me *Channel) TxCommit() (err error) {
+func (me *Channel) TxCommit() error {
 	return me.call(
 		&txCommit{},
 		&txCommitOk{},
@@ -899,7 +899,7 @@ immediately start a new transaction.
 Calling this method without having called Channel.TxSelect is an error.
 
 */
-func (me *Channel) TxRollback() (err error) {
+func (me *Channel) TxRollback() error {
 	return me.call(
 		&txRollback{},
 		&txRollbackOk{},
@@ -930,7 +930,7 @@ a connection, so under high volume scenarios, it's wise to open separate
 Connections for publishings and deliveries.
 
 */
-func (me *Channel) Flow(active bool) (err error) {
+func (me *Channel) Flow(active bool) error {
 	return me.call(
 		&channelFlow{Active: active},
 		&channelFlowOk{},
