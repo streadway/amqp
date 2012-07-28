@@ -48,10 +48,6 @@ func newSession(t *testing.T) (io.ReadWriteCloser, *server) {
 	return rwc, &server
 }
 
-	if _, ok = f.(*methodFrame).Method.(*connectionTuneOk); !ok {
-		t.Fatalf("expected ConnectionTuneOk")
-	}
-
 func (t *server) expectBytes(b []byte) {
 	in := make([]byte, len(b))
 	if _, err := io.ReadFull(t.S, in); err != nil {
@@ -186,10 +182,79 @@ func TestNewConnectionChannelOpen(t *testing.T) {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
 
-	go driveChannelOpen(t, server)
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %s (%s)", ch, err)
+	}
+}
+
+func TestConfirmMultiple(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(1, &confirmSelect{})
+		srv.send(1, &confirmSelectOk{})
+
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+
+		// Single tag, plus multiple, should produce
+		// 2, 1, 3, 4
+		srv.send(1, &basicAck{DeliveryTag: 2})
+		srv.send(1, &basicAck{DeliveryTag: 4, Multiple: true})
+
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+
+		// And some more, but in reverse order, multiple then one
+		// 5, 6, 7, 8
+		srv.send(1, &basicAck{DeliveryTag: 6, Multiple: true})
+		srv.send(1, &basicAck{DeliveryTag: 8})
+		srv.send(1, &basicAck{DeliveryTag: 7})
+	}()
+
+	c, err := NewConnection(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %s (%s)", c, err)
+	}
 
 	ch, err := c.Channel()
 	if err != nil {
 		t.Fatalf("could not open channel: %s (%s)", ch, err)
 	}
+
+	acks, _ := ch.NotifyConfirm(make(chan uint64), make(chan uint64))
+
+	ch.Confirm(false)
+
+	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 1")})
+	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 2")})
+	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 3")})
+	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 4")})
+
+	for i, tag := range []uint64{2, 1, 3, 4} {
+		if ack := <-acks; tag != ack {
+			t.Fatalf("failed ack, expected ack#%d to be %d, got %d", i, tag, ack)
+		}
+	}
+
+	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 5")})
+	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 6")})
+	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 7")})
+	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 8")})
+
+	for i, tag := range []uint64{5, 6, 8, 7} {
+		if ack := <-acks; tag != ack {
+			t.Fatalf("failed ack, expected ack#%d to be %d, got %d", i, tag, ack)
+		}
+	}
+
 }

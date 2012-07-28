@@ -6,6 +6,7 @@
 package amqp
 
 import (
+	"container/heap"
 	"reflect"
 	"sync"
 )
@@ -23,14 +24,14 @@ type Channel struct {
 	// Mutex for notify listeners
 	destructor sync.Once
 	m          sync.Mutex
+	sendM      sync.Mutex
 
 	connection *Connection
 
 	rpc       chan message
 	consumers consumers
 
-	id    uint16
-	state state
+	id uint16
 
 	// Writer lock for the notify slices
 	notify sync.Mutex
@@ -49,8 +50,10 @@ type Channel struct {
 	// Listeners for Acks/Nacks when the channel is in Confirm mode
 	// the value is the sequentially increasing delivery tag
 	// starting at 1 immediately after the Confirm
-	acks  []chan uint64
-	nacks []chan uint64
+	acks           []chan uint64
+	nacks          []chan uint64
+	confirms       tagSet
+	publishCounter uint64
 
 	// State machine that manages frame order, must only be mutated by the connection
 	recv func(*Channel, frame) error
@@ -119,11 +122,7 @@ func (me *Channel) shutdown(e *Error) {
 }
 
 func (me *Channel) open() (err error) {
-	if err = me.call(&channelOpen{}, &channelOpenOk{}); err != nil {
-		me.state = closed
-	}
-
-	return
+	return me.call(&channelOpen{}, &channelOpenOk{})
 }
 
 // Performs a request/response call for when the message is not NoWait and is
@@ -174,8 +173,8 @@ func (me *Channel) sendClosed(msg message) (err error) {
 }
 
 func (me *Channel) sendOpen(msg message) (err error) {
-	me.m.Lock()
-	defer me.m.Unlock()
+	me.sendM.Lock()
+	defer me.sendM.Unlock()
 
 	if content, ok := msg.(messageWithContent); ok {
 		props, body := content.getContent()
@@ -250,21 +249,23 @@ func (me *Channel) dispatch(msg message) {
 		}
 
 	case *basicAck:
-		for _, c := range me.acks {
-			c <- m.DeliveryTag
+		if m.Multiple {
+			me.broadcastConfirmMultiple(m.DeliveryTag, me.acks)
+		} else {
+			me.broadcastConfirmOne(m.DeliveryTag, me.acks)
 		}
 
 	case *basicNack:
-		for _, c := range me.nacks {
-			c <- m.DeliveryTag
+		if m.Multiple {
+			me.broadcastConfirmMultiple(m.DeliveryTag, me.nacks)
+		} else {
+			me.broadcastConfirmOne(m.DeliveryTag, me.nacks)
 		}
 
 	case *basicDeliver:
-		if me.state == open {
-			me.consumers.send(m.ConsumerTag, newDelivery(me, m))
-			// TODO log failed consumer and close channel, this can happen when
-			// deliveries are in flight and a no-wait cancel has happened
-		}
+		me.consumers.send(m.ConsumerTag, newDelivery(me, m))
+		// TODO log failed consumer and close channel, this can happen when
+		// deliveries are in flight and a no-wait cancel has happened
 
 	default:
 		me.rpc <- msg
@@ -427,22 +428,81 @@ func (me *Channel) NotifyReturn(c chan Return) chan Return {
 	return c
 }
 
-// Intended for reliable publishing.  Add a listener for basic.ack and
-// basic.nack messages.  These will be sent by the server for every publish
-// after `channel.Confirm(...)` has been called.  The value sent on these
-// channels are the sequence number of the publishing.  It is up to client of
-// this channel to maintain the sequence number and handle resends.
-//
-// The order of acknowledgements is not bound to the order of deliveries.
-//
-// It's advisable to wait for all acks or nacks to arrive before closing the
-// channel on completion.
+/*
+Listener for reliable publishing.  Add a listener for basic.ack and basic.nack
+messages.  These messages will be sent by the server for every publish after
+`channel.Confirm(...)` has been called.  The value sent on these channels are
+the sequence number of the publishing.  It is up to client of this channel to
+maintain the sequence number and handle resends.
+
+When multiple acknowledgments are received, an individual delivery tag will be
+sent between the last seen delivery tag up to and including the delivery tag
+in the basic.ack.  Listeners should expect one message per publishing on these
+channels combined.
+
+The order of acknowledgments is not bound to the order of deliveries.
+
+It's advisable to wait for all acks or nacks to arrive before closing the
+channel on completion.
+
+*/
 func (me *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64) {
 	me.m.Lock()
 	defer me.m.Unlock()
 	me.acks = append(me.acks, ack)
 	me.nacks = append(me.nacks, nack)
 	return ack, nack
+}
+
+// Since the acknowledgments may come out of order, scan the heap
+// until found.  In most cases, only the head will be found.
+func (me *Channel) broadcastConfirmOne(tag uint64, ch []chan uint64) {
+	me.m.Lock()
+	defer me.m.Unlock()
+
+	if me.confirms != nil {
+		var unacked []uint64
+
+		for {
+			// We expect once and only once delivery
+			next := heap.Pop(&me.confirms).(uint64)
+
+			if next != tag {
+				unacked = append(unacked, next)
+			} else {
+				for _, c := range ch {
+					c <- tag
+				}
+				break
+			}
+		}
+
+		for _, pending := range unacked {
+			heap.Push(&me.confirms, pending)
+		}
+	}
+}
+
+// Instead of pushing the pending acknowledgments, deliver them as we should ack
+// all up until this tag.
+func (me *Channel) broadcastConfirmMultiple(tag uint64, ch []chan uint64) {
+	me.m.Lock()
+	defer me.m.Unlock()
+
+	if me.confirms != nil {
+		for {
+			// We expect once and only once delivery
+			next := heap.Pop(&me.confirms).(uint64)
+
+			for _, c := range ch {
+				c <- next
+			}
+
+			if next == tag {
+				break
+			}
+		}
+	}
 }
 
 func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (err error) {
@@ -810,7 +870,10 @@ accounted for.
 
 */
 func (me *Channel) Publish(exchange, routingKey string, mandatory, immediate bool, msg Publishing) error {
-	return me.send(me, &basicPublish{
+	me.m.Lock()
+	defer me.m.Unlock()
+
+	if err := me.send(me, &basicPublish{
 		Exchange:   exchange,
 		RoutingKey: routingKey,
 		Mandatory:  mandatory,
@@ -831,7 +894,17 @@ func (me *Channel) Publish(exchange, routingKey string, mandatory, immediate boo
 			UserId:          msg.UserId,
 			AppId:           msg.AppId,
 		},
-	})
+	}); err != nil {
+		return err
+	}
+
+	me.publishCounter += 1
+
+	if me.confirms != nil {
+		heap.Push(&me.confirms, me.publishCounter)
+	}
+
+	return nil
 }
 
 // Synchronously fetch a single message from a queue.  In almost all cases,
@@ -960,11 +1033,21 @@ When noWait is true, the client will not wait for a response.  A channel
 exception could occur if the server does not support this method.
 
 */
-func (me *Channel) Confirm(noWait bool) (err error) {
-	return me.call(
+func (me *Channel) Confirm(noWait bool) error {
+	me.m.Lock()
+	defer me.m.Unlock()
+
+	if err := me.call(
 		&confirmSelect{Nowait: noWait},
 		&confirmSelectOk{},
-	)
+	); err != nil {
+		return err
+	}
+
+	// Indicates we're in confirm mode
+	me.confirms = make(tagSet, 0)
+
+	return nil
 }
 
 //TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }

@@ -172,6 +172,19 @@ type Publishing struct {
 	Body []byte
 }
 
+// Heap interface for maintaining delivery tags
+type tagSet []uint64
+
+func (me tagSet) Len() int              { return len(me) }
+func (me tagSet) Less(i, j int) bool    { return (me)[i] < (me)[j] }
+func (me tagSet) Swap(i, j int)         { (me)[i], (me)[j] = (me)[j], (me)[i] }
+func (me *tagSet) Push(tag interface{}) { *me = append(*me, tag.(uint64)) }
+func (me *tagSet) Pop() interface{} {
+	val := (*me)[len(*me)-1]
+	*me = (*me)[:len(*me)-1]
+	return val
+}
+
 // The golang type that matches the amqp type.  Scale is the number of decimal digits
 // Scale == 2, Value == 12345, Decimal == 123.45
 type Decimal struct {
