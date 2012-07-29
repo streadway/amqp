@@ -250,16 +250,16 @@ func (me *Channel) dispatch(msg message) {
 
 	case *basicAck:
 		if m.Multiple {
-			me.broadcastConfirmMultiple(m.DeliveryTag, me.acks)
+			me.confimMultiple(m.DeliveryTag, me.acks)
 		} else {
-			me.broadcastConfirmOne(m.DeliveryTag, me.acks)
+			me.confimOne(m.DeliveryTag, me.acks)
 		}
 
 	case *basicNack:
 		if m.Multiple {
-			me.broadcastConfirmMultiple(m.DeliveryTag, me.nacks)
+			me.confimMultiple(m.DeliveryTag, me.nacks)
 		} else {
-			me.broadcastConfirmOne(m.DeliveryTag, me.nacks)
+			me.confimOne(m.DeliveryTag, me.nacks)
 		}
 
 	case *basicDeliver:
@@ -390,7 +390,7 @@ func (me *Channel) NotifyClose(c chan *Error) chan *Error {
 // 
 // When a new channel is opened, it is active (flow is active). Some
 // applications assume that channels are inactive until started. To emulate
-// this behaviour a client MAY open the channel, then pause it.
+// this behavior a client MAY open the channel, then pause it.
 // 
 // Publishers should respond to a flow messages as rapidly as possible and the
 // server may disconnect over producing channels that do not respect these
@@ -405,7 +405,7 @@ func (me *Channel) NotifyClose(c chan *Error) chan *Error {
 // Note: RabbitMQ will rather use TCP pushback on the network connection instead of
 // sending basic.flow.  This means that if a single channel is producing too
 // much on the same connection, all channels using that connection will suffer,
-// including acknowlegements from deliveries.
+// including acknowledgments from deliveries.
 //
 func (me *Channel) NotifyFlow(c chan bool) chan bool {
 	me.m.Lock()
@@ -456,7 +456,7 @@ func (me *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint6
 
 // Since the acknowledgments may come out of order, scan the heap
 // until found.  In most cases, only the head will be found.
-func (me *Channel) broadcastConfirmOne(tag uint64, ch []chan uint64) {
+func (me *Channel) confimOne(tag uint64, ch []chan uint64) {
 	me.m.Lock()
 	defer me.m.Unlock()
 
@@ -485,7 +485,7 @@ func (me *Channel) broadcastConfirmOne(tag uint64, ch []chan uint64) {
 
 // Instead of pushing the pending acknowledgments, deliver them as we should ack
 // all up until this tag.
-func (me *Channel) broadcastConfirmMultiple(tag uint64, ch []chan uint64) {
+func (me *Channel) confimMultiple(tag uint64, ch []chan uint64) {
 	me.m.Lock()
 	defer me.m.Unlock()
 
@@ -505,6 +505,37 @@ func (me *Channel) broadcastConfirmMultiple(tag uint64, ch []chan uint64) {
 	}
 }
 
+/*
+Controls how many messages or how many bytes the server will try to keep on
+the network for consumers before receiving delivery acks.  The intent of Qos
+is to make sure the network buffers stay full between the server and client.
+
+With a prefetch count greater than zero, the server will deliver that many
+messages to consumers before acknowledgments are received.  The server ignores
+this option when consumers are started with noAck because no acknowledgments
+are expected or sent.
+
+With a prefetch size greater than zero, the server will try to keep at least
+that many bytes of deliveries flushed to the network before receiving
+acknowledgments from the consumers.  This option is ignored when consumers are
+started with noAck.
+
+When global is true, these Qos settings apply to all existing and future
+consumers on all channels on the same connection.  When false, the Qos
+settings will apply to all existing
+and future consumers on this channel.
+
+To get round-robin behavior between consumers consuming from the same queue on
+different connections, set the prefetch count to 1, and the next available
+message on the server will be delivered to the next available consumer.
+
+If your consumer work time is reasonably is consistent and not much greater
+than two times your network round trip time, you will see significant
+throughput improvements starting with a prefetch count of 2 or slightly
+greater as described by benchmarks on RabbitMQ.
+
+http://www.rabbitmq.com/blog/2012/04/25/rabbitmq-performance-measurements-part-2/
+*/
 func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (err error) {
 	return me.call(
 		&basicQos{
@@ -516,6 +547,21 @@ func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (
 	)
 }
 
+/*
+Cancels deliveries the consumer identified by consumerTag.
+
+Use this method to cleanly stop receiving deliveries from the server and
+cleanly shut down the consumer chan identified by this tag.  Using this method
+and waiting for remaining messages to flush from the consumer chan will ensure
+all messages received on the network will be delivered to the receiver of your
+consumer chan.
+
+When noWait is true, do not wait for the server to acknowledge the cancel.
+Only use this when you are certain there are no deliveries requiring
+acknowledgment are in-flight otherwise they will arrive and be dropped in the
+client without an ack and will not be redelivered to other consumers.
+
+*/
 func (me *Channel) Cancel(consumerTag string, noWait bool) (err error) {
 	req := &basicCancel{
 		ConsumerTag: consumerTag,
@@ -537,7 +583,64 @@ func (me *Channel) Cancel(consumerTag string, noWait bool) (err error) {
 	return
 }
 
-func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive bool, noWait bool, arguments Table) (state QueueState, err error) {
+/*
+Declares a queue to be the container of messages and source of consumers.
+This will create the queue if it doesn't already exist, and ensure that an
+existing queue matches the same parameters.
+
+Every queue declared gets a default binding to the empty exchange "" which has
+the type "direct" with the routing key matching the queue's name.  With this
+default binding, it is possible to publish messages that route directly to
+this queue by publishing to "" with the routing key of the queue name.
+
+  QueueDeclare("alerts", UntilDeleted, false false, false, nil)
+	Publish("", "alerts", false, false, Publishing{Body: []byte("...")})
+
+  Delivery       Exchange  Key       Queue
+  -----------------------------------------------
+  key: alerts -> ""     -> alerts -> alerts
+
+The queue name may be empty, in which the server will generate a unique name
+which will be returned in the Name field of Queue struct.
+
+Each queue has a lifetime that affects how long the queue will remain after
+all consumers have been canceled.
+
+		UntilDeleted
+		UntilUnused
+		UntilServerRestarted
+
+UntilDeleted - declares the queue as durable and not auto-deleted.  It will
+survive server restarts and remain when there are no remaining consumers or
+bindings.  Persistent publishings will be restored in this queue on server
+restart.  These queues are only able to be bound to durable exchanges.
+
+UntilUnused - declares the queue as non-durable and auto-deleted which will
+not be redeclared on server restart and will be deleted by the server after a
+short time when the last consumer is canceled or the last consumer's channel
+is closed.  Queues with this lifetime can also be deleted normally with
+QueueDelete.  These queues can only be bound to non-durable exchanges.
+
+UntilServerRestarted - declares the queue as non-durable and not
+auto-deleted which will remain as long as the server is running regardless of
+how many consumers.  This lifetime is useful for temporary topologies that may
+have long delays between consumer activity.  These queues can only be bound to
+non-durable exchanges.
+
+Exclusive queues are only accessible by the connection that declares them and
+will be deleted when the connection closes.  Channels on other connections
+will receive an error when attempting declare, bind, consume, purge or delete a
+queue with the same name.
+
+When noWait is true, the queue will assume to be declared on the server.  A
+channel exception will arrive if the conditions are met for existing queues
+or attempting to modify an existing queue from a different connection.
+
+When the error return value is not nil, you can assume the queue could not be
+declared with these parameters and the channel will be closed.
+
+*/
+func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive, noWait bool, arguments Table) (Queue, error) {
 	req := &queueDeclare{
 		Queue:      name,
 		Passive:    false,
@@ -549,24 +652,41 @@ func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive bool, 
 	}
 	res := &queueDeclareOk{}
 
-	if err = me.call(req, res); err != nil {
-		return
+	if err := me.call(req, res); err != nil {
+		return Queue{}, err
 	}
 
 	if req.wait() {
-		state = QueueState{
-			Declared:      (res.Queue == name),
-			MessageCount:  int(res.MessageCount),
-			ConsumerCount: int(res.ConsumerCount),
-		}
+		return Queue{
+			Name:      res.Queue,
+			Messages:  int(res.MessageCount),
+			Consumers: int(res.ConsumerCount),
+		}, nil
 	} else {
-		state = QueueState{Declared: true}
+		return Queue{
+			Name: name,
+		}, nil
 	}
 
-	return
+	panic("unreachable")
 }
 
-func (me *Channel) QueueInspect(name string) (QueueState, error) {
+/*
+Passively declare this queue by name to inspect the current message count,
+consumer count and whether it has been declared.
+
+Use this method to check how many unacknowledged messages reside in the queue
+and how many consumers are receiving deliveries and whether a queue by this
+name already exists.
+
+If the queue by this name exists, use Channel.QueueDeclare check if it is
+declared with specific parameters. 
+
+If a queue by this name does not exist, an error will be returned and the
+channel will be closed.
+
+*/
+func (me *Channel) QueueInspect(name string) (Queue, error) {
 	req := &queueDeclare{
 		Queue:   name,
 		Passive: true,
@@ -575,21 +695,66 @@ func (me *Channel) QueueInspect(name string) (QueueState, error) {
 
 	err := me.call(req, res)
 
-	state := QueueState{
-		Declared:      (res.Queue == name),
-		MessageCount:  int(res.MessageCount),
-		ConsumerCount: int(res.ConsumerCount),
+	state := Queue{
+		Name:      name,
+		Messages:  int(res.MessageCount),
+		Consumers: int(res.ConsumerCount),
 	}
 
 	return state, err
 }
 
-func (me *Channel) QueueBind(name string, routingKey string, sourceExchange string, noWait bool, arguments Table) error {
+/*
+Bind the exchange to the queue so that publishings to the exchange will be
+routed to the queue if the publishing's routing key matches the binding's
+routing key.
+
+  QueueBind("pagers", "log", "alert", false, nil)
+  QueueBind("emails", "log", "info", false, nil)
+
+  Delivery       Exchange  Key       Queue
+  -----------------------------------------------
+  key: alert --> log ----> alert --> pagers
+  key: info ---> log ----> info ---> emails
+  key: debug --> log       (none)    (dropped)
+
+If a binding with the same key and arguments already exists between the
+exchange and queue, the attempt to rebind will be ignored and the existing
+binding will be retained.
+
+In the case that multiple bindings may cause the message to be routed to the
+same queue, the server will only route the publishing once.  This is possible
+with topic exchanges. 
+
+  QueueBind("pagers", "amq.topic", "alert", false, nil)
+  QueueBind("emails", "amq.topic", "info", false, nil)
+  QueueBind("emails", "amq.topic", "#", false, nil) // match everything
+
+  Delivery       Exchange        Key       Queue
+  -----------------------------------------------
+  key: alert --> amq.topic ----> alert --> pagers
+  key: info ---> amq.topic ----> # ------> emails
+                 amq.topic \---> info ---/
+  key: debug --> amq.topic ----> # ------> emails
+
+It is possible to bind a durable queue with the lifetime UntilDeleted to a
+transient exchange with the lifetime UntilUnused or UntilServerRestarted.  When
+a durable queue is bound to a durable exchange, the binding is also durable
+and will be restored on server restart.
+
+If the binding could not complete, an error will be returned and the channel
+will be closed.
+
+When noWait is true and the queue could not be bound, the channel will be
+closed with an error.
+
+*/
+func (me *Channel) QueueBind(name, key, exchange string, noWait bool, arguments Table) error {
 	return me.call(
 		&queueBind{
 			Queue:      name,
-			Exchange:   sourceExchange,
-			RoutingKey: routingKey,
+			Exchange:   exchange,
+			RoutingKey: key,
 			NoWait:     noWait,
 			Arguments:  arguments,
 		},
@@ -597,41 +762,82 @@ func (me *Channel) QueueBind(name string, routingKey string, sourceExchange stri
 	)
 }
 
-func (me *Channel) QueueUnbind(name string, routingKey string, sourceExchange string, arguments Table) error {
+/*
+Deletes a binding between an exchange and queue matching the key and
+arguments.
+
+It is possible to send and empty string for the exchange name which means to
+unbind the queue from the default exchange.
+
+*/
+func (me *Channel) QueueUnbind(name, key, exchange string, arguments Table) error {
 	return me.call(
 		&queueUnbind{
 			Queue:      name,
-			Exchange:   sourceExchange,
-			RoutingKey: routingKey,
+			Exchange:   exchange,
+			RoutingKey: key,
 			Arguments:  arguments,
 		},
 		&queueUnbindOk{},
 	)
 }
 
-func (me *Channel) QueuePurge(name string, noWait bool) (messageCount int, err error) {
+/*
+Remove all messages from the named queue which are not waiting to be
+acknowledged.  Messages that have been delivered but have not yet been
+acknowledged will not be removed.
+
+When successful, returns the number of messages purged.
+
+If noWait is true, do not wait for the server response and the number of
+messages purged will not be meaningful.
+*/
+func (me *Channel) QueuePurge(name string, noWait bool) (int, error) {
 	req := &queuePurge{
 		Queue:  name,
 		NoWait: noWait,
 	}
 	res := &queuePurgeOk{}
 
-	err = me.call(req, res)
-	messageCount = int(res.MessageCount)
+	err := me.call(req, res)
 
-	return
+	purged := int(res.MessageCount)
+
+	return purged, err
 }
 
-func (me *Channel) QueueDelete(name string, ifUnused bool, ifEmpty bool, noWait bool) (err error) {
-	return me.call(
-		&queueDelete{
-			Queue:    name,
-			IfUnused: ifUnused,
-			IfEmpty:  ifEmpty,
-			NoWait:   noWait,
-		},
-		&queueDeleteOk{},
-	)
+/*
+Removes the queue, any bindings it has and purges the messages based on server
+configuration, returning the number of messages purged.
+
+When ifUnused is true, the queue will not be deleted if there are any
+consumers on the queue.  If there are consumers, an error will be returned and
+the channel will be closed.
+
+When ifEmpty is true, the queue will not be deleted if there are any messages
+remaining on the queue.  If there are messages, an error will be returned and
+the channel will be closed.
+
+When noWait is true, the queue will be deleted without waiting for a response
+from the server.  The purged message count will not be meaningful. If the queue
+could not be deleted, a channel exception will be raised and the channel will
+be closed.
+
+*/
+func (me *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int, error) {
+	req := &queueDelete{
+		Queue:    name,
+		IfUnused: ifUnused,
+		IfEmpty:  ifEmpty,
+		NoWait:   noWait,
+	}
+	res := &queueDeleteOk{}
+
+	err := me.call(req, res)
+
+	purged := int(res.MessageCount)
+
+	return purged, err
 }
 
 // Will deliver on the chan passed or this will make a new chan. The
@@ -785,8 +991,8 @@ exchange even though multiple bindings will match.
 Given a message delivered to the source exchange, the message will be forwarded
 to the destination exchange when the routing key is matched.
 
-  ExchangeBind("trade", "MSFT", "sell", false, nil)
-  ExchangeBind("trade", "AAPL", "buy", false, nil)
+  ExchangeBind("sell", "MSFT", "trade", false, nil)
+  ExchangeBind("buy", "AAPL", "trade", false, nil)
 
   Delivery       Source      Key      Destination
   example        exchange             exchange
@@ -800,7 +1006,7 @@ handle these errors.
 
 Optional arguments specific to the exchanges bound can also be specified.
 */
-func (me *Channel) ExchangeBind(source, routingKey, destination string, noWait bool, arguments Table) error {
+func (me *Channel) ExchangeBind(destination, routingKey, source string, noWait bool, arguments Table) error {
 	return me.call(
 		&exchangeBind{
 			Destination: destination,
@@ -937,8 +1143,8 @@ this transaction and immediately start a new transaction.
 The atomicity across multiple queues is not defined as queue declarations and
 bindings are not included in the transaction.
 
-The behavior of publishings that are delivered as mandatory or immediate while the channel is
-in a transaction is not defined.
+The behavior of publishings that are delivered as mandatory or immediate while
+the channel is in a transaction is not defined.
 
 Once a channel has been put into transaction mode, it cannot be taken out of
 transaction mode.  Use a different channel for non-transactional semantics.

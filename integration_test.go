@@ -120,7 +120,7 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 			}
 			t.Logf("declare exchange OK")
 
-			if queueState, err := channel.QueueDeclare(
+			if _, err := channel.QueueDeclare(
 				queueName,    // name
 				UntilDeleted, // lifetime (note: not UntilUnused)
 				false,        // exclusive
@@ -128,8 +128,6 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 				nil,          // arguments
 			); err != nil {
 				t.Fatalf("queue declare: %s", err)
-			} else if !queueState.Declared {
-				t.Fatalf("queue declare: state indicates not-declared")
 			}
 			t.Logf("declare queue OK")
 
@@ -145,7 +143,7 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 			t.Logf("queue bind OK")
 
 			if deleteQueueFirst {
-				if err := channel.QueueDelete(
+				if _, err := channel.QueueDelete(
 					queueName, // name
 					false,     // ifUnused (false=be aggressive)
 					false,     // ifEmpty (false=be aggressive)
@@ -166,14 +164,12 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 				}
 				t.Logf("delete exchange (first) OK")
 
-				if queueState, err := channel.QueueInspect(queueName); err != nil {
+				if _, err := channel.QueueInspect(queueName); err != nil {
 					t.Fatalf("inspect queue state after deleting exchange: %s", err)
-				} else if !queueState.Declared {
-					t.Fatalf("after deleting exchange, queue disappeared")
 				}
 				t.Logf("queue properly remains after exchange is deleted")
 
-				if err := channel.QueueDelete(
+				if _, err := channel.QueueDelete(
 					queueName,
 					false, // ifUnused
 					false, // ifEmpty

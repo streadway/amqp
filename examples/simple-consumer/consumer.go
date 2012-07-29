@@ -89,7 +89,7 @@ func NewConsumer(amqpURI, exchange, exchangeType, queue, key, ctag string) (*Con
 	}
 
 	log.Printf("declared Exchange, declaring Queue (%s)", queue)
-	queueState, err := c.channel.QueueDeclare(
+	state, err := c.channel.QueueDeclare(
 		queue,            // name of the queue
 		amqp.UntilUnused, // lifetime = auto-delete
 		false,            // exclusive
@@ -100,15 +100,9 @@ func NewConsumer(amqpURI, exchange, exchangeType, queue, key, ctag string) (*Con
 		return nil, fmt.Errorf("Queue Declare: %s", err)
 	}
 
-	// Extra check where you can inspect the number of messages pending in the
-	// declared queue and how many other consumers exist.  queueState.Declared
-	// could be false when attempting a passive declare (QueueInspect), but here,
-	// it will always be true.
-	if !queueState.Declared {
-		return nil, fmt.Errorf("Queue Declare: somehow Undeclared")
-	}
+	log.Printf("declared Queue (%d messages, %d consumers), binding to Exchange (key '%s')",
+		state.Messages, state.Consumers, key)
 
-	log.Printf("declared Queue, binding to Exchange (key '%s')", key)
 	if err = c.channel.QueueBind(
 		queue,    // name of the queue
 		key,      // bindingKey

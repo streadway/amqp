@@ -142,11 +142,12 @@ const (
 	Headers = "headers"
 )
 
-// Server state about the existence of a Queue.  This can be from a QueueDeclare or QueueInspect
-type QueueState struct {
-	Declared      bool
-	MessageCount  int
-	ConsumerCount int
+// Current state of the queue on the server returned from Channel.QueueDeclare or
+// Channel.QueueInspect.
+type Queue struct {
+	Name      string // server confirmed or uniquely chosen name
+	Messages  int    // count of messages not awaiting acknowledgment
+	Consumers int    // number of consumers receiving deliveries
 }
 
 // A published message from the client to the server.  The typed fields are the
