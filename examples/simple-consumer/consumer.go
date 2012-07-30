@@ -79,8 +79,8 @@ func NewConsumer(amqpURI, exchange, exchangeType, queue, key, ctag string) (*Con
 	log.Printf("got Channel, declaring Exchange (%s)", exchange)
 	if err = c.channel.ExchangeDeclare(
 		exchange,          // name of the exchange
-		amqp.UntilDeleted, // lifetime = durable
 		exchangeType,      // type
+		amqp.UntilDeleted, // lifetime = durable
 		false,             // internal
 		false,             // noWait
 		nil,               // arguments
@@ -116,13 +116,12 @@ func NewConsumer(amqpURI, exchange, exchangeType, queue, key, ctag string) (*Con
 	log.Printf("Queue bound to Exchange, starting Consume (consumer tag '%s')", c.tag)
 	deliveries, err := c.channel.Consume(
 		queue, // name
+		c.tag, // consumerTag,
 		false, // noAck
 		false, // exclusive
 		false, // noLocal
 		false, // noWait
-		c.tag, // consumerTag,
 		nil,   // arguments
-		nil,   // deliveries (ie. create a deliveries channel for me)
 	)
 	if err != nil {
 		return nil, fmt.Errorf("Queue Consume: %s", err)
@@ -149,7 +148,7 @@ func (c *Consumer) Shutdown() error {
 	return <-c.done
 }
 
-func handle(deliveries chan amqp.Delivery, done chan error) {
+func handle(deliveries <-chan amqp.Delivery, done chan error) {
 	for d := range deliveries {
 		log.Printf(
 			"got %dB delivery: [%v] %s",

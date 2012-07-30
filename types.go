@@ -11,15 +11,6 @@ import (
 	"time"
 )
 
-// Connection and channel state
-type state uint8
-
-const (
-	open state = iota
-	closing
-	closed
-)
-
 var (
 	// Errors that this library could return/emit from a channel or connection
 	ErrClosed          = &Error{Code: ChannelError, Reason: "channel/connection is not open"}
@@ -58,7 +49,7 @@ type properties struct {
 	ContentType     string    // MIME content type
 	ContentEncoding string    // MIME content encoding
 	Headers         Table     // Application or header exchange table
-	DeliveryMode    uint8     // queue implemention use - non-persistent (1) or persistent (2)
+	DeliveryMode    uint8     // queue implemention use - Transient (1) or Persistent (2)
 	Priority        uint8     // queue implementation use - 0 to 9
 	CorrelationId   string    // application use - correlation identifier
 	ReplyTo         string    // application use - address to to reply to (ex: RPC)
@@ -71,11 +62,17 @@ type properties struct {
 	reserved1       string    // was cluster-id - process for buffer consumption
 }
 
-// The enum of possible DeliveryMode values.  Transient means higher throughput
-// but message loss on broker crash.
+// DeliveryMode.  Transient means higher throughput but messages will not be
+// restored on broker restart.  The delivery mode of publishings is unrelated
+// to the lifetime of the queues they reside on.  Transient messages will not
+// be restored in queues with a lifetime UntilDeleted on server restart.
+//
+// This remains typed as uint8 to match Publishing.DeliveryMode.  Other
+// delivery modes specific to custom queue implementations are not enumerated
+// here.
 const (
-	TransientDelivery  uint8 = 1
-	PersistentDelivery uint8 = 2
+	Transient  uint8 = 1
+	Persistent uint8 = 2
 )
 
 // The property flags are an array of bits that indicate the presence or
@@ -133,45 +130,49 @@ func (me *Lifetime) autoDelete() bool {
 	panic("unknown lifetime")
 }
 
-// AMQP defined exchange types.  You may use these constants or provide your
-// own exchange types to ExchangeDeclare
-const (
-	Direct  = "direct"
-	Topic   = "topic"
-	Fanout  = "fanout"
-	Headers = "headers"
-)
-
 // Current state of the queue on the server returned from Channel.QueueDeclare or
 // Channel.QueueInspect.
 type Queue struct {
-	Name      string // server confirmed or uniquely chosen name
+	Name      string // server confirmed or generated name
 	Messages  int    // count of messages not awaiting acknowledgment
 	Consumers int    // number of consumers receiving deliveries
 }
 
-// A published message from the client to the server.  The typed fields are the
-// message delivery properties that will have a more efficient representation
-// on the wire.
+// A published message from the client to the server.  The fields outside of
+// the Headers table included in this struct mirror the underlying fields in
+// the content frame.  They use native types for convienence and efficiency.
 type Publishing struct {
-	Headers Table // Application or header exchange table
+	// Application or exchange specific fields,
+	// the headers exchange will inspect this field.
+	Headers Table
 
-	// Properties for the message
+	// Properties
 	ContentType     string    // MIME content type
 	ContentEncoding string    // MIME content encoding
-	DeliveryMode    uint8     // queue implemention use - non-persistent (1) or persistent (2)
-	Priority        uint8     // queue implementation use - 0 to 9
-	CorrelationId   string    // application use - correlation identifier
-	ReplyTo         string    // application use - address to to reply to (ex: RPC)
-	Expiration      string    // implementation use - message expiration spec
-	MessageId       string    // application use - message identifier
-	Timestamp       time.Time // application use - message timestamp
-	Type            string    // application use - message type name
-	UserId          string    // application use - creating user id - should be authenticated user
-	AppId           string    // application use - creating application id
+	DeliveryMode    uint8     // Transient (0 or 1) or Persistent (2)
+	Priority        uint8     // 0 to 9
+	CorrelationId   string    // correlation identifier
+	ReplyTo         string    // address to to reply to (ex: RPC)
+	Expiration      string    // message expiration spec
+	MessageId       string    // message identifier
+	Timestamp       time.Time // message timestamp
+	Type            string    // message type name
+	UserId          string    // creating user id - ex: "guest"
+	AppId           string    // creating application id
 
 	Body []byte
 }
+
+// The golang type that matches the amqp type.  Scale is the number of decimal digits
+// Scale == 2, Value == 12345, Decimal == 123.45
+type Decimal struct {
+	Scale uint8
+	Value int32
+}
+
+// The amqp type that represents a string to field.  Most Go types are supported in
+// table serialization.
+type Table map[string]interface{}
 
 // Heap interface for maintaining delivery tags
 type tagSet []uint64
@@ -185,17 +186,6 @@ func (me *tagSet) Pop() interface{} {
 	*me = (*me)[:len(*me)-1]
 	return val
 }
-
-// The golang type that matches the amqp type.  Scale is the number of decimal digits
-// Scale == 2, Value == 12345, Decimal == 123.45
-type Decimal struct {
-	Scale uint8
-	Value int32
-}
-
-// The amqp type that represents a string to field.  Most Go types are supported in
-// table serialization.
-type Table map[string]interface{}
 
 type message interface {
 	id() (uint16, uint16)
@@ -230,8 +220,9 @@ To read a frame, we:
  2. Depending on the frame type, we read the payload and process it.
  3. Read the frame end octet.
 
-In realistic implementations where performance is a concern, we would use “read-ahead buffering” or
-“gathering reads” to avoid doing three separate system calls to read a frame.
+In realistic implementations where performance is a concern, we would use
+“read-ahead buffering” or “gathering reads” to avoid doing three separate
+system calls to read a frame.
 
 */
 type frame interface {

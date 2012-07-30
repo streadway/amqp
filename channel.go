@@ -69,8 +69,8 @@ type Channel struct {
 }
 
 // Constructs a new channel with the given framing rules
-func newChannel(c *Connection, id uint16) (me *Channel, err error) {
-	me = &Channel{
+func newChannel(c *Connection, id uint16) *Channel {
+	return &Channel{
 		connection: c,
 		id:         id,
 		rpc:        make(chan message),
@@ -78,8 +78,6 @@ func newChannel(c *Connection, id uint16) (me *Channel, err error) {
 		recv:       (*Channel).recvMethod,
 		send:       (*Channel).sendOpen,
 	}
-
-	return me, nil
 }
 
 func (me *Channel) shutdown(e *Error) {
@@ -536,11 +534,11 @@ greater as described by benchmarks on RabbitMQ.
 
 http://www.rabbitmq.com/blog/2012/04/25/rabbitmq-performance-measurements-part-2/
 */
-func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (err error) {
+func (me *Channel) Qos(prefetchCount, prefetchSize int, global bool) error {
 	return me.call(
 		&basicQos{
-			PrefetchSize:  prefetchSize,
-			PrefetchCount: prefetchCount,
+			PrefetchCount: uint16(prefetchCount),
+			PrefetchSize:  uint32(prefetchSize),
 			Global:        global,
 		},
 		&basicQosOk{},
@@ -548,7 +546,8 @@ func (me *Channel) Qos(prefetchCount uint16, prefetchSize uint32, global bool) (
 }
 
 /*
-Cancels deliveries the consumer identified by consumerTag.
+Cancels deliveries the consumer chan established in Channel.Consume and
+identified by consumer.
 
 Use this method to cleanly stop receiving deliveries from the server and
 cleanly shut down the consumer chan identified by this tag.  Using this method
@@ -562,25 +561,25 @@ acknowledgment are in-flight otherwise they will arrive and be dropped in the
 client without an ack and will not be redelivered to other consumers.
 
 */
-func (me *Channel) Cancel(consumerTag string, noWait bool) (err error) {
+func (me *Channel) Cancel(consumer string, noWait bool) error {
 	req := &basicCancel{
-		ConsumerTag: consumerTag,
+		ConsumerTag: consumer,
 		NoWait:      noWait,
 	}
 	res := &basicCancelOk{}
 
-	if err = me.call(req, res); err != nil {
-		return
+	if err := me.call(req, res); err != nil {
+		return err
 	}
 
 	if req.wait() {
 		me.consumers.close(res.ConsumerTag)
 	} else {
 		// Potentially could drop deliveries in flight
-		me.consumers.close(consumerTag)
+		me.consumers.close(consumer)
 	}
 
-	return
+	return nil
 }
 
 /*
@@ -594,7 +593,7 @@ default binding, it is possible to publish messages that route directly to
 this queue by publishing to "" with the routing key of the queue name.
 
   QueueDeclare("alerts", UntilDeleted, false false, false, nil)
-	Publish("", "alerts", false, false, Publishing{Body: []byte("...")})
+  Publish("", "alerts", false, false, Publishing{Body: []byte("...")})
 
   Delivery       Exchange  Key       Queue
   -----------------------------------------------
@@ -640,7 +639,7 @@ When the error return value is not nil, you can assume the queue could not be
 declared with these parameters and the channel will be closed.
 
 */
-func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive, noWait bool, arguments Table) (Queue, error) {
+func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive, noWait bool, args Table) (Queue, error) {
 	req := &queueDeclare{
 		Queue:      name,
 		Passive:    false,
@@ -648,7 +647,7 @@ func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive, noWai
 		AutoDelete: lifetime.autoDelete(),
 		Exclusive:  exclusive,
 		NoWait:     noWait,
-		Arguments:  arguments,
+		Arguments:  args,
 	}
 	res := &queueDeclareOk{}
 
@@ -734,7 +733,7 @@ with topic exchanges.
   -----------------------------------------------
   key: alert --> amq.topic ----> alert --> pagers
   key: info ---> amq.topic ----> # ------> emails
-                 amq.topic \---> info ---/
+                           \---> info ---/
   key: debug --> amq.topic ----> # ------> emails
 
 It is possible to bind a durable queue with the lifetime UntilDeleted to a
@@ -749,14 +748,14 @@ When noWait is true and the queue could not be bound, the channel will be
 closed with an error.
 
 */
-func (me *Channel) QueueBind(name, key, exchange string, noWait bool, arguments Table) error {
+func (me *Channel) QueueBind(name, key, exchange string, noWait bool, args Table) error {
 	return me.call(
 		&queueBind{
 			Queue:      name,
 			Exchange:   exchange,
 			RoutingKey: key,
 			NoWait:     noWait,
-			Arguments:  arguments,
+			Arguments:  args,
 		},
 		&queueBindOk{},
 	)
@@ -770,13 +769,13 @@ It is possible to send and empty string for the exchange name which means to
 unbind the queue from the default exchange.
 
 */
-func (me *Channel) QueueUnbind(name, key, exchange string, arguments Table) error {
+func (me *Channel) QueueUnbind(name, key, exchange string, args Table) error {
 	return me.call(
 		&queueUnbind{
 			Queue:      name,
 			Exchange:   exchange,
 			RoutingKey: key,
-			Arguments:  arguments,
+			Arguments:  args,
 		},
 		&queueUnbindOk{},
 	)
@@ -801,9 +800,7 @@ func (me *Channel) QueuePurge(name string, noWait bool) (int, error) {
 
 	err := me.call(req, res)
 
-	purged := int(res.MessageCount)
-
-	return purged, err
+	return int(res.MessageCount), err
 }
 
 /*
@@ -835,48 +832,85 @@ func (me *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int
 
 	err := me.call(req, res)
 
-	purged := int(res.MessageCount)
-
-	return purged, err
+	return int(res.MessageCount), err
 }
 
-// Will deliver on the chan passed or this will make a new chan. The
-// delivery chan, either provided or created, will be returned.
-//
-// If a consumerTag is not provided, the server will generate one. If you do
-// include noWait, a random tag will be generated by the client.
-func (me *Channel) Consume(queueName string, noAck bool, exclusive bool, noLocal bool, noWait bool, consumerTag string, arguments Table, deliveries chan Delivery) (ch chan Delivery, err error) {
-	ch = deliveries
-	if ch == nil {
-		ch = make(chan Delivery)
-	}
+/*
+Consumes deliveries from a queue.
 
-	// when we won't wait for the server, add the consumer channel now
-	if noWait {
-		if consumerTag == "" {
-			consumerTag = randomConsumerTag()
-		}
-		me.consumers.add(consumerTag, ch)
+When this method returns any asynchronous deliveries sent by the server will be
+sent to the chan returned.  When the consumer is cancelled with Channel.Cancel
+or when the channel or connection is closed, the delivery chan will also be
+closed.  Consumers goroutines should range over the chan or check that the
+channel is open after every receive.
+
+All deliveries in AMQP must be acknowledged.  It is expected of the consumer to
+call Delivery.Ack after it has succesfully processed the delivery.  If the
+consumer is cancelled or the channel or connection is closed any
+unacknowledged deliveries will be requeued at the end of the same queue.
+
+The consumer is identified by a string that is unique and scoped for all
+consumers on this channel.  If you wish to eventually cancel the consumer, use
+the same non-empty idenfitier in Channel.Cancel.  An empty string will cause
+the library to generate a unique identity.  The consumer identity will be
+included in every Delivery in the ConsumerTag field
+
+When autoAck (also known as noAck) is true the server will acknowledge
+deliveries to this consumer prior to writing the delivery to the network.  When
+autoAck is true, the consumer should not call Delivery.Ack.  Automatically
+acknowledging deliveries means that some deliveries may get lost if the
+consumer is unable to process them after the server delivers them.
+
+When exclusive is true, the server will ensure that this is the sole consumer
+from this queue.  When exclusive is false, the server will fairly distribute
+deliveries across multiple consumers.
+
+When noLocal is true, the server will not deliver publishing sent from the same
+connection to this consumer.  It's advisable to use separate connections for
+Channel.Publish and Channel.Consume so not to have TCP pushback on publishing
+affect the ability to consume messages, so this parameter is here mostly for
+completeness.
+
+When noWait is true, do not wait for the server to confirm the request and
+immediately begin deliveries.  If it is not possible to consume, a channel
+exception will be raised and the channel will be closed.
+
+Optional arguments can be provided that have specific semantics for the queue
+or server.
+
+When the channel or connection closes, all delivery chans will also close.
+
+*/
+func (me *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args Table) (<-chan Delivery, error) {
+	// When we return from me.call, there may be a delivery already for the
+	// consumer that hasn't been added to the consumer hash yet.  Because of
+	// this, we never rely on the server picking a consumer tag for us.
+
+	if consumer == "" {
+		consumer = uniqueConsumerTag()
 	}
 
 	req := &basicConsume{
-		Queue:       queueName,
-		ConsumerTag: consumerTag,
+		Queue:       queue,
+		ConsumerTag: consumer,
 		NoLocal:     noLocal,
-		NoAck:       noAck,
+		NoAck:       autoAck,
 		Exclusive:   exclusive,
 		NoWait:      noWait,
-		Arguments:   arguments,
+		Arguments:   args,
 	}
 	res := &basicConsumeOk{}
 
-	err = me.call(req, res)
+	deliveries := make(chan Delivery)
 
-	if !noWait {
-		me.consumers.add(res.ConsumerTag, ch)
+	me.consumers.add(consumer, deliveries)
+
+	if err := me.call(req, res); err != nil {
+		me.consumers.close(consumer)
+		return nil, err
 	}
 
-	return
+	return (<-chan Delivery)(deliveries), nil
 }
 
 /*
@@ -888,15 +922,15 @@ Errors returned from this method will close the channel.
 
 Exchange names starting with "amq." are reserved for pre-declared and
 standardized exchanges. The client MAY declare an exchange starting with
-"amq." if the passive option is set, or the exchange already exists.
+"amq." if the passive option is set, or the exchange already exists.  Names can
+consists of a non-empty sequence of letters, digits, hyphen, underscore,
+period, or colon.
 
-The exchange name can consists of a non-empty sequence of letters, digits,
-hyphen, underscore, period, or colon.
-
-Each exchange belongs to one of a set of exchange types implemented by the
-server. The exchange types define the functionality of the exchange - i.e. how
-messages are routed through it. Once an exchange is declared, its type cannot
-be changed.
+Each exchange belongs to one of a set of exchange kinds/types implemented by
+the server. The exchange types define the functionality of the exchange - i.e.
+how messages are routed through it. Once an exchange is declared, its type
+cannot be changed.  The common types are "direct", "fanout", "topic" and
+"headers".
 
 Each exchange has a lifetime that affects the durable and auto-delete flags and
 can be one of the following:
@@ -934,17 +968,17 @@ to respond to any exceptions.
 Optional amqp.Table of arguments that are specific to the server's implementation of
 the exchange can be sent for exchange types that require extra parameters.
 */
-func (me *Channel) ExchangeDeclare(name string, lifetime Lifetime, exchangeType string, internal, noWait bool, arguments Table) error {
+func (me *Channel) ExchangeDeclare(name, kind string, lifetime Lifetime, internal, noWait bool, args Table) error {
 	return me.call(
 		&exchangeDeclare{
 			Exchange:   name,
-			Type:       exchangeType,
+			Type:       kind,
 			Passive:    false,
 			Durable:    lifetime.durable(),
 			AutoDelete: lifetime.autoDelete(),
 			Internal:   internal,
 			NoWait:     noWait,
-			Arguments:  arguments,
+			Arguments:  args,
 		},
 		&exchangeDeclareOk{},
 	)
@@ -1006,14 +1040,14 @@ handle these errors.
 
 Optional arguments specific to the exchanges bound can also be specified.
 */
-func (me *Channel) ExchangeBind(destination, routingKey, source string, noWait bool, arguments Table) error {
+func (me *Channel) ExchangeBind(destination, key, source string, noWait bool, args Table) error {
 	return me.call(
 		&exchangeBind{
 			Destination: destination,
 			Source:      source,
-			RoutingKey:  routingKey,
+			RoutingKey:  key,
 			NoWait:      noWait,
-			Arguments:   arguments,
+			Arguments:   args,
 		},
 		&exchangeBindOk{},
 	)
@@ -1032,14 +1066,14 @@ Optional arguments that are specific to the type of exchanges bound can also be
 provided.  These must match the same arguments specified in ExchangeBind to
 identify the binding.
 */
-func (me *Channel) ExchangeUnbind(name, routingKey, destinationExchange string, noWait bool, arguments Table) error {
+func (me *Channel) ExchangeUnbind(destination, key, source string, noWait bool, args Table) error {
 	return me.call(
 		&exchangeUnbind{
-			Destination: destinationExchange,
-			Source:      name,
-			RoutingKey:  routingKey,
+			Destination: destination,
+			Source:      source,
+			RoutingKey:  key,
 			NoWait:      noWait,
-			Arguments:   arguments,
+			Arguments:   args,
 		},
 		&exchangeUnbindOk{},
 	)
@@ -1075,13 +1109,13 @@ for every publishing you publish, only exiting when all publishings are
 accounted for.
 
 */
-func (me *Channel) Publish(exchange, routingKey string, mandatory, immediate bool, msg Publishing) error {
+func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) error {
 	me.m.Lock()
 	defer me.m.Unlock()
 
 	if err := me.send(me, &basicPublish{
 		Exchange:   exchange,
-		RoutingKey: routingKey,
+		RoutingKey: key,
 		Mandatory:  mandatory,
 		Immediate:  immediate,
 		Body:       msg.Body,
@@ -1113,25 +1147,37 @@ func (me *Channel) Publish(exchange, routingKey string, mandatory, immediate boo
 	return nil
 }
 
-// Synchronously fetch a single message from a queue.  In almost all cases,
-// using `Consume` will be preferred.
-//
-// When a message is available on the queue, the second 'ok bool' return
-// parameter will be true.
-func (me *Channel) Get(queueName string, noAck bool) (*Delivery, bool, error) {
-	req := &basicGet{Queue: queueName, NoAck: noAck}
+/*
+Synchronously deliver a single message from the head of a queue.  In almost all
+cases, using Channel.Consume will be preferred.
+
+If there was a delivery waiting on the queue and that delivery was received the
+second return value will be true.  If there was no delivery waiting or an error
+occured, the ok bool will be false.
+
+All deliveries must be acknowledged including those from Channel.Get.  Call
+Delivery.Ack on the returned delivery when you have fully processed this
+delivery.
+
+When autoAck is true, the server will automatically acknowledge this message so
+you don't have to.  But if you are unable to fully process this message before
+the channel or connection is closed, the message will not get requeued.
+
+*/
+func (me *Channel) Get(queue string, autoAck bool) (msg Delivery, ok bool, err error) {
+	req := &basicGet{Queue: queue, NoAck: autoAck}
 	res := &basicGetOk{}
 	empty := &basicGetEmpty{}
 
 	if err := me.call(req, res, empty); err != nil {
-		return nil, false, err
+		return Delivery{}, false, err
 	}
 
 	if res.DeliveryTag > 0 {
-		return newDelivery(me, res), true, nil
+		return *(newDelivery(me, res)), true, nil
 	}
 
-	return nil, false, nil
+	return Delivery{}, false, nil
 }
 
 /*

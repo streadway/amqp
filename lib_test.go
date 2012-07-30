@@ -120,7 +120,7 @@ func integrationRabbitMQ(t *testing.T, name string) *Connection {
 	return nil
 }
 
-func assertConsumeBody(t *testing.T, messages chan Delivery, body []byte) *Delivery {
+func assertConsumeBody(t *testing.T, messages <-chan Delivery, body []byte) *Delivery {
 	select {
 	case msg := <-messages:
 		if bytes.Compare(msg.Body, body) != 0 {

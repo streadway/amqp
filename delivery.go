@@ -9,15 +9,14 @@ import (
 	"time"
 )
 
-// A delivery from the server to a consumer created with Queue.Consume or Queue.Get.  The
-// types have been promoted from the framing and the method so to provide flat,
-// typed access to everything the channel knows about this message.
+// A delivery from the server to a consumer started with Queue.Consume or
+// Queue.Get.
 type Delivery struct {
 	channel *Channel
 
 	Headers Table // Application or header exchange table
 
-	// Properties for the message
+	// Properties
 	ContentType     string    // MIME content type
 	ContentEncoding string    // MIME content encoding
 	DeliveryMode    uint8     // queue implemention use - non-persistent (1) or persistent (2)
@@ -28,20 +27,19 @@ type Delivery struct {
 	MessageId       string    // application use - message identifier
 	Timestamp       time.Time // application use - message timestamp
 	Type            string    // application use - message type name
-	UserId          string    // application use - creating user idA - should be authenticated user
+	UserId          string    // application use - creating user - should be authenticated user
 	AppId           string    // application use - creating application id
 
-	// only meaningful from a Channel.Consume or Queue.Consume
+	// Valid only with Channel.Consume
 	ConsumerTag string
 
-	// only meaningful on Channel.Get
+	// Valid only with Channel.Get
 	MessageCount uint32
 
-	// Only meaningful when this is a result of a message consumption
 	DeliveryTag uint64
 	Redelivered bool
-	Exchange    string
-	RoutingKey  string // Message routing key
+	Exchange    string // basic.publish exhange
+	RoutingKey  string // basic.publish routing key
 
 	Body []byte
 }
@@ -89,31 +87,73 @@ func newDelivery(channel *Channel, msg messageWithContent) *Delivery {
 	return &delivery
 }
 
-func (me *Delivery) Ack(multiple bool) error {
+/*
+All deliveries in AMQP must be acknowledged.  If you called Channel.Consume
+with autoAck true then the server will be automatically ack each message and
+this method should not be called.  Otherwise, you must call Delivery.Ack after
+you have successfully processed this delivery.
+
+When multiple is true, this delivery and all prior unacknowledged deliveries
+on the same channel will be acknowledged.  This is useful for batch processing
+of deliveries.
+
+An error will indicate that the acknowledge could not be delivered to the
+channel it was sent from.
+
+Either Delivery.Ack, Delivery.Reject or Delivery.Nack must be called for every
+delivery that is not automatically acknowledged.
+*/
+func (me Delivery) Ack(multiple bool) error {
 	return me.channel.send(me.channel, &basicAck{
 		DeliveryTag: me.DeliveryTag,
 		Multiple:    multiple,
 	})
 }
 
-func (me *Delivery) Reject(requeue bool) error {
+/*
+Negatively acknowledge processing of this message.  
+
+When requeue is true, queue this message to be delivered to a consumer on a
+different channel.  When requeue is false or the server is unable to queue this
+message, it will be dropped.
+
+If you are batch processing deliveries, and your server supports it, prefer
+Delivery.Nack.
+
+Either Delivery.Ack, Delivery.Reject or Delivery.Nack must be called for every
+delivery that is not automatically acknowledged.
+*/
+func (me Delivery) Reject(requeue bool) error {
 	return me.channel.send(me.channel, &basicReject{
 		DeliveryTag: me.DeliveryTag,
 		Requeue:     requeue,
 	})
 }
 
-func (me *Delivery) Cancel(noWait bool) (consumerTag string, err error) {
-	return me.ConsumerTag, me.channel.Cancel(me.ConsumerTag, noWait)
+/*
+Uses the consumer identity in this delivery to cancel the consumer delegating
+to Channel.Cancel.  An error indicates the channel is closed.
+
+*/
+func (me Delivery) Cancel(noWait bool) error {
+	return me.channel.Cancel(me.ConsumerTag, noWait)
 }
 
-// RabbitMQ extension - Negatively acknowledge the delivery of message(s)
-// identified by the deliveryTag.  When multiple, nack messages up to and
-// including delivered messages up until the deliveryTag.
-//
-// This method must not be used to select or requeue messages the client wishes
-// not to handle.
-func (me *Delivery) Nack(multiple, requeue bool) error {
+/*
+RabbitMQ extension - Negatively acknowledge the delivery of message(s)
+identified by the deliveryTag. 
+
+When multiple is true, nack messages up to and including delivered messages up
+until the deliveryTag delivered on the same channel.
+
+This method must not be used to select or requeue messages the client wishes
+not to handle, rather it is to inform the server that the client is incapable
+of handling this message at this time.
+
+Either Delivery.Ack, Delivery.Reject or Delivery.Nack must be called for every
+delivery that is not automatically acknowledged.
+*/
+func (me Delivery) Nack(multiple, requeue bool) error {
 	return me.channel.send(me.channel, &basicNack{
 		DeliveryTag: me.DeliveryTag,
 		Multiple:    multiple,

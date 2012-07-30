@@ -52,8 +52,8 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 	log.Printf("got Channel, declaring %q Exchange (%s)", exchangeType, exchange)
 	if err := channel.ExchangeDeclare(
 		exchange,          // name
-		amqp.UntilDeleted, // lifetime = durable
 		exchangeType,      // type
+		amqp.UntilDeleted, // lifetime = durable
 		false,             // internal
 		false,             // noWait
 		nil,               // arguments
@@ -84,8 +84,8 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 			ContentType:     "text/plain",
 			ContentEncoding: "",
 			Body:            []byte(body),
-			DeliveryMode:    amqp.TransientDelivery, // 1=non-persistent, 2=persistent
-			Priority:        0,                      // 0-9
+			DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
+			Priority:        0,              // 0-9
 			// a bunch of application/implementation-specific fields
 		},
 	); err != nil {

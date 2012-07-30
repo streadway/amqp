@@ -25,14 +25,15 @@ type Config struct {
 	// mechanism used on the Connection object
 	SASL []Authentication
 
-	Vhost string // The Vhost the Auth credentials are permitted to open
+	Vhost string
 
-	MaxChannels       int // Maximum number of channels the client intends to open - defaults to 0
-	MaxFrameSize      int // Maximum frame size the client intends to send - default to 0
-	HeartbeatInterval int // Frequency in seconds the client wishes the server to send heartbeats - defaults to 0 (no heartbeats)
+	MaxChannels       int // 0 is unlimited
+	MaxFrameSize      int // 0 is unlimited
+	HeartbeatInterval int // 0 means no heartbeats
 }
 
-// Manages the serialization and deserialization of frames from IO and dispatches the frames to the appropriate channel.
+// Manages the serialization and deserialization of frames from IO and
+// dispatches the frames to the appropriate channel.
 type Connection struct {
 	destructor sync.Once
 	m          sync.Mutex // writer and notify mutex
@@ -42,13 +43,13 @@ type Connection struct {
 	writer   *writer
 	sequence uint32
 	channels map[uint16]*Channel
-	sends    chan time.Time // timestamps of sends
+	sends    chan time.Time // timestamps of each frame sent
 	closes   []chan *Error
 
 	Config Config // The negotiated Config after connection.open
 
-	VersionMajor int   // The server's major version
-	VersionMinor int   // The server's minor version
+	VersionMajor int   // Server major version
+	VersionMinor int   // Server minor version
 	Properties   Table // Server properties
 }
 
@@ -85,8 +86,8 @@ func Dial(amqp string) (*Connection, error) {
 	})
 }
 
-func NewConnection(conn io.ReadWriteCloser, config Config) (me *Connection, err error) {
-	me = &Connection{
+func NewConnection(conn io.ReadWriteCloser, config Config) (*Connection, error) {
+	me := &Connection{
 		conn:     conn,
 		writer:   &writer{bufio.NewWriter(conn)},
 		rpc:      make(chan message),
@@ -111,6 +112,19 @@ func (me *Connection) NotifyClose(c chan *Error) {
 	me.closes = append(me.closes, c)
 }
 
+/*
+Requests, and waits for the response to close the AMQP connection.
+
+It's advisable to use this message when publishing so to make sure that all
+kernel buffers have been flushed before exiting.
+
+An error indicates that server may not have received this request to close but
+the connection should be treated as closed regardless.
+
+After returning from this call, all resources associated with this connection,
+including the underlying io, Channels, Notify listeners and Channel consumers
+will also be closed.
+*/
 func (me *Connection) Close() error {
 	defer me.shutdown(nil)
 	return me.call(
@@ -172,7 +186,10 @@ func (me *Connection) shutdown(err *Error) {
 		}
 
 		close(me.rpc)
+		me.rpc = nil
+
 		close(me.sends)
+		me.sends = nil
 
 		me.conn.Close()
 
@@ -303,9 +320,9 @@ func (me *Connection) isCapable(featureName string) bool {
 }
 
 // Constructs and opens a unique channel for concurrent operations
-func (me *Connection) Channel() (channel *Channel, err error) {
+func (me *Connection) Channel() (*Channel, error) {
 	id := me.nextChannelId()
-	channel, err = newChannel(me, id)
+	channel := newChannel(me, id)
 	me.channels[id] = channel
 	return channel, channel.open()
 }

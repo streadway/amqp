@@ -6,11 +6,17 @@
 package amqp
 
 import (
-	"crypto/rand"
-	"encoding/ascii85"
-	mrand "math/rand"
+	"fmt"
+	"os"
 	"sync"
+	"sync/atomic"
 )
+
+var consumerSeq uint64
+
+func uniqueConsumerTag() string {
+	return fmt.Sprintf("ctag-%s-%d", os.Args[0], atomic.AddUint64(&consumerSeq, 1))
+}
 
 type consumerChannels map[string]chan Delivery
 
@@ -23,20 +29,6 @@ type consumers struct {
 
 func makeConsumers() consumers {
 	return consumers{chans: make(consumerChannels)}
-}
-
-func randomConsumerTag() string {
-	in := make([]byte, 32)
-	out := make([]byte, ascii85.MaxEncodedLen(len(in)))
-
-	if _, err := rand.Read(in); err != nil {
-		for i, n := range mrand.Perm(256)[:len(in)] {
-			in[i] = byte(n)
-		}
-	}
-
-	ascii85.Encode(in, out)
-	return string(out)
 }
 
 // On key conflict, close the previous channel.

@@ -56,8 +56,8 @@ func TestIntegrationExchange(t *testing.T) {
 
 		if err := channel.ExchangeDeclare(
 			exchange,    // name
-			UntilUnused, // lifetime
 			"direct",    // type
+			UntilUnused, // lifetime
 			false,       // internal
 			false,       // nowait
 			nil,         // args
@@ -110,8 +110,8 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 
 			if err := channel.ExchangeDeclare(
 				exchangeName, // name
-				UntilDeleted, // lifetime (note: not UntilUnused)
 				"direct",     // type
+				UntilDeleted, // lifetime (note: not UntilUnused)
 				false,        // internal
 				false,        // nowait
 				nil,          // args
@@ -354,7 +354,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 			t.Fatalf("Could not declare")
 		}
 
-		msgs, err := ch.Consume(queue, false, false, false, false, "", nil, nil)
+		msgs, err := ch.Consume(queue, "", false, false, false, false, nil)
 		if err != nil {
 			t.Fatalf("Could not consume")
 		}
@@ -404,7 +404,7 @@ func TestIntegrationPublishConsume(t *testing.T) {
 		sub.QueueDeclare(queue, UntilUnused, false, false, nil)
 		defer pub.QueueDelete(queue, false, false, false)
 
-		messages, _ := sub.Consume(queue, false, false, false, false, "", nil, nil)
+		messages, _ := sub.Consume(queue, "", false, false, false, false, nil)
 
 		pub.Publish("", queue, false, false, Publishing{Body: []byte("pub 1")})
 		pub.Publish("", queue, false, false, Publishing{Body: []byte("pub 2")})
@@ -435,7 +435,7 @@ func TestIntegrationConsumeFlow(t *testing.T) {
 
 		sub.Qos(1, 0, false)
 
-		messages, _ := sub.Consume(queue, false, false, false, false, "", nil, nil)
+		messages, _ := sub.Consume(queue, "", false, false, false, false, nil)
 
 		pub.Publish("", queue, false, false, Publishing{Body: []byte("pub 1")})
 		pub.Publish("", queue, false, false, Publishing{Body: []byte("pub 2")})
@@ -479,7 +479,7 @@ func TestIntegrationConsumeCancel(t *testing.T) {
 		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
 		defer ch.QueueDelete(queue, false, false, false)
 
-		messages, _ := ch.Consume(queue, false, false, false, false, "integration-tag", nil, nil)
+		messages, _ := ch.Consume(queue, "integration-tag", false, false, false, false, nil)
 
 		ch.Publish("", queue, false, false, Publishing{Body: []byte("1")})
 
@@ -600,7 +600,7 @@ func TestPublishEmptyBody(t *testing.T) {
 			t.Fatalf("Could not declare")
 		}
 
-		messages, err := ch.Consume(queue, false, false, false, false, "", nil, nil)
+		messages, err := ch.Consume(queue, "", false, false, false, false, nil)
 		if err != nil {
 			t.Fatalf("Could not consume")
 		}
@@ -646,7 +646,7 @@ func TestQuickPublishConsumeOnly(t *testing.T) {
 
 		defer sub.QueueDelete(queue, false, false, false)
 
-		ch, err := sub.Consume(queue, false, false, false, false, "", nil, nil)
+		ch, err := sub.Consume(queue, "", false, false, false, false, nil)
 		if err != nil {
 			t.Errorf("Could not sub: %s", err)
 		}
@@ -686,7 +686,7 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 			return
 		}
 
-		ch, err := sub.Consume(queue, false, false, false, false, "", nil, nil)
+		ch, err := sub.Consume(queue, "", false, false, false, false, nil)
 		if err != nil {
 			t.Errorf("Could not sub: %s", err)
 		}
@@ -908,7 +908,7 @@ func TestCorruptedMessageRegression(t *testing.T) {
 			t.Fatalf("Cannot declare")
 		}
 
-		msgs, err := sub.Consume(queue, false, false, false, false, "", nil, nil)
+		msgs, err := sub.Consume(queue, "", false, false, false, false, nil)
 		if err != nil {
 			t.Fatalf("Cannot consume")
 		}
@@ -950,8 +950,8 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 
 		err = ch.ExchangeDeclare(
 			exchange,
-			UntilUnused, // lifetime (auto-delete)
 			"direct",    // exchangeType
+			UntilUnused, // lifetime (auto-delete)
 			false,       // internal
 			false,       // noWait
 			nil,         // arguments
@@ -962,8 +962,8 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 
 		err = ch.ExchangeDeclare(
 			exchange,
-			UntilDeleted, // lifetime
 			"direct",
+			UntilDeleted, // different lifetime
 			false,
 			false,
 			nil,

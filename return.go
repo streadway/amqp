@@ -13,11 +13,12 @@ import (
 // unable to be delivered either due to the `mandatory` flag set and no route
 // found, or `immediate` flag set and no free consumer.
 type Return struct {
-	ReplyCode  uint16
-	ReplyText  string
-	Exchange   string
-	RoutingKey string // Message routing key
+	ReplyCode  uint16 // reason
+	ReplyText  string // description
+	Exchange   string // basic.publish exchange
+	RoutingKey string // basic.publish routing key
 
+	// Properties
 	ContentType     string    // MIME content type
 	ContentEncoding string    // MIME content encoding
 	Headers         Table     // Application or header exchange table
