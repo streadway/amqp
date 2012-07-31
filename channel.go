@@ -177,7 +177,7 @@ func (me *Channel) sendOpen(msg message) (err error) {
 	if content, ok := msg.(messageWithContent); ok {
 		props, body := content.getContent()
 		class, _ := content.id()
-		size := me.connection.Config.MaxFrameSize - frameHeaderSize
+		size := me.connection.Config.FrameSize - frameHeaderSize
 
 		if err = me.connection.send(&methodFrame{
 			ChannelId: me.id,

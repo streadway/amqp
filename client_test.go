@@ -160,16 +160,16 @@ func (t *server) channelOpen(id int) {
 	t.send(id, &channelOpenOk{})
 }
 
-func TestNewConnectionOpen(t *testing.T) {
+func Test(t *testing.T) {
 	rwc, srv := newSession(t)
 	go srv.connectionOpen()
 
-	if c, err := NewConnection(rwc, defaultConfig()); err != nil {
+	if c, err := Open(rwc, defaultConfig()); err != nil {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
 }
 
-func TestNewConnectionChannelOpen(t *testing.T) {
+func TestChannelOpen(t *testing.T) {
 	rwc, srv := newSession(t)
 
 	go func() {
@@ -177,7 +177,7 @@ func TestNewConnectionChannelOpen(t *testing.T) {
 		srv.channelOpen(1)
 	}()
 
-	c, err := NewConnection(rwc, defaultConfig())
+	c, err := Open(rwc, defaultConfig())
 	if err != nil {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
@@ -221,7 +221,7 @@ func TestConfirmMultiple(t *testing.T) {
 		srv.send(1, &basicAck{DeliveryTag: 7})
 	}()
 
-	c, err := NewConnection(rwc, defaultConfig())
+	c, err := Open(rwc, defaultConfig())
 	if err != nil {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}

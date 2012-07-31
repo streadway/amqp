@@ -17,8 +17,8 @@ import (
 	"time"
 )
 
-// Used along side NewConnection to specify the desired tuning parameters used
-// during a Connection handshake.  The negotiated tuning will be stored in the
+// Used in Open to specify the desired tuning parameters used during a
+// connection open handshake.  The negotiated tuning will be stored in the
 // resultant connection.
 type Config struct {
 	// The SASL mechanisms to try in the client request, and the successful
@@ -27,9 +27,9 @@ type Config struct {
 
 	Vhost string
 
-	MaxChannels       int // 0 is unlimited
-	MaxFrameSize      int // 0 is unlimited
-	HeartbeatInterval int // 0 means no heartbeats
+	Channels  int           // 0 max channels means unlimited
+	FrameSize int           // 0 max bytes means unlimited
+	Heartbeat time.Duration // less than 1s interval means no heartbeats
 }
 
 // Manages the serialization and deserialization of frames from IO and
@@ -38,19 +38,23 @@ type Connection struct {
 	destructor sync.Once
 	m          sync.Mutex // writer and notify mutex
 
-	conn     io.ReadWriteCloser
-	rpc      chan message
-	writer   *writer
+	conn io.ReadWriteCloser
+
+	rpc    chan message
+	writer *writer
+	sends  chan time.Time // timestamps of each frame sent
+
 	sequence uint32
 	channels map[uint16]*Channel
-	sends    chan time.Time // timestamps of each frame sent
-	closes   []chan *Error
+
+	closes []chan *Error
 
 	Config Config // The negotiated Config after connection.open
 
-	VersionMajor int   // Server major version
-	VersionMinor int   // Server minor version
-	Properties   Table // Server properties
+	Major int // Server's major version
+	Minor int // Server's minor version
+
+	Properties Table // Server properties
 }
 
 type readDeadliner interface {
@@ -61,8 +65,6 @@ type readDeadliner interface {
 // over TCP using PlainAuth.  Defaults to a server heartbeat interval of 10
 // seconds and sets the initial read deadline to 30 seconds.
 func Dial(amqp string) (*Connection, error) {
-	timeout := time.Duration(30) * time.Second
-
 	uri, err := ParseURI(amqp)
 	if err != nil {
 		return nil, err
@@ -70,23 +72,24 @@ func Dial(amqp string) (*Connection, error) {
 
 	addr := net.JoinHostPort(uri.Host, strconv.FormatInt(int64(uri.Port), 10))
 
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+	// Heartbeating hasn't started yet, don't stall forever on a dead server.
+	if err := conn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
 		return nil, err
 	}
 
-	return NewConnection(conn, Config{
-		SASL:              []Authentication{uri.PlainAuth()},
-		Vhost:             uri.Vhost,
-		HeartbeatInterval: 10, // seconds
+	return Open(conn, Config{
+		SASL:      []Authentication{uri.PlainAuth()},
+		Vhost:     uri.Vhost,
+		Heartbeat: 10 * time.Second,
 	})
 }
 
-func NewConnection(conn io.ReadWriteCloser, config Config) (*Connection, error) {
+func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	me := &Connection{
 		conn:     conn,
 		writer:   &writer{bufio.NewWriter(conn)},
@@ -267,16 +270,16 @@ func (me *Connection) reader() {
 		// Reset the blocking read deadline on the underlying connection when it
 		// implements SetReadDeadline to three times the requested heartbeat interval.
 		// On error, resort to blocking reads.
-		if beat := time.Duration(me.Config.HeartbeatInterval); beat > 0 {
+		if me.Config.Heartbeat > 0 {
 			if c, ok := me.conn.(readDeadliner); ok {
-				c.SetReadDeadline(time.Now().Add(3 * beat * time.Second))
+				c.SetReadDeadline(time.Now().Add(3 * me.Config.Heartbeat))
 			}
 		}
 	}
 }
 
 // Ensures that at least one frame is being sent at the tuned interval with a
-// jitter tolerance of 250ms
+// jitter tolerance of 1s
 func (me *Connection) heartbeater(interval time.Duration) {
 	last := time.Now()
 	tick := time.Tick(interval)
@@ -284,7 +287,7 @@ func (me *Connection) heartbeater(interval time.Duration) {
 	for {
 		select {
 		case at := <-tick:
-			if at.Sub(last) > interval-250*time.Millisecond {
+			if at.Sub(last) > interval-time.Second {
 				if err := me.send(&heartbeatFrame{}); err != nil {
 					// send heartbeats even after close/closeOk so we
 					// tick until the connection starts erroring
@@ -384,8 +387,8 @@ func (me *Connection) openStart(config Config) error {
 		return err
 	}
 
-	me.VersionMajor = int(start.VersionMajor)
-	me.VersionMinor = int(start.VersionMinor)
+	me.Major = int(start.VersionMajor)
+	me.Minor = int(start.VersionMinor)
 	me.Properties = Table(start.ServerProperties)
 
 	// eventually support challenge/response here by also responding to
@@ -421,28 +424,30 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 	// When this is bounded, share the bound.  We're effectively only bounded
 	// by MaxUint16.  If you hit a wrap around bug, throw a small party then
 	// make an github issue.
-	me.Config.MaxChannels = pick(config.MaxChannels, int(tune.ChannelMax))
+	me.Config.Channels = pick(config.Channels, int(tune.ChannelMax))
 
 	// Frame size includes headers and end byte (len(payload)+8), even if
 	// this is less than FrameMinSize, use what the server sends because the
 	// alternative is to stop the handshake here.
-	me.Config.MaxFrameSize = pick(config.MaxFrameSize, int(tune.FrameMax))
+	me.Config.FrameSize = pick(config.FrameSize, int(tune.FrameMax))
 
 	// Save this off for resetDeadline()
-	me.Config.HeartbeatInterval = pick(config.HeartbeatInterval, int(tune.Heartbeat))
+	me.Config.Heartbeat = time.Second * time.Duration(pick(
+		int(config.Heartbeat/time.Second),
+		int(tune.Heartbeat)))
 
 	// "The client should start sending heartbeats after receiving a
 	// Connection.Tune method"
-	if me.Config.HeartbeatInterval > 0 {
-		go me.heartbeater(time.Duration(me.Config.HeartbeatInterval) * time.Second)
+	if me.Config.Heartbeat > 0 {
+		go me.heartbeater(me.Config.Heartbeat)
 	}
 
 	if err := me.send(&methodFrame{
 		ChannelId: 0,
 		Method: &connectionTuneOk{
-			ChannelMax: uint16(me.Config.MaxChannels),
-			FrameMax:   uint32(me.Config.MaxFrameSize),
-			Heartbeat:  uint16(me.Config.HeartbeatInterval),
+			ChannelMax: uint16(me.Config.Channels),
+			FrameMax:   uint32(me.Config.FrameSize),
+			Heartbeat:  uint16(me.Config.Heartbeat / time.Second),
 		},
 	}); err != nil {
 		return err
