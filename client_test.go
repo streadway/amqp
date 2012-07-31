@@ -26,11 +26,6 @@ func defaultConfig() Config {
 }
 
 func newSession(t *testing.T) (io.ReadWriteCloser, *server) {
-	type pipe struct {
-		io.Reader
-		io.WriteCloser
-	}
-
 	rs, wc := io.Pipe()
 	rc, ws := io.Pipe()
 
@@ -127,9 +122,7 @@ func (t *server) expectAMQP() {
 	t.expectBytes([]byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1})
 }
 
-func (t *server) connectionOpen() {
-	t.expectAMQP()
-
+func (t *server) connectionStart() {
 	t.send(0, &connectionStart{
 		VersionMajor: 0,
 		VersionMinor: 9,
@@ -138,7 +131,9 @@ func (t *server) connectionOpen() {
 	})
 
 	t.recv(0, &connectionStartOk{})
+}
 
+func (t *server) connectionTune() {
 	t.send(0, &connectionTune{
 		ChannelMax: 11,
 		FrameMax:   20000,
@@ -146,6 +141,13 @@ func (t *server) connectionOpen() {
 	})
 
 	t.recv(0, &connectionTuneOk{})
+}
+
+func (t *server) connectionOpen() {
+	t.expectAMQP()
+	t.connectionStart()
+	t.connectionTune()
+
 	t.recv(0, &connectionOpen{})
 	t.send(0, &connectionOpenOk{})
 }
@@ -160,9 +162,12 @@ func (t *server) channelOpen(id int) {
 	t.send(id, &channelOpenOk{})
 }
 
-func Test(t *testing.T) {
+func TestOpen(t *testing.T) {
 	rwc, srv := newSession(t)
-	go srv.connectionOpen()
+	go func() {
+		srv.connectionOpen()
+		rwc.Close()
+	}()
 
 	if c, err := Open(rwc, defaultConfig()); err != nil {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
@@ -175,6 +180,8 @@ func TestChannelOpen(t *testing.T) {
 	go func() {
 		srv.connectionOpen()
 		srv.channelOpen(1)
+
+		rwc.Close()
 	}()
 
 	c, err := Open(rwc, defaultConfig())
@@ -185,6 +192,60 @@ func TestChannelOpen(t *testing.T) {
 	ch, err := c.Channel()
 	if err != nil {
 		t.Fatalf("could not open channel: %s (%s)", ch, err)
+	}
+}
+
+func TestOpenFailedSASLUnsupportedMechanisms(t *testing.T) {
+	rwc, srv := newSession(t)
+
+	go func() {
+		srv.expectAMQP()
+		srv.send(0, &connectionStart{
+			VersionMajor: 0,
+			VersionMinor: 9,
+			Mechanisms:   "KERBEROS NTLM",
+			Locales:      "en-us",
+		})
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != ErrSASL {
+		t.Fatalf("expected ErrSASL got: %+v on %+v", err, c)
+	}
+}
+
+func TestOpenFailedCredentials(t *testing.T) {
+	rwc, srv := newSession(t)
+
+	go func() {
+		srv.expectAMQP()
+		srv.connectionStart()
+		// Now kill/timeout the connection indicating bad auth
+		rwc.Close()
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != ErrCredentials {
+		t.Fatalf("expected ErrCredentials got: %+v on %+v", err, c)
+	}
+}
+
+func TestOpenFailedVhost(t *testing.T) {
+	rwc, srv := newSession(t)
+
+	go func() {
+		srv.expectAMQP()
+		srv.connectionStart()
+		srv.connectionTune()
+		srv.recv(0, &connectionOpen{})
+
+		// Now kill/timeout the connection on bad Vhost
+		rwc.Close()
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != ErrVhost {
+		t.Fatalf("expected ErrVhost got: %+v on %+v", err, c)
 	}
 }
 

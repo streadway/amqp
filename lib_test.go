@@ -17,6 +17,23 @@ import (
 	"time"
 )
 
+type pipe struct {
+	r *io.PipeReader
+	w *io.PipeWriter
+}
+
+func (p pipe) Read(b []byte) (int, error) {
+	return p.r.Read(b)
+}
+func (p pipe) Write(b []byte) (int, error) {
+	return p.w.Write(b)
+}
+func (p pipe) Close() error {
+	p.r.Close()
+	p.w.Close()
+	return nil
+}
+
 type logIO struct {
 	t      *testing.T
 	prefix string

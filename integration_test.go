@@ -17,15 +17,9 @@ import (
 	"time"
 )
 
-func TestIntegrationConnect(t *testing.T) {
-	if c := integrationConnection(t, "connect"); c != nil {
-		t.Logf("have connection")
-	}
-}
-
-func TestIntegrationConnectClose(t *testing.T) {
-	if c := integrationConnection(t, "close"); c != nil {
-		t.Logf("calling connection close")
+func TestIntegrationOpenClose(t *testing.T) {
+	if c := integrationConnection(t, "open-close"); c != nil {
+		t.Logf("have connection, calling connection close")
 		if err := c.Close(); err != nil {
 			t.Fatalf("connection close: %s", err)
 		}
@@ -33,8 +27,10 @@ func TestIntegrationConnectClose(t *testing.T) {
 	}
 }
 
-func TestIntegrationConnectChannel(t *testing.T) {
+func TestIntegrationOpenCloseChannel(t *testing.T) {
 	if c := integrationConnection(t, "channel"); c != nil {
+		defer c.Close()
+
 		if _, err := c.Channel(); err != nil {
 			t.Errorf("Channel could not be opened: %s", err)
 		}
@@ -42,11 +38,11 @@ func TestIntegrationConnectChannel(t *testing.T) {
 }
 
 func TestIntegrationExchange(t *testing.T) {
-	c1 := integrationConnection(t, "exch")
-	if c1 != nil {
-		defer c1.Close()
+	c := integrationConnection(t, "exch")
+	if c != nil {
+		defer c.Close()
 
-		channel, err := c1.Channel()
+		channel, err := c.Channel()
 		if err != nil {
 			t.Fatalf("create channel: %s", err)
 		}
@@ -66,19 +62,6 @@ func TestIntegrationExchange(t *testing.T) {
 		}
 		t.Logf("declare exchange OK")
 
-		// I'm not sure if this behavior is actually well-defined.
-		// if err := exchange.Declare(
-		//      UntilUnused, // lifetime
-		//      "direct",    // type
-		//      false,       // internal
-		//      false,       // nowait
-		//      nil,         // args
-		// ); err == nil {
-		//      t.Fatalf("re-declare same exchange didn't fail (it should have!)")
-		// } else {
-		//      t.Logf("re-declare same exchange: got expected error: %s", err)
-		// }
-
 		if err := channel.ExchangeDelete(exchange, false, false); err != nil {
 			t.Fatalf("delete exchange: %s", err)
 		}
@@ -92,11 +75,11 @@ func TestIntegrationExchange(t *testing.T) {
 }
 
 func TestIntegrationBasicQueueOperations(t *testing.T) {
-	c1 := integrationConnection(t, "queue")
-	if c1 != nil {
-		defer c1.Close()
+	c := integrationConnection(t, "queue")
+	if c != nil {
+		defer c.Close()
 
-		channel, err := c1.Channel()
+		channel, err := c.Channel()
 		if err != nil {
 			t.Fatalf("create channel: %s", err)
 		}
@@ -189,9 +172,9 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 }
 
 func TestIntegrationChannelClosing(t *testing.T) {
-	c1 := integrationConnection(t, "closings")
-	if c1 != nil {
-		defer c1.Close()
+	c := integrationConnection(t, "closings")
+	if c != nil {
+		defer c.Close()
 
 		// This function is run on every channel after it is successfully
 		// opened. It can do something to verify something. It should be
@@ -201,7 +184,7 @@ func TestIntegrationChannelClosing(t *testing.T) {
 		}
 
 		// open and close
-		channel, err := c1.Channel()
+		channel, err := c.Channel()
 		if err != nil {
 			t.Fatalf("basic create channel: %s", err)
 		}
@@ -215,7 +198,7 @@ func TestIntegrationChannelClosing(t *testing.T) {
 		// deferred close
 		signal := make(chan bool)
 		go func() {
-			channel, err := c1.Channel()
+			channel, err := c.Channel()
 			if err != nil {
 				t.Fatalf("second create channel: %s", err)
 			}
@@ -246,7 +229,7 @@ func TestIntegrationChannelClosing(t *testing.T) {
 			channels := make([]*Channel, n)
 			for i := 0; i < n; i++ {
 				var err error
-				if channels[i], err = c1.Channel(); err != nil {
+				if channels[i], err = c.Channel(); err != nil {
 					t.Fatalf("create channel %d/%d: %s", i+1, n, err)
 				}
 			}
@@ -259,30 +242,6 @@ func TestIntegrationChannelClosing(t *testing.T) {
 			t.Logf("created/closed %d channels OK", n)
 		}
 
-	}
-}
-
-func TestIntegrationConnectBadCredentials(t *testing.T) {
-	t.Parallel()
-
-	if uri, ok := integrationUri(t); ok {
-		uri.Username = "lolwho"
-
-		if _, err := Dial(uri.String()); err != ErrCredentials {
-			t.Errorf("Expected ErrCredentials, got %s", err)
-		}
-	}
-}
-
-func TestIntegrationConnectBadVhost(t *testing.T) {
-	t.Parallel()
-
-	if uri, ok := integrationUri(t); ok {
-		uri.Vhost = "lolwat"
-
-		if _, err := Dial(uri.String()); err != ErrVhost {
-			t.Errorf("Expected ErrVhost, got %s", err)
-		}
 	}
 }
 
@@ -338,11 +297,11 @@ func TestIntegrationMeaningfulChannelErrors(t *testing.T) {
 
 // https://github.com/streadway/amqp/issues/6
 func TestIntegrationNonBlockingClose(t *testing.T) {
-	c1 := integrationConnection(t, "pub")
-	if c1 != nil {
-		defer c1.Close()
+	c := integrationConnection(t, "#6")
+	if c != nil {
+		defer c.Close()
 
-		ch, err := c1.Channel()
+		ch, err := c.Channel()
 		if err != nil {
 			t.Fatalf("Could not create channel")
 		}
@@ -366,10 +325,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 			}
 		}()
 
-		time.Sleep(2 * time.Second)
-
 		succeed := make(chan bool)
-		fail := time.After(1 * time.Second)
 
 		go func() {
 			if err = ch.Close(); err != nil {
@@ -381,7 +337,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 		select {
 		case <-succeed:
 			break
-		case <-fail:
+		case <-time.After(1 * time.Second):
 			t.Fatalf("Close timed out after 1s")
 		}
 	}
@@ -584,11 +540,11 @@ func TestQuickPublishOnly(t *testing.T) {
 }
 
 func TestPublishEmptyBody(t *testing.T) {
-	c1 := integrationConnection(t, "empty")
-	if c1 != nil {
-		defer c1.Close()
+	c := integrationConnection(t, "empty")
+	if c != nil {
+		defer c.Close()
 
-		ch, err := c1.Channel()
+		ch, err := c.Channel()
 		if err != nil {
 			t.Errorf("Failed to create channel")
 			return
