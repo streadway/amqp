@@ -55,6 +55,9 @@ type Channel struct {
 	confirms       tagSet
 	publishCounter uint64
 
+	// Selects on any errors from shutdown during RPC
+	errors chan *Error
+
 	// State machine that manages frame order, must only be mutated by the connection
 	recv func(*Channel, frame) error
 
@@ -77,6 +80,7 @@ func newChannel(c *Connection, id uint16) *Channel {
 		consumers:  makeConsumers(),
 		recv:       (*Channel).recvMethod,
 		send:       (*Channel).sendOpen,
+		errors:     make(chan *Error, 1),
 	}
 }
 
@@ -93,7 +97,10 @@ func (me *Channel) shutdown(e *Error) {
 
 		me.send = (*Channel).sendClosed
 
-		close(me.rpc)
+		// Notify RPC if we're selecting
+		if e != nil {
+			me.errors <- e
+		}
 
 		me.consumers.closeAll()
 
@@ -131,14 +138,12 @@ func (me *Channel) call(req message, res ...message) error {
 	}
 
 	if req.wait() {
-		if msg, ok := <-me.rpc; ok {
-			switch m := msg.(type) {
-			case *channelClose:
-				return newError(m.ReplyCode, m.ReplyText)
-			case *connectionClose:
-				return newError(m.ReplyCode, m.ReplyText)
-			default:
-				// Try to match one of the result types
+		select {
+		case e := <-me.errors:
+			return e
+
+		case msg := <-me.rpc:
+			if msg != nil {
 				for _, try := range res {
 					if reflect.TypeOf(msg) == reflect.TypeOf(try) {
 						// *res = *msg
@@ -149,11 +154,12 @@ func (me *Channel) call(req message, res ...message) error {
 					}
 				}
 				return ErrCommandInvalid
+			} else {
+				// RPC channel has been closed without an error, likely due to a hard
+				// error on the Connection.  This indicates we have already been
+				// shutdown and if were waiting, will have returned from the errors chan.
+				return ErrClosed
 			}
-		} else {
-			// RPC channel has been closed, likely due to a hard error on the
-			// Connection.  This indicates we have already been shutdown.
-			return ErrClosed
 		}
 	}
 
@@ -225,15 +231,6 @@ func (me *Channel) sendOpen(msg message) (err error) {
 func (me *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
-		// Deliver this close message only when this is a synchronous response
-		// (exception) to a waiting RPC call.  This is a touch racy when the call
-		// goroutine is moving from send to receive.  If it doesn't meet the race,
-		// the callee will get an ErrClosed instead of the text from this method.
-		select {
-		case me.rpc <- msg:
-		default:
-		}
-
 		me.shutdown(newError(m.ReplyCode, m.ReplyText))
 		me.send(me, &channelCloseOk{})
 
@@ -357,9 +354,11 @@ func (me *Channel) recvContent(f frame) error {
 // Initiate a clean channel closure by sending a close message with the error
 // code set to '200'
 func (me *Channel) Close() error {
-	err := me.call(&channelClose{ReplyCode: ReplySuccess}, &channelCloseOk{})
-	me.shutdown(nil)
-	return err
+	defer me.shutdown(nil)
+	return me.call(
+		&channelClose{ReplyCode: ReplySuccess},
+		&channelCloseOk{},
+	)
 }
 
 // Add a chan for when the server sends a channel or connection exception in

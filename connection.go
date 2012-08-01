@@ -49,6 +49,8 @@ type Connection struct {
 
 	closes []chan *Error
 
+	errors chan *Error
+
 	Config Config // The negotiated Config after connection.open
 
 	Major int // Server's major version
@@ -96,6 +98,7 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 		rpc:      make(chan message),
 		channels: make(map[uint16]*Channel),
 		sends:    make(chan time.Time),
+		errors:   make(chan *Error, 1),
 	}
 	go me.reader()
 	return me, me.open(config)
@@ -189,8 +192,9 @@ func (me *Connection) shutdown(err *Error) {
 			c.shutdown(err)
 		}
 
-		close(me.rpc)
-		me.rpc = nil
+		if err != nil {
+			me.errors <- err
+		}
 
 		close(me.sends)
 		me.sends = nil
@@ -223,18 +227,6 @@ func (me *Connection) dispatch0(f frame) {
 				ChannelId: 0,
 				Method:    &connectionCloseOk{},
 			})
-
-			// Deliver when we're waiting for a response before we've shut down so
-			// that we can return a meaningful error
-			select {
-			case me.rpc <- m:
-			default:
-			}
-
-			// Deliver to all channels that are waiting
-			for _, c := range me.channels {
-				c.recv(c, f)
-			}
 
 			me.shutdown(newError(m.ReplyCode, m.ReplyText))
 		default:
@@ -345,24 +337,22 @@ func (me *Connection) call(req message, res ...message) error {
 		}
 	}
 
-	if msg, ok := <-me.rpc; ok {
-		if closed, ok := msg.(*connectionClose); ok {
-			return newError(closed.ReplyCode, closed.ReplyText)
-		} else {
-			// Try to match one of the result types
-			for _, try := range res {
-				if reflect.TypeOf(msg) == reflect.TypeOf(try) {
-					// *res = *msg
-					vres := reflect.ValueOf(try).Elem()
-					vmsg := reflect.ValueOf(msg).Elem()
-					vres.Set(vmsg)
-					return nil
-				}
+	select {
+	case err := <-me.errors:
+		return err
+
+	case msg := <-me.rpc:
+		// Try to match one of the result types
+		for _, try := range res {
+			if reflect.TypeOf(msg) == reflect.TypeOf(try) {
+				// *res = *msg
+				vres := reflect.ValueOf(try).Elem()
+				vmsg := reflect.ValueOf(msg).Elem()
+				vres.Set(vmsg)
+				return nil
 			}
-			return ErrCommandInvalid
 		}
-	} else {
-		return ErrClosed
+		return ErrCommandInvalid
 	}
 
 	panic("unreachable")
@@ -418,13 +408,10 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 	tune := &connectionTune{}
 
 	if err := me.call(ok, tune); err != nil {
-		if err == ErrClosed {
-			// per spec, a connection can only be closed when it has been opened
-			// so at this point, we know it's an auth error, but the socket
-			// was closed instead.  Return a meaningful error.
-			return ErrCredentials
-		}
-		return err
+		// per spec, a connection can only be closed when it has been opened
+		// so at this point, we know it's an auth error, but the socket
+		// was closed instead.  Return a meaningful error.
+		return ErrCredentials
 	}
 
 	// When this is bounded, share the bound.  We're effectively only bounded
@@ -467,11 +454,8 @@ func (me *Connection) openVhost(config Config) error {
 	res := &connectionOpenOk{}
 
 	if err := me.call(req, res); err != nil {
-		if err == ErrClosed {
-			// Cannot be closed yet, but we know it's a vhost problem
-			return ErrVhost
-		}
-		return err
+		// Cannot be closed yet, but we know it's a vhost problem
+		return ErrVhost
 	}
 
 	me.Config.Vhost = config.Vhost
