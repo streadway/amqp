@@ -146,6 +146,10 @@ identified by the deliveryTag.
 When multiple is true, nack messages up to and including delivered messages up
 until the deliveryTag delivered on the same channel.
 
+When requeue is true, request the server to deliver this message to a different
+consumer.  If it is not possible or requeue is false, the message will be
+dropped or delivered to a server configured dead-letter queue.
+
 This method must not be used to select or requeue messages the client wishes
 not to handle, rather it is to inform the server that the client is incapable
 of handling this message at this time.

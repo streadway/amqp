@@ -1315,7 +1315,7 @@ potentially including the original.
 If the deliveries cannot be recovered, an error will be returned and the channel
 will be closed.
 
-Note: this method is not implemented on RabbitMQ
+Note: this method is not implemented on RabbitMQ, use Delivery.Nack instead
 */
 func (me *Channel) Recover(requeue bool) error {
 	return me.call(
