@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
-	"net"
 	"os"
 	"reflect"
 	"testing"
@@ -242,18 +241,6 @@ func TestIntegrationChannelClosing(t *testing.T) {
 			t.Logf("created/closed %d channels OK", n)
 		}
 
-	}
-}
-
-func TestIntegrationConnectHostBrackets(t *testing.T) {
-	if uri, ok := integrationUri(t); ok {
-		uri.Host = "::1"
-
-		_, err := Dial(uri.String())
-
-		if e, ok := err.(*net.AddrError); ok {
-			t.Errorf("Expected no AddrError on colon in hostname, got %v", e)
-		}
 	}
 }
 
