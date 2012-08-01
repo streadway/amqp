@@ -109,10 +109,11 @@ func (me *Connection) nextChannelId() uint16 {
 // connection.close method or by a normal shutdown.
 //
 // On normal shutdowns, the chan will be closed.
-func (me *Connection) NotifyClose(c chan *Error) {
+func (me *Connection) NotifyClose(c chan *Error) chan *Error {
 	me.m.Lock()
 	defer me.m.Unlock()
 	me.closes = append(me.closes, c)
+	return c
 }
 
 /*
