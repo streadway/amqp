@@ -48,14 +48,14 @@ func (me *methodFrame) write(w io.Writer) (err error) {
 		return
 	}
 
-	return writeFrame(w, FrameMethod, me.ChannelId, payload.Bytes())
+	return writeFrame(w, frameMethod, me.ChannelId, payload.Bytes())
 }
 
 // Heartbeat
 //
 // Payload is empty
 func (me *heartbeatFrame) write(w io.Writer) (err error) {
-	return writeFrame(w, FrameHeartbeat, me.ChannelId, []byte{})
+	return writeFrame(w, frameHeartbeat, me.ChannelId, []byte{})
 }
 
 // CONTENT HEADER
@@ -196,7 +196,7 @@ func (me *headerFrame) write(w io.Writer) (err error) {
 		}
 	}
 
-	return writeFrame(w, FrameHeader, me.ChannelId, payload.Bytes())
+	return writeFrame(w, frameHeader, me.ChannelId, payload.Bytes())
 }
 
 // Body
@@ -204,11 +204,11 @@ func (me *headerFrame) write(w io.Writer) (err error) {
 // Payload is one byterange from the full body who's size is declared in the
 // Header frame
 func (me *bodyFrame) write(w io.Writer) (err error) {
-	return writeFrame(w, FrameBody, me.ChannelId, me.Body)
+	return writeFrame(w, frameBody, me.ChannelId, me.Body)
 }
 
 func writeFrame(w io.Writer, typ uint8, channel uint16, payload []byte) (err error) {
-	end := []byte{FrameEnd}
+	end := []byte{frameEnd}
 	size := uint(len(payload))
 
 	_, err = w.Write([]byte{

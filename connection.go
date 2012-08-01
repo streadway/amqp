@@ -136,7 +136,7 @@ func (me *Connection) Close() error {
 	defer me.shutdown(nil)
 	return me.call(
 		&connectionClose{
-			ReplyCode: ReplySuccess,
+			ReplyCode: replySuccess,
 			ReplyText: "kthxbai",
 		},
 		&connectionCloseOk{},

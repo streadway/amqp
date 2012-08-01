@@ -356,7 +356,7 @@ func (me *Channel) recvContent(f frame) error {
 func (me *Channel) Close() error {
 	defer me.shutdown(nil)
 	return me.call(
-		&channelClose{ReplyCode: ReplySuccess},
+		&channelClose{ReplyCode: replySuccess},
 		&channelCloseOk{},
 	)
 }

@@ -130,8 +130,9 @@ type fieldset struct {
 
 var (
 	helpers = template.FuncMap{
-		"camel": camel,
-		"clean": clean,
+		"public":  public,
+		"private": private,
+		"clean":   clean,
 	}
 
 	packageTemplate = template.Must(template.New("package").Funcs(helpers).Parse(`
@@ -152,10 +153,13 @@ var (
     "io"
   )
 
-	// From the specification.  Used in the Error type.
-  const (
-  {{range .Constants}}
-	{{.Name | camel}} = {{.Value}}{{end}}
+	// Error codes that can be sent from the server during a connection or
+	// channel exception or used by the client to indicate a class of error like
+	// ErrCredentials.  The text of the error is likely more interesting than
+	// these constants.
+	const (
+	{{range $c := .Constants}}
+	{{if $c.IsError}}{{.Name | public}}{{else}}{{.Name | private}}{{end}} = {{.Value}}{{end}}
   )
 
 	func isSoftExceptionCode(code int) bool {
@@ -339,6 +343,10 @@ var (
   `))
 )
 
+func (me *Constant) IsError() bool {
+	return strings.Contains(me.Class, "error")
+}
+
 func (me *Constant) IsSoftError() bool {
 	return me.Class == "soft-error"
 }
@@ -423,7 +431,7 @@ func (me *renderer) Domain(field Field) (domain Domain, err error) {
 }
 
 func (me *renderer) FieldName(field Field) (t string) {
-	t = camel(field.Name)
+	t = public(field.Name)
 
 	if field.Reserved {
 		t = strings.ToLower(t)
@@ -469,16 +477,23 @@ func (me *renderer) Tag(d Domain) string {
 }
 
 func (me *renderer) StructName(parts ...string) string {
-	return parts[0] + camel(parts[1:]...)
+	return parts[0] + public(parts[1:]...)
 }
 
 func clean(body string) (res string) {
 	return strings.Replace(body, "\r", "", -1)
 }
 
-func camel(parts ...string) (res string) {
+func private(parts ...string) string {
+	return export(regexp.MustCompile(`[-_]\w`), parts...)
+}
+
+func public(parts ...string) string {
+	return export(regexp.MustCompile(`^\w|[-_]\w`), parts...)
+}
+
+func export(delim *regexp.Regexp, parts ...string) (res string) {
 	for _, in := range parts {
-		delim := regexp.MustCompile(`^\w|[-_]\w`)
 
 		res += delim.ReplaceAllStringFunc(in, func(match string) string {
 			switch len(match) {

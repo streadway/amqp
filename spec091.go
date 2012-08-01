@@ -14,15 +14,18 @@ import (
 	"io"
 )
 
-// From the specification.  Used in the Error type.
+// Error codes that can be sent from the server during a connection or
+// channel exception or used by the client to indicate a class of error like
+// ErrCredentials.  The text of the error is likely more interesting than
+// these constants.
 const (
-	FrameMethod        = 1
-	FrameHeader        = 2
-	FrameBody          = 3
-	FrameHeartbeat     = 8
-	FrameMinSize       = 4096
-	FrameEnd           = 206
-	ReplySuccess       = 200
+	frameMethod        = 1
+	frameHeader        = 2
+	frameBody          = 3
+	frameHeartbeat     = 8
+	frameMinSize       = 4096
+	frameEnd           = 206
+	replySuccess       = 200
 	ContentTooLarge    = 311
 	NoConsumers        = 313
 	ConnectionForced   = 320

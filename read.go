@@ -54,22 +54,22 @@ func (me *reader) ReadFrame() (frame frame, err error) {
 	size := binary.BigEndian.Uint32(scratch[3:7])
 
 	switch typ {
-	case FrameMethod:
+	case frameMethod:
 		if frame, err = me.parseMethodFrame(channel, size); err != nil {
 			return
 		}
 
-	case FrameHeader:
+	case frameHeader:
 		if frame, err = me.parseHeaderFrame(channel, size); err != nil {
 			return
 		}
 
-	case FrameBody:
+	case frameBody:
 		if frame, err = me.parseBodyFrame(channel, size); err != nil {
 			return
 		}
 
-	case FrameHeartbeat:
+	case frameHeartbeat:
 		if frame, err = me.parseHeartbeatFrame(channel, size); err != nil {
 			return
 		}
@@ -82,7 +82,7 @@ func (me *reader) ReadFrame() (frame frame, err error) {
 		return
 	}
 
-	if scratch[0] != FrameEnd {
+	if scratch[0] != frameEnd {
 		return nil, ErrFrame
 	}
 
