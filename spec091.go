@@ -2627,7 +2627,7 @@ func (me *basicRecover) id() (uint16, uint16) {
 }
 
 func (me *basicRecover) wait() bool {
-	return false
+	return true
 }
 
 func (me *basicRecover) write(w io.Writer) (err error) {

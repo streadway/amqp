@@ -402,6 +402,22 @@ func TestIntegrationConsumeFlow(t *testing.T) {
 	}
 }
 
+func TestIntegrationRecoverNotImplemented(t *testing.T) {
+	queue := "test.recover"
+
+	if c, ch := integrationQueue(t, queue); c != nil {
+		if product, ok := c.Properties["product"]; ok && product.(string) == "RabbitMQ" {
+			defer c.Close()
+
+			err := ch.Recover(false)
+
+			if ex, ok := err.(*Error); !ok || ex.Code != 540 {
+				t.Fatalf("Expected NOT IMPLEMENTED got: %v", ex)
+			}
+		}
+	}
+}
+
 // This test is driven by a private API to simulate the server sending a channelFlow message
 func TestIntegrationPublishFlow(t *testing.T) {
 	// TODO - no idea how to test without affecting the server or mucking internal APIs

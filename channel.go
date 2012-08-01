@@ -1304,4 +1304,22 @@ func (me *Channel) Confirm(noWait bool) error {
 	return nil
 }
 
-//TODO func (me *Channel) Recover(requeue bool) error                                 { return nil }
+/*
+Asks the server to redeliver all unacknowledged deliveries on this channel. 
+
+When requeue is false, messages will be redelivered to the original consumer.
+
+When requeue is true, messages will be redelivered to any available consumer,
+potentially including the original.
+
+If the deliveries cannot be recovered, an error will be returned and the channel
+will be closed.
+
+Note: this method is not implemented on RabbitMQ
+*/
+func (me *Channel) Recover(requeue bool) error {
+	return me.call(
+		&basicRecover{Requeue: requeue},
+		&basicRecoverOk{},
+	)
+}

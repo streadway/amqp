@@ -2970,7 +2970,7 @@
 
     <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
 
-    <method name = "recover" index = "110" label = "redeliver unacknowledged messages">
+    <method name = "recover" synchronous = "1" index = "110" label = "redeliver unacknowledged messages">
       <doc>
         This method asks the server to redeliver all unacknowledged messages on a
         specified channel. Zero or more messages may be redelivered.  This method
