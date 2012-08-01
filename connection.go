@@ -231,6 +231,11 @@ func (me *Connection) dispatch0(f frame) {
 			default:
 			}
 
+			// Deliver to all channels that are waiting
+			for _, c := range me.channels {
+				c.recv(c, f)
+			}
+
 			me.shutdown(newError(m.ReplyCode, m.ReplyText))
 		default:
 			me.rpc <- m

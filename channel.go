@@ -132,9 +132,12 @@ func (me *Channel) call(req message, res ...message) error {
 
 	if req.wait() {
 		if msg, ok := <-me.rpc; ok {
-			if closed, ok := msg.(*channelClose); ok {
-				return newError(closed.ReplyCode, closed.ReplyText)
-			} else {
+			switch m := msg.(type) {
+			case *channelClose:
+				return newError(m.ReplyCode, m.ReplyText)
+			case *connectionClose:
+				return newError(m.ReplyCode, m.ReplyText)
+			default:
 				// Try to match one of the result types
 				for _, try := range res {
 					if reflect.TypeOf(msg) == reflect.TypeOf(try) {
