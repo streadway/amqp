@@ -1198,7 +1198,7 @@ Once a channel has been put into transaction mode, it cannot be taken out of
 transaction mode.  Use a different channel for non-transactional semantics.
 
 */
-func (me *Channel) TxSelect() error {
+func (me *Channel) Tx() error {
 	return me.call(
 		&txSelect{},
 		&txSelectOk{},
@@ -1209,7 +1209,7 @@ func (me *Channel) TxSelect() error {
 Atomically commit all publishings and acknowledgments for a single queue and
 immediately start a new transaction.
 
-Calling this method without having called Channel.TxSelect is an error.
+Calling this method without having called Channel.Tx is an error.
 
 */
 func (me *Channel) TxCommit() error {
@@ -1223,7 +1223,7 @@ func (me *Channel) TxCommit() error {
 Atomically roll back all publishings and acknowledgments for a single queue and
 immediately start a new transaction.
 
-Calling this method without having called Channel.TxSelect is an error.
+Calling this method without having called Channel.Tx is an error.
 
 */
 func (me *Channel) TxRollback() error {

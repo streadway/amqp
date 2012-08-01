@@ -731,7 +731,7 @@ func TestIntegrationTxCommit(t *testing.T) {
 
 		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
 
-		if err := ch.TxSelect(); err != nil {
+		if err := ch.Tx(); err != nil {
 			t.Fatalf("tx.select failed")
 		}
 
@@ -762,7 +762,7 @@ func TestIntegrationTxRollback(t *testing.T) {
 
 		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
 
-		if err := ch.TxSelect(); err != nil {
+		if err := ch.Tx(); err != nil {
 			t.Fatalf("tx.select failed")
 		}
 
