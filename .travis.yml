@@ -1,8 +1,9 @@
 language: go
 
+services:
+  - rabbitmq
+
 before_install:
- - sudo service rabbitmq-server start
- - sleep 1
  - sudo service rabbitmq-server status
 
 env:
