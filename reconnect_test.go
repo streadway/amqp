@@ -18,7 +18,7 @@ func setup(url, queue string) (*amqp.Connection, *amqp.Channel, error) {
 		return nil, nil, err
 	}
 
-	if _, err := ch.QueueDeclare(queue, amqp.UntilUnused, false, false, nil); err != nil {
+	if _, err := ch.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 		return nil, nil, err
 	}
 

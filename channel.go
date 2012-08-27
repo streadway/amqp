@@ -594,7 +594,7 @@ the type "direct" with the routing key matching the queue's name.  With this
 default binding, it is possible to publish messages that route directly to
 this queue by publishing to "" with the routing key of the queue name.
 
-  QueueDeclare("alerts", UntilDeleted, false false, false, nil)
+  QueueDeclare("alerts", true, false, false false, false, nil)
   Publish("", "alerts", false, false, Publishing{Body: []byte("...")})
 
   Delivery       Exchange  Key       Queue
@@ -604,29 +604,25 @@ this queue by publishing to "" with the routing key of the queue name.
 The queue name may be empty, in which the server will generate a unique name
 which will be returned in the Name field of Queue struct.
 
-Each queue has a lifetime that affects how long the queue will remain after
-all consumers have been canceled.
+Durable and Non-Auto-Deleted queues will survive server restarts and remain
+when there are no remaining consumers or bindings.  Persistent publishings will
+be restored in this queue on server restart.  These queues are only able to be
+bound to durable exchanges.
 
-		UntilDeleted
-		UntilUnused
-		UntilServerRestarted
+Non-Durable and Auto-Deleted queues will not be redeclared on server restart
+and will be deleted by the server after a short time when the last consumer is
+canceled or the last consumer's channel is closed.  Queues with this lifetime
+can also be deleted normally with QueueDelete.  These durable queues can only
+be bound to non-durable exchanges.
 
-UntilDeleted - declares the queue as durable and not auto-deleted.  It will
-survive server restarts and remain when there are no remaining consumers or
-bindings.  Persistent publishings will be restored in this queue on server
-restart.  These queues are only able to be bound to durable exchanges.
+Non-Durable and Non-Auto-Deleted queues will remain declared as long as the
+server is running regardless of how many consumers.  This lifetime is useful
+for temporary topologies that may have long delays between consumer activity.
+These queues can only be bound to non-durable exchanges.
 
-UntilUnused - declares the queue as non-durable and auto-deleted which will
-not be redeclared on server restart and will be deleted by the server after a
-short time when the last consumer is canceled or the last consumer's channel
-is closed.  Queues with this lifetime can also be deleted normally with
-QueueDelete.  These queues can only be bound to non-durable exchanges.
-
-UntilServerRestarted - declares the queue as non-durable and not
-auto-deleted which will remain as long as the server is running regardless of
-how many consumers.  This lifetime is useful for temporary topologies that may
-have long delays between consumer activity.  These queues can only be bound to
-non-durable exchanges.
+Durable and Auto-Deleted queues will be restored on server restart, but without
+active consumers, will not survive and be removed.  This Lifetime is unlikely
+to be useful.
 
 Exclusive queues are only accessible by the connection that declares them and
 will be deleted when the connection closes.  Channels on other connections
@@ -641,12 +637,12 @@ When the error return value is not nil, you can assume the queue could not be
 declared with these parameters and the channel will be closed.
 
 */
-func (me *Channel) QueueDeclare(name string, lifetime Lifetime, exclusive, noWait bool, args Table) (Queue, error) {
+func (me *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
 	req := &queueDeclare{
 		Queue:      name,
 		Passive:    false,
-		Durable:    lifetime.durable(),
-		AutoDelete: lifetime.autoDelete(),
+		Durable:    durable,
+		AutoDelete: autoDelete,
 		Exclusive:  exclusive,
 		NoWait:     noWait,
 		Arguments:  args,
@@ -738,10 +734,9 @@ with topic exchanges.
                            \---> info ---/
   key: debug --> amq.topic ----> # ------> emails
 
-It is possible to bind a durable queue with the lifetime UntilDeleted to a
-transient exchange with the lifetime UntilUnused or UntilServerRestarted.  When
-a durable queue is bound to a durable exchange, the binding is also durable
-and will be restored on server restart.
+It is only possible to bind a durable queue to a durable exchange regardless of
+whether the queue or exchange is auto-deleted.  Bindings between durable queues
+and exchanges will also be restored on server restart.
 
 If the binding could not complete, an error will be returned and the channel
 will be closed.
@@ -918,7 +913,7 @@ func (me *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 /*
 Declares an exchange on the server. If the exchange does not already exist,
 the server will create it.  If the exchange exists, the server verifies
-that it is of the provided type and lifetime.
+that it is of the provided type, durability and auto-delete flags.
 
 Errors returned from this method will close the channel.
 
@@ -934,30 +929,27 @@ how messages are routed through it. Once an exchange is declared, its type
 cannot be changed.  The common types are "direct", "fanout", "topic" and
 "headers".
 
-Each exchange has a lifetime that affects the durable and auto-delete flags and
-can be one of the following:
+Durable and Non-Auto-Deleted exchanges will survive server restarts and remain
+declared when there are no remaining bindings.  This is the best lifetime for
+long-lived exchange configurations like stable routes and default exchanges.
 
-		UntilDeleted
-		UntilUnused
-		UntilServerRestarted
+Non-Durable and Auto-Deleted exchanges will be deleted when there are no
+remaining bindings and not restored on server restart.  This lifetime is
+useful for temporary topologies that should not pollute the virtual host on
+failure or after the consumers have completed.
 
-UntilDeleted - declares the exchange as durable and not auto-deleted will
-survive server restarts and remain when there are no remaining bindings.  This
-is the lifetime for long-lived exchange configurations like stable routes and
-default exchanges.
+Non-Durable and Non-Auto-deleted exchanges will remain as long as the server is
+running including when there are no remaining bindings.  This is useful for
+temporary topologies that may have long delays between bindings.
 
-UntilUnused - declares the exchange as non-durable and auto-deleted which will
-not be redeclared on server restart and will be deleted when there are no
-remaining bindings.  This lifetime is useful for temporary topologies that
-should not pollute the virtual host on failure or completion.
+Durable and Auto-Deleted exchanges will survive server restarts and will be
+removed before and after server restarts when there are no remaining bindings.
+These exchanges are useful for robust temporary topologies or when you require
+binding durable queues to auto-deleted exchanges.
 
-UntilServerRestarted - declares the exchange as non-durable and not
-auto-deleted which will remain as long as the server is running including when
-there are no remaining bindings.  This is useful for temporary topologies that
-may have long delays between bindings.
-
-Note: RabbitMQ declares the default exchange types like 'amq.fanout' with the
-equivalent Lifetime of UntilDeleted
+Note: RabbitMQ declares the default exchange types like 'amq.fanout' as
+durable, so queues that bind to these pre-declared exchanges must also be
+durable.
 
 Exchanges declared as `internal` do not accept accept publishings. Internal
 exchanges are useful for when you wish to implement inter-exchange topologies
@@ -970,14 +962,14 @@ to respond to any exceptions.
 Optional amqp.Table of arguments that are specific to the server's implementation of
 the exchange can be sent for exchange types that require extra parameters.
 */
-func (me *Channel) ExchangeDeclare(name, kind string, lifetime Lifetime, internal, noWait bool, args Table) error {
+func (me *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
 	return me.call(
 		&exchangeDeclare{
 			Exchange:   name,
 			Type:       kind,
 			Passive:    false,
-			Durable:    lifetime.durable(),
-			AutoDelete: lifetime.autoDelete(),
+			Durable:    durable,
+			AutoDelete: autoDelete,
 			Internal:   internal,
 			NoWait:     noWait,
 			Arguments:  args,
