@@ -64,8 +64,9 @@ type properties struct {
 
 // DeliveryMode.  Transient means higher throughput but messages will not be
 // restored on broker restart.  The delivery mode of publishings is unrelated
-// to the lifetime of the queues they reside on.  Transient messages will not
-// be restored in queues with a lifetime UntilDeleted on server restart.
+// to the durability of the queues they reside on.  Transient messages will
+// not be restored to durable queues, persistent messages will be restored to
+// durable queues and lost on non-durable queues during server restart.
 //
 // This remains typed as uint8 to match Publishing.DeliveryMode.  Other
 // delivery modes specific to custom queue implementations are not enumerated
@@ -94,41 +95,6 @@ const (
 	flagAppId           = 0x0008
 	flagReserved1       = 0x0004
 )
-
-// A library type that makes it simpler to reason about the possible Durable
-// and AutoDelete fields that make sense for a Queue or Exchange.  This avoids
-// the possible combination of durable=true, autoDelete=true.
-type Lifetime int
-
-const (
-	UntilDeleted         Lifetime = iota // durable
-	UntilServerRestarted                 // not durable, not auto-delete
-	UntilUnused                          // auto-delete
-)
-
-func (me *Lifetime) durable() bool {
-	switch *me {
-	case UntilDeleted:
-		return true
-	case UntilServerRestarted:
-		return false
-	case UntilUnused:
-		return false
-	}
-	panic("unknown lifetime")
-}
-
-func (me *Lifetime) autoDelete() bool {
-	switch *me {
-	case UntilDeleted:
-		return false
-	case UntilServerRestarted:
-		return false
-	case UntilUnused:
-		return true
-	}
-	panic("unknown lifetime")
-}
 
 // Current state of the queue on the server returned from Channel.QueueDeclare or
 // Channel.QueueInspect.

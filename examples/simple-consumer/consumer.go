@@ -14,7 +14,7 @@ import (
 
 var (
 	uri          = flag.String("uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
-	exchange     = flag.String("exchange", "test-exchange", "Durable AMQP exchange name")
+	exchange     = flag.String("exchange", "test-exchange", "Durable, non-auto-deleted AMQP exchange name")
 	exchangeType = flag.String("exchange-type", "direct", "Exchange type - direct|fanout|topic|x-custom")
 	queue        = flag.String("queue", "test-queue", "Ephemeral AMQP queue name")
 	bindingKey   = flag.String("key", "test-key", "AMQP binding key")
@@ -78,23 +78,25 @@ func NewConsumer(amqpURI, exchange, exchangeType, queue, key, ctag string) (*Con
 
 	log.Printf("got Channel, declaring Exchange (%s)", exchange)
 	if err = c.channel.ExchangeDeclare(
-		exchange,          // name of the exchange
-		exchangeType,      // type
-		amqp.UntilDeleted, // lifetime = durable
-		false,             // internal
-		false,             // noWait
-		nil,               // arguments
+		exchange,     // name of the exchange
+		exchangeType, // type
+		true,         // durable
+		false,        // delete when complete
+		false,        // internal
+		false,        // noWait
+		nil,          // arguments
 	); err != nil {
 		return nil, fmt.Errorf("Exchange Declare: %s", err)
 	}
 
 	log.Printf("declared Exchange, declaring Queue (%s)", queue)
 	state, err := c.channel.QueueDeclare(
-		queue,            // name of the queue
-		amqp.UntilUnused, // lifetime = auto-delete
-		false,            // exclusive
-		false,            // noWait
-		nil,              // arguments
+		queue, // name of the queue
+		true,  // durable
+		false, // delete when usused
+		false, // exclusive
+		false, // noWait
+		nil,   // arguments
 	)
 	if err != nil {
 		return nil, fmt.Errorf("Queue Declare: %s", err)

@@ -26,11 +26,11 @@ func ExampleChannel_Confirm_bridge() {
 		log.Fatalf("channel.open source: %s", err)
 	}
 
-	if err := chs.ExchangeDeclare("log", "topic", amqp.UntilDeleted, false, false, nil); err != nil {
+	if err := chs.ExchangeDeclare("log", "topic", true, false, false, false, nil); err != nil {
 		log.Fatalf("exchange.declare destination: %s", err)
 	}
 
-	if _, err := chs.QueueDeclare("remote-tee", amqp.UntilUnused, false, false, nil); err != nil {
+	if _, err := chs.QueueDeclare("remote-tee", true, true, false, false, nil); err != nil {
 		log.Fatalf("queue.declare source: %s", err)
 	}
 
@@ -55,7 +55,7 @@ func ExampleChannel_Confirm_bridge() {
 		log.Fatalf("channel.open destination: %s", err)
 	}
 
-	if err := chd.ExchangeDeclare("log", "topic", amqp.UntilDeleted, false, false, nil); err != nil {
+	if err := chd.ExchangeDeclare("log", "topic", true, false, false, false, nil); err != nil {
 		log.Fatalf("exchange.declare destination: %s", err)
 	}
 
@@ -129,7 +129,7 @@ func ExampleChannel_Consume() {
 	// are the same.  This is part of AMQP being a programmable messaging model.
 	//
 	// See the Channel.Publish example for the complimentary declare.
-	err = c.ExchangeDeclare("logs", "topic", amqp.UntilDeleted, false, false, nil)
+	err = c.ExchangeDeclare("logs", "topic", true, false, false, false, nil)
 	if err != nil {
 		log.Fatal("exchange.declare: %s", err)
 	}
@@ -147,7 +147,7 @@ func ExampleChannel_Consume() {
 	}
 
 	for _, b := range bindings {
-		_, err = c.QueueDeclare(b.queue, amqp.UntilDeleted, false, false, nil)
+		_, err = c.QueueDeclare(b.queue, true, false, false, false, nil)
 		if err != nil {
 			log.Fatal("queue.declare: %s", err)
 		}
@@ -251,7 +251,7 @@ func ExampleChannel_Publish() {
 	// are the same.  This is part of AMQP being a programmable messaging model.
 	//
 	// See the Channel.Consume example for the complimentary declare.
-	err = c.ExchangeDeclare("logs", "topic", amqp.UntilDeleted, false, false, nil)
+	err = c.ExchangeDeclare("logs", "topic", true, false, false, false, nil)
 	if err != nil {
 		log.Fatal("exchange.declare: %s", err)
 	}

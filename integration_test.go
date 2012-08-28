@@ -50,12 +50,13 @@ func TestIntegrationExchange(t *testing.T) {
 		exchange := "test-integration-exchange"
 
 		if err := channel.ExchangeDeclare(
-			exchange,    // name
-			"direct",    // type
-			UntilUnused, // lifetime
-			false,       // internal
-			false,       // nowait
-			nil,         // args
+			exchange, // name
+			"direct", // type
+			false,    // duration
+			true,     // auto-delete
+			false,    // internal
+			false,    // nowait
+			nil,      // args
 		); err != nil {
 			t.Fatalf("declare exchange: %s", err)
 		}
@@ -93,7 +94,8 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 			if err := channel.ExchangeDeclare(
 				exchangeName, // name
 				"direct",     // type
-				UntilDeleted, // lifetime (note: not UntilUnused)
+				true,         // duration (note: is durable)
+				false,        // auto-delete
 				false,        // internal
 				false,        // nowait
 				nil,          // args
@@ -103,11 +105,12 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 			t.Logf("declare exchange OK")
 
 			if _, err := channel.QueueDeclare(
-				queueName,    // name
-				UntilDeleted, // lifetime (note: not UntilUnused)
-				false,        // exclusive
-				false,        // noWait
-				nil,          // arguments
+				queueName, // name
+				true,      // duration (note: durable)
+				false,     // auto-delete
+				false,     // exclusive
+				false,     // noWait
+				nil,       // arguments
 			); err != nil {
 				t.Fatalf("queue declare: %s", err)
 			}
@@ -256,12 +259,12 @@ func TestIntegrationMeaningfulChannelErrors(t *testing.T) {
 
 		queue := "test.integration.channel.error"
 
-		_, err = ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		_, err = ch.QueueDeclare(queue, false, true, false, false, nil)
 		if err != nil {
 			t.Fatalf("Could not declare")
 		}
 
-		_, err = ch.QueueDeclare(queue, UntilDeleted, false, false, nil)
+		_, err = ch.QueueDeclare(queue, true, false, false, false, nil)
 		if err == nil {
 			t.Fatalf("Expected error, got nil")
 		}
@@ -275,7 +278,7 @@ func TestIntegrationMeaningfulChannelErrors(t *testing.T) {
 			t.Fatalf("Expected PreconditionFailed, got: %+v", e)
 		}
 
-		_, err = ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		_, err = ch.QueueDeclare(queue, false, true, false, false, nil)
 		if err != ErrClosed {
 			t.Fatalf("Expected channel to be closed, got: %T", err)
 		}
@@ -295,7 +298,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 
 		queue := "test.integration.blocking.close"
 
-		_, err = ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		_, err = ch.QueueDeclare(queue, false, true, false, false, nil)
 		if err != nil {
 			t.Fatalf("Could not declare")
 		}
@@ -343,8 +346,8 @@ func TestIntegrationPublishConsume(t *testing.T) {
 		pub, _ := c1.Channel()
 		sub, _ := c2.Channel()
 
-		pub.QueueDeclare(queue, UntilUnused, false, false, nil)
-		sub.QueueDeclare(queue, UntilUnused, false, false, nil)
+		pub.QueueDeclare(queue, false, true, false, false, nil)
+		sub.QueueDeclare(queue, false, true, false, false, nil)
 		defer pub.QueueDelete(queue, false, false, false)
 
 		messages, _ := sub.Consume(queue, "", false, false, false, false, nil)
@@ -372,8 +375,8 @@ func TestIntegrationConsumeFlow(t *testing.T) {
 		pub, _ := c1.Channel()
 		sub, _ := c2.Channel()
 
-		pub.QueueDeclare(queue, UntilUnused, false, false, nil)
-		sub.QueueDeclare(queue, UntilUnused, false, false, nil)
+		pub.QueueDeclare(queue, false, true, false, false, nil)
+		sub.QueueDeclare(queue, false, true, false, false, nil)
 		defer pub.QueueDelete(queue, false, false, false)
 
 		sub.Qos(1, 0, false)
@@ -435,7 +438,7 @@ func TestIntegrationConsumeCancel(t *testing.T) {
 
 		ch, _ := c.Channel()
 
-		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		ch.QueueDeclare(queue, false, true, false, false, nil)
 		defer ch.QueueDelete(queue, false, false, false)
 
 		messages, _ := ch.Consume(queue, "integration-tag", false, false, false, false, nil)
@@ -529,7 +532,7 @@ func TestQuickPublishOnly(t *testing.T) {
 		pub, err := c.Channel()
 		queue := "test-publish"
 
-		if _, err = pub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+		if _, err = pub.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 			t.Errorf("Failed to declare: %s", err)
 			return
 		}
@@ -555,7 +558,7 @@ func TestPublishEmptyBody(t *testing.T) {
 
 		queue := "test-TestPublishEmptyBody"
 
-		if _, err := ch.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+		if _, err := ch.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 			t.Fatalf("Could not declare")
 		}
 
@@ -593,12 +596,12 @@ func TestQuickPublishConsumeOnly(t *testing.T) {
 
 		queue := "TestPublishConsumeOnly"
 
-		if _, err = pub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+		if _, err = pub.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 			t.Errorf("Failed to declare: %s", err)
 			return
 		}
 
-		if _, err = sub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+		if _, err = sub.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 			t.Errorf("Failed to declare: %s", err)
 			return
 		}
@@ -640,7 +643,7 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 
 		queue := "test-pubsub"
 
-		if _, err = sub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+		if _, err = sub.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 			t.Errorf("Failed to declare: %s", err)
 			return
 		}
@@ -654,7 +657,7 @@ func TestQuickPublishConsumeBigBody(t *testing.T) {
 			Body: make([]byte, 1e4+1000),
 		}
 
-		if _, err = pub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+		if _, err = pub.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 			t.Errorf("Failed to declare: %s", err)
 			return
 		}
@@ -682,7 +685,7 @@ func TestIntegrationGetOk(t *testing.T) {
 		queue := "test.get-ok"
 		ch, _ := c.Channel()
 
-		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		ch.QueueDeclare(queue, false, true, false, false, nil)
 		ch.Publish("", queue, false, false, Publishing{Body: []byte("ok")})
 
 		msg, ok, err := ch.Get(queue, false)
@@ -708,7 +711,7 @@ func TestIntegrationGetEmpty(t *testing.T) {
 		queue := "test.get-ok"
 		ch, _ := c.Channel()
 
-		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		ch.QueueDeclare(queue, false, true, false, false, nil)
 
 		_, ok, err := ch.Get(queue, false)
 
@@ -729,7 +732,7 @@ func TestIntegrationTxCommit(t *testing.T) {
 		queue := "test.tx.commit"
 		ch, _ := c.Channel()
 
-		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		ch.QueueDeclare(queue, false, true, false, false, nil)
 
 		if err := ch.Tx(); err != nil {
 			t.Fatalf("tx.select failed")
@@ -760,7 +763,7 @@ func TestIntegrationTxRollback(t *testing.T) {
 		queue := "test.tx.rollback"
 		ch, _ := c.Channel()
 
-		ch.QueueDeclare(queue, UntilUnused, false, false, nil)
+		ch.QueueDeclare(queue, false, true, false, false, nil)
 
 		if err := ch.Tx(); err != nil {
 			t.Fatalf("tx.select failed")
@@ -859,11 +862,11 @@ func TestCorruptedMessageRegression(t *testing.T) {
 
 		queue := "test-corrupted-message-regression"
 
-		if _, err := pub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+		if _, err := pub.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 			t.Fatalf("Cannot declare")
 		}
 
-		if _, err := sub.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+		if _, err := sub.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 			t.Fatalf("Cannot declare")
 		}
 
@@ -909,11 +912,12 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 
 		err = ch.ExchangeDeclare(
 			exchange,
-			"direct",    // exchangeType
-			UntilUnused, // lifetime (auto-delete)
-			false,       // internal
-			false,       // noWait
-			nil,         // arguments
+			"direct", // exchangeType
+			false,    // durable
+			true,     // auto-delete
+			false,    // internal
+			false,    // noWait
+			nil,      // arguments
 		)
 		if err != nil {
 			t.Fatalf("Could not initially declare exchange")
@@ -922,14 +926,15 @@ func TestExchangeDeclarePrecondition(t *testing.T) {
 		err = ch.ExchangeDeclare(
 			exchange,
 			"direct",
-			UntilDeleted, // different lifetime
+			true, // different durability
+			true,
 			false,
 			false,
 			nil,
 		)
 
 		if err == nil {
-			t.Fatalf("Expected to fail a redeclare with different lifetime, didn't receive an error")
+			t.Fatalf("Expected to fail a redeclare with different durability, didn't receive an error")
 		}
 
 		if err, ok := err.(Error); ok {
@@ -960,7 +965,8 @@ func TestRabbitMQQueueTTLGet(t *testing.T) {
 
 		if _, err = channel.QueueDeclare(
 			queue,
-			UntilUnused,
+			false,
+			true,
 			false,
 			false,
 			Table{"x-message-ttl": int32(100)}, // in ms
@@ -995,7 +1001,7 @@ func TestRabbitMQQueueNackMultipleRequeue(t *testing.T) {
 				t.Fatalf("channel: %v", err)
 			}
 
-			if _, err = channel.QueueDeclare(queue, UntilUnused, false, false, nil); err != nil {
+			if _, err = channel.QueueDeclare(queue, false, true, false, false, nil); err != nil {
 				t.Fatalf("queue declare: %s", err)
 			}
 
