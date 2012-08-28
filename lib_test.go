@@ -117,7 +117,7 @@ func integrationConnection(t *testing.T, name string) *Connection {
 func integrationQueue(t *testing.T, name string) (*Connection, *Channel) {
 	if conn := integrationConnection(t, name); conn != nil {
 		if channel, err := conn.Channel(); err == nil {
-			if _, err = channel.QueueDeclare(name, UntilUnused, false, false, nil); err == nil {
+			if _, err = channel.QueueDeclare(name, false, true, false, false, nil); err == nil {
 				return conn, channel
 			}
 		}

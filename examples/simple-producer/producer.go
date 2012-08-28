@@ -51,12 +51,13 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 
 	log.Printf("got Channel, declaring %q Exchange (%s)", exchangeType, exchange)
 	if err := channel.ExchangeDeclare(
-		exchange,          // name
-		exchangeType,      // type
-		amqp.UntilDeleted, // lifetime = durable
-		false,             // internal
-		false,             // noWait
-		nil,               // arguments
+		exchange,     // name
+		exchangeType, // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // noWait
+		nil,          // arguments
 	); err != nil {
 		return fmt.Errorf("Exchange Declare: %s", err)
 	}
