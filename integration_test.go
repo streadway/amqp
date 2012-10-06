@@ -840,7 +840,7 @@ func TestIntegrationConfirm(t *testing.T) {
 }
 
 // https://github.com/streadway/amqp/issues/7
-func TestCorruptedMessageRegression(t *testing.T) {
+func TestCorruptedMessageIssue7(t *testing.T) {
 	messageCount := 1024
 
 	c1 := integrationConnection(t, "")
