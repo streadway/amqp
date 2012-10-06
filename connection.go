@@ -244,7 +244,36 @@ func (me *Connection) dispatchN(f frame) {
 	if channel, ok := me.channels[f.channel()]; ok {
 		channel.recv(channel, f)
 	} else {
-		me.closeWith(ErrClosed)
+		me.dispatchClosed(f)
+	}
+}
+
+// section 2.3.7: "When a peer decides to close a channel or connection, it
+// sends a Close method.  The receiving peer MUST respond to a Close with a
+// Close-Ok, and then both parties can close their channel or connection.  Note
+// that if peers ignore Close, deadlock can happen when both peers send Close
+// at the same time."
+//
+// When we don't have a channel, so we must respond with close-ok on a close
+// method.  This can happen between a channel exception on an asynchronous
+// method like basic.publish and a synchronous close with channel.close.
+// In that case, we'll get both a channel.close and channel.close-ok in any
+// order.
+func (me *Connection) dispatchClosed(f frame) {
+	// Only consider method frames, drop content/header frames
+	if mf, ok := f.(*methodFrame); ok {
+		switch mf.Method.(type) {
+		case *channelClose:
+			me.send(&methodFrame{
+				ChannelId: f.channel(),
+				Method:    &channelCloseOk{},
+			})
+		case *channelCloseOk:
+			// we are already closed, so do nothing
+		default:
+			// unexpected method on closed channel
+			me.closeWith(ErrClosed)
+		}
 	}
 }
 

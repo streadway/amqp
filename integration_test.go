@@ -839,6 +839,59 @@ func TestIntegrationConfirm(t *testing.T) {
 	}
 }
 
+// https://github.com/streadway/amqp/issues/43
+func TestChannelExceptionWithCloseIssue43(t *testing.T) {
+	conn := integrationConnection(t, "issue43")
+	if conn != nil {
+		go func() {
+			for err := range conn.NotifyClose(make(chan *Error)) {
+				t.Log(err.Error())
+			}
+		}()
+
+		c1, err := conn.Channel()
+		if err != nil {
+			panic(err)
+		}
+
+		go func() {
+			for err := range c1.NotifyClose(make(chan *Error)) {
+				t.Log("Channel1 Close: " + err.Error())
+			}
+		}()
+
+		c2, err := conn.Channel()
+		if err != nil {
+			panic(err)
+		}
+
+		go func() {
+			for err := range c2.NotifyClose(make(chan *Error)) {
+				t.Log("Channel2 Close: " + err.Error())
+			}
+		}()
+
+		// Cause an asynchronous channel exception causing the server
+		// to send a "channel.close" method either before or after the next
+		// asynchronous method.
+		err = c1.Publish("nonexisting-exchange", "", false, false, Publishing{})
+		if err != nil {
+			panic(err)
+		}
+
+		// Receive or send the channel close method, the channel shuts down
+		// but this expects a channel.close-ok to be received.
+		c1.Close()
+
+		// This ensures that the 2nd channel is unaffected by the channel exception
+		// on channel 1.
+		err = c2.ExchangeDeclare("test-channel-still-exists", "direct", false, true, false, false, nil)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
 // https://github.com/streadway/amqp/issues/7
 func TestCorruptedMessageIssue7(t *testing.T) {
 	messageCount := 1024
