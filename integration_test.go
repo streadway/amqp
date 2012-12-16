@@ -795,17 +795,17 @@ func TestIntegrationReturn(t *testing.T) {
 
 		ch.NotifyReturn(ret)
 
-		// without any consumers this should be returned
-		ch.Publish("", "confirm", false, true, Publishing{Body: []byte("immediate")})
+		// mandatory publish to an exchange without a binding should be returned
+		ch.Publish("", "return-without-binding", true, false, Publishing{Body: []byte("mandatory")})
 
 		select {
 		case res := <-ret:
-			if string(res.Body) != "immediate" {
+			if string(res.Body) != "mandatory" {
 				t.Fatalf("expected return of the same message")
 			}
 
-			if res.ReplyCode != 313 {
-				t.Fatalf("expected no consumers reply code on the Return result")
+			if res.ReplyCode != NoRoute {
+				t.Fatalf("expected no consumers reply code on the Return result, got: %v", res.ReplyCode)
 			}
 
 		case <-time.After(200 * time.Millisecond):

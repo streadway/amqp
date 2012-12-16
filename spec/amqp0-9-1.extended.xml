@@ -186,6 +186,14 @@
     </doc>
   </constant>
 
+  <constant name = "no-route" value = "312" class = "soft-error">
+    <doc>
+      Errata: Section 1.2 ought to define an exception 312 "No route", which used to
+      exist in 0-9 and is what RabbitMQ sends back with 'basic.return' when a
+      'mandatory' message cannot be delivered to any queue.
+    </doc>
+  </constant>
+
   <constant name = "no-consumers" value = "313" class = "soft-error">
     <doc>
       When the exchange cannot deliver to a consumer when the immediate flag is

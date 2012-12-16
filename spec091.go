@@ -27,6 +27,7 @@ const (
 	frameEnd           = 206
 	replySuccess       = 200
 	ContentTooLarge    = 311
+	NoRoute            = 312
 	NoConsumers        = 313
 	ConnectionForced   = 320
 	InvalidPath        = 402
@@ -48,6 +49,7 @@ const (
 func isSoftExceptionCode(code int) bool {
 	switch code {
 	case 311:
+	case 312:
 	case 313:
 	case 403:
 	case 404:
@@ -58,7 +60,7 @@ func isSoftExceptionCode(code int) bool {
 	return false
 }
 
-/*  
+/*
    This method starts the connection negotiation process by telling the client the
    protocol version that the server proposes, along with a list of security mechanisms
    which the client can use for authentication.
@@ -126,7 +128,7 @@ func (me *connectionStart) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method selects a SASL security mechanism.
 */
 type connectionStartOk struct {
@@ -187,7 +189,7 @@ func (me *connectionStartOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    The SASL protocol works by exchanging challenges and responses until both peers have
    received sufficient information to authenticate each other. This method challenges
    the client to provide more information.
@@ -223,7 +225,7 @@ func (me *connectionSecure) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method attempts to authenticate, passing a block of SASL data for the security
    mechanism at the server side.
 */
@@ -258,7 +260,7 @@ func (me *connectionSecureOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method proposes a set of connection configuration values to the client. The
    client can accept and/or adjust these.
 */
@@ -311,7 +313,7 @@ func (me *connectionTune) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method sends the client's connection tuning parameters to the server.
    Certain fields are negotiated, others provide capability information.
 */
@@ -364,7 +366,7 @@ func (me *connectionTuneOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method opens a connection to a virtual host, which is a collection of
    resources, and acts to separate multiple application domains within a server.
    The server may apply arbitrary limits per virtual host, such as the number
@@ -423,7 +425,7 @@ func (me *connectionOpen) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method signals to the client that the connection is ready for use.
 */
 type connectionOpenOk struct {
@@ -456,7 +458,7 @@ func (me *connectionOpenOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method indicates that the sender wants to close the connection. This may be
    due to internal conditions (e.g. a forced shut-down) or due to an error handling
    a specific method, i.e. an exception. When a close is due to an exception, the
@@ -518,7 +520,7 @@ func (me *connectionClose) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method confirms a Connection.Close method and tells the recipient that it is
    safe to release resources for the connection and close the socket.
 */
@@ -543,7 +545,7 @@ func (me *connectionCloseOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method opens a channel to the server.
 */
 type channelOpen struct {
@@ -576,7 +578,7 @@ func (me *channelOpen) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method signals to the client that the channel is ready for use.
 */
 type channelOpenOk struct {
@@ -609,7 +611,7 @@ func (me *channelOpenOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method asks the peer to pause or restart the flow of content data sent by
    a consumer. This is a simple flow-control mechanism that a peer can use to avoid
    overflowing its queues or otherwise finding itself receiving more messages than
@@ -654,7 +656,7 @@ func (me *channelFlow) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    Confirms to the peer that a flow command was received and processed.
 */
 type channelFlowOk struct {
@@ -695,7 +697,7 @@ func (me *channelFlowOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method indicates that the sender wants to close the channel. This may be due to
    internal conditions (e.g. a forced shut-down) or due to an error handling a specific
    method, i.e. an exception. When a close is due to an exception, the sender provides
@@ -757,7 +759,7 @@ func (me *channelClose) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method confirms a Channel.Close method and tells the recipient that it is safe
    to release resources for the channel.
 */
@@ -782,7 +784,7 @@ func (me *channelCloseOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method creates an exchange if it does not already exist, and if the exchange
    exists, verifies that it is of the correct and expected class.
 */
@@ -882,7 +884,7 @@ func (me *exchangeDeclare) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method confirms a Declare method and confirms the name of the exchange,
    essential for automatically-named exchanges.
 */
@@ -907,7 +909,7 @@ func (me *exchangeDeclareOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method deletes an exchange. When an exchange is deleted all queue bindings on
    the exchange are cancelled.
 */
@@ -1198,7 +1200,7 @@ func (me *exchangeUnbindOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method creates or checks a queue. When creating a new queue the client can
    specify various properties that control the durability of the queue and its
    contents, and the level of sharing for the queue.
@@ -1292,7 +1294,7 @@ func (me *queueDeclare) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method confirms a Declare method and confirms the name of the queue, essential
    for automatically-named queues.
 */
@@ -1343,7 +1345,7 @@ func (me *queueDeclareOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method binds a queue to an exchange. Until a queue is bound it will not
    receive any messages. In a classic messaging model, store-and-forward queues
    are bound to a direct exchange and subscription queues are bound to a topic
@@ -1536,7 +1538,7 @@ func (me *queueUnbindOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method removes all messages from a queue which are not awaiting
    acknowledgment.
 */
@@ -1626,7 +1628,7 @@ func (me *queuePurgeOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method deletes a queue. When a queue is deleted any pending messages are sent
    to a dead-letter queue if this is defined in the server configuration, and all
    consumers on the queue are cancelled.
@@ -1729,7 +1731,7 @@ func (me *queueDeleteOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method requests a specific quality of service. The QoS can be specified for the
    current channel or for all channels on the connection. The particular properties and
    semantics of a qos method always depend on the content class semantics. Though the
@@ -1792,7 +1794,7 @@ func (me *basicQos) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method tells the client that the requested QoS levels could be handled by the
    server. The requested QoS applies to all active consumers until a new QoS is
    defined.
@@ -1818,7 +1820,7 @@ func (me *basicQosOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method asks the server to start a "consumer", which is a transient request for
    messages from a specific queue. Consumers last as long as the channel they were
    declared on, or until the client cancels them.
@@ -1913,7 +1915,7 @@ func (me *basicConsume) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    The server provides the client with a consumer tag, which is used by the client
    for methods called on the consumer at a later stage.
 */
@@ -1947,7 +1949,7 @@ func (me *basicConsumeOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method cancels a consumer. This does not affect already delivered
    messages, but it does mean the server will not send any more messages for
    that consumer. The client may receive an arbitrary number of messages in
@@ -2010,7 +2012,7 @@ func (me *basicCancel) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method confirms that the cancellation was completed.
 */
 type basicCancelOk struct {
@@ -2043,7 +2045,7 @@ func (me *basicCancelOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method publishes a message to a specific exchange. The message will be routed
    to queues as defined by the exchange configuration and distributed to any active
    consumers when the transaction, if any, is committed.
@@ -2126,7 +2128,7 @@ func (me *basicPublish) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method returns an undeliverable message that was published with the "immediate"
    flag set, or an unroutable message published with the "mandatory" flag set. The
    reply code and text provide information about the reason that the message was
@@ -2195,7 +2197,7 @@ func (me *basicReturn) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method delivers a message to the client, via a consumer. In the asynchronous
    message delivery model, the client starts a consumer using the Consume method, then
    the server responds with Deliver methods as and when messages arrive for that
@@ -2282,7 +2284,7 @@ func (me *basicDeliver) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method provides a direct access to the messages in a queue using a synchronous
    dialogue that is designed for specific types of application where synchronous
    functionality is more important than performance.
@@ -2342,7 +2344,7 @@ func (me *basicGet) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method delivers a message to the client following a get method. A message
    delivered by 'get-ok' must be acknowledged unless the no-ack option was set in the
    get method.
@@ -2428,7 +2430,7 @@ func (me *basicGetOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method tells the client that the queue has no messages available for the
    client.
 */
@@ -2462,7 +2464,7 @@ func (me *basicGetEmpty) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    When sent by the client, this method acknowledges one or more
    messages delivered via the Deliver or Get-Ok methods.
 
@@ -2520,7 +2522,7 @@ func (me *basicAck) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method allows a client to reject a message. It can be used to interrupt and
    cancel large incoming messages, or return untreatable messages to their original
    queue.
@@ -2572,7 +2574,7 @@ func (me *basicReject) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method asks the server to redeliver all unacknowledged messages on a
    specified channel. Zero or more messages may be redelivered.  This method
    is deprecated in favour of the synchronous Recover/Recover-Ok.
@@ -2615,7 +2617,7 @@ func (me *basicRecoverAsync) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method asks the server to redeliver all unacknowledged messages on a
    specified channel. Zero or more messages may be redelivered.  This method
    replaces the asynchronous Recover.
@@ -2658,7 +2660,7 @@ func (me *basicRecover) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method acknowledges a Basic.Recover method.
 */
 type basicRecoverOk struct {
@@ -2682,7 +2684,7 @@ func (me *basicRecoverOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method allows a client to reject one or more incoming messages. It can be
    used to interrupt and cancel large incoming messages, or return untreatable
    messages to their original queue.
@@ -2744,7 +2746,7 @@ func (me *basicNack) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method sets the channel to use standard transactions. The client must use this
    method at least once on a channel before using the Commit or Rollback methods.
 */
@@ -2769,7 +2771,7 @@ func (me *txSelect) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method confirms to the client that the channel was successfully set to use
    standard transactions.
 */
@@ -2794,7 +2796,7 @@ func (me *txSelectOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method commits all message publications and acknowledgments performed in
    the current transaction.  A new transaction starts immediately after a commit.
 */
@@ -2819,7 +2821,7 @@ func (me *txCommit) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method confirms to the client that the commit succeeded. Note that if a commit
    fails, the server raises a channel exception.
 */
@@ -2844,7 +2846,7 @@ func (me *txCommitOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method abandons all message publications and acknowledgments performed in
    the current transaction. A new transaction starts immediately after a rollback.
    Note that unacked messages will not be automatically redelivered by rollback;
@@ -2871,7 +2873,7 @@ func (me *txRollback) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method confirms to the client that the rollback succeeded. Note that if an
    rollback fails, the server raises a channel exception.
 */
@@ -2896,7 +2898,7 @@ func (me *txRollbackOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method sets the channel to use publisher acknowledgements.
    The client can only use this method on a non-transactional
    channel.
@@ -2938,7 +2940,7 @@ func (me *confirmSelect) read(r io.Reader) (err error) {
 	return
 }
 
-/*  
+/*
    This method confirms to the client that the channel was successfully
    set to use publisher acknowledgements.
 */
