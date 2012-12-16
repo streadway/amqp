@@ -32,7 +32,7 @@ All frames consist of a header (7 octets), a payload of arbitrary size, and a
   +------+---------+-------------+  +------------+  +-----------+
    octet   short         long         size octets       octet
 
-To read a frame, we: 
+To read a frame, we:
   1. Read the header and check the frame type and channel.
 	2. Depending on the frame type, we read the payload and process it.
   3. Read the frame end octet.
@@ -148,8 +148,8 @@ func readTimestamp(r io.Reader) (v time.Time, err error) {
 }
 
 /*
-	field-table         = long-uint *field-value-pair 
-	field-value-pair    = field-name field-value 
+	field-table         = long-uint *field-value-pair
+	field-value-pair    = field-name field-value
 	field-name          = short-string
 	field-value         = 't' boolean
 											/ 'b' short-short-int

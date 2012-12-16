@@ -111,7 +111,7 @@ func (me Delivery) Ack(multiple bool) error {
 }
 
 /*
-Negatively acknowledge processing of this message.  
+Negatively acknowledge processing of this message.
 
 When requeue is true, queue this message to be delivered to a consumer on a
 different channel.  When requeue is false or the server is unable to queue this
@@ -141,7 +141,7 @@ func (me Delivery) Cancel(noWait bool) error {
 
 /*
 RabbitMQ extension - Negatively acknowledge the delivery of message(s)
-identified by the deliveryTag. 
+identified by the deliveryTag.
 
 When multiple is true, nack messages up to and including delivered messages up
 until the deliveryTag delivered on the same channel.

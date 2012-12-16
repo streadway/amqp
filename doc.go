@@ -18,7 +18,7 @@ concepts.
 
 Design
 
-Most other broker clients publish to queues, but in AMQP, clients publish 
+Most other broker clients publish to queues, but in AMQP, clients publish
 Exchanges instead.  AMQP is programmable, meaning that both the producers and
 consumers agree on the configuration of the broker, instead requiring an
 operator or system configuration that declares the logical topology in the
@@ -76,7 +76,7 @@ prior to calling Channel.Publish or Channel.Consume.
   // Most operations happen on a channel.  If any error is returned on a
   // channel, the channel will no longer be valid, throw it away and try with
   // a different channel.  If you use many channels, it's useful for the
-  // server to 
+  // server to
   channel, err := connection.Channel()
 
   // Declare your topology here, if it doesn't exist, it will be created, if

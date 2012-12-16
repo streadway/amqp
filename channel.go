@@ -387,21 +387,21 @@ func (me *Channel) NotifyClose(c chan *Error) chan *Error {
 // messages than it can process. Note that this method is not intended for
 // window control. It does not affect contents returned by basic.get-ok
 // methods.
-// 
+//
 // When a new channel is opened, it is active (flow is active). Some
 // applications assume that channels are inactive until started. To emulate
 // this behavior a client MAY open the channel, then pause it.
-// 
+//
 // Publishers should respond to a flow messages as rapidly as possible and the
 // server may disconnect over producing channels that do not respect these
 // messages.
 //
 // basic.flow-ok methods will always be returned to the server regardless of
 // the number of listeners there are.
-// 
+//
 // To control the flow of deliveries from the server.  Use the Channel.Flow()
 // method instead.
-// 
+//
 // Note: RabbitMQ will rather use TCP pushback on the network connection instead of
 // sending basic.flow.  This means that if a single channel is producing too
 // much on the same connection, all channels using that connection will suffer,
@@ -677,7 +677,7 @@ and how many consumers are receiving deliveries and whether a queue by this
 name already exists.
 
 If the queue by this name exists, use Channel.QueueDeclare check if it is
-declared with specific parameters. 
+declared with specific parameters.
 
 If a queue by this name does not exist, an error will be returned and the
 channel will be closed.
@@ -721,7 +721,7 @@ binding will be retained.
 
 In the case that multiple bindings may cause the message to be routed to the
 same queue, the server will only route the publishing once.  This is possible
-with topic exchanges. 
+with topic exchanges.
 
   QueueBind("pagers", "amq.topic", "alert", false, nil)
   QueueBind("emails", "amq.topic", "info", false, nil)
@@ -1297,7 +1297,7 @@ func (me *Channel) Confirm(noWait bool) error {
 }
 
 /*
-Asks the server to redeliver all unacknowledged deliveries on this channel. 
+Asks the server to redeliver all unacknowledged deliveries on this channel.
 
 When requeue is false, messages will be redelivered to the original consumer.
 

@@ -83,7 +83,7 @@ func ParseURI(uri string) (URI, error) {
 		if strings.HasPrefix(u.Path, "/") {
 			if u.Host == "" && strings.HasPrefix(u.Path, "///") {
 				// net/url doesn't handle local context authorities and leaves that up
-				// to the scheme handler.  In our case, we translate amqp:/// into the 
+				// to the scheme handler.  In our case, we translate amqp:/// into the
 				// default host and whatever the vhost should be
 				if len(u.Path) > 3 {
 					me.Vhost = u.Path[3:]
