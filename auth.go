@@ -9,12 +9,14 @@ import (
 	"fmt"
 )
 
-// Interface to encode different SASL authentication mechanisms used during connection tuning.
+// Authentication interface provides a means for different SASL authentication
+// mechanisms to be used during connection tuning.
 type Authentication interface {
 	Mechanism() string
 	Response() string
 }
 
+// PlainAuth is a similar to Basic Auth in HTTP.
 type PlainAuth struct {
 	Username string
 	Password string

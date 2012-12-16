@@ -23,7 +23,8 @@ var (
 	ErrUnexpectedFrame = &Error{Code: UnexpectedFrame, Reason: "unexpected frame received"}
 )
 
-// The code and reason a channel or connection has been closed by the server.
+// Error captures the code and reason a channel or connection has been closed
+// by the server.
 type Error struct {
 	Code    int    // constant code from the specification
 	Reason  string // description of the error
@@ -96,17 +97,18 @@ const (
 	flagReserved1       = 0x0004
 )
 
-// Current state of the queue on the server returned from Channel.QueueDeclare or
-// Channel.QueueInspect.
+// Queue captures the current server state of the queue on the server returned
+// from Channel.QueueDeclare or Channel.QueueInspect.
 type Queue struct {
 	Name      string // server confirmed or generated name
 	Messages  int    // count of messages not awaiting acknowledgment
 	Consumers int    // number of consumers receiving deliveries
 }
 
-// A published message from the client to the server.  The fields outside of
-// the Headers table included in this struct mirror the underlying fields in
-// the content frame.  They use native types for convienence and efficiency.
+// Publishing captures the client message sent to the server.  The fields
+// outside of the Headers table included in this struct mirror the underlying
+// fields in the content frame.  They use native types for convienence and
+// efficiency.
 type Publishing struct {
 	// Application or exchange specific fields,
 	// the headers exchange will inspect this field.
@@ -126,17 +128,18 @@ type Publishing struct {
 	UserId          string    // creating user id - ex: "guest"
 	AppId           string    // creating application id
 
+	// The application specific payload of the message
 	Body []byte
 }
 
-// The golang type that matches the amqp type.  Scale is the number of decimal digits
-// Scale == 2, Value == 12345, Decimal == 123.45
+// Decimal matches the AMQP decimal type.  Scale is the number of decimal
+// digits Scale == 2, Value == 12345, Decimal == 123.45
 type Decimal struct {
 	Scale uint8
 	Value int32
 }
 
-// The amqp type that represents a string to field.  Most Go types are supported in
+// Table matches the amqp table type for string to field mappings.  Most Go types are supported in
 // table serialization.
 type Table map[string]interface{}
 

@@ -17,9 +17,9 @@ import (
 	"time"
 )
 
-// Used in Open to specify the desired tuning parameters used during a
-// connection open handshake.  The negotiated tuning will be stored in the
-// resultant connection.
+// Config is used in Open to specify the desired tuning parameters used during
+// a connection open handshake.  The negotiated tuning will be stored in the
+// returned connection's Config field.
 type Config struct {
 	// The SASL mechanisms to try in the client request, and the successful
 	// mechanism used on the Connection object
@@ -32,8 +32,11 @@ type Config struct {
 	Heartbeat time.Duration // less than 1s interval means no heartbeats
 }
 
-// Manages the serialization and deserialization of frames from IO and
-// dispatches the frames to the appropriate channel.
+// Connection manages the serialization and deserialization of frames from IO
+// and dispatches the frames to the appropriate channel.  All RPC methods and
+// asyncronous Publishing, Delivery, Ack, Nack and Return messages are
+// multiplexed on this channel.  There must always be active receivers for
+// every asynchronous message on this connection.
 type Connection struct {
 	destructor sync.Once
 	m          sync.Mutex // writer and notify mutex
@@ -91,6 +94,12 @@ func Dial(amqp string) (*Connection, error) {
 	})
 }
 
+/*
+Open accepts an already established connection, or other io.ReadWriteCloser as
+a transport.  Use this method if you have established a TLS connection or wish
+to use your own custom transport.
+
+*/
 func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	me := &Connection{
 		conn:     conn,
@@ -108,10 +117,16 @@ func (me *Connection) nextChannelId() uint16 {
 	return uint16(atomic.AddUint32(&me.sequence, 1))
 }
 
-// Listens for close events either initiated by an error accompaning a
-// connection.close method or by a normal shutdown.
-//
-// On normal shutdowns, the chan will be closed.
+/*
+NotifyClose registers a listener for close events either initiated by an error
+accompaning a connection.close method or by a normal shutdown.
+
+On normal shutdowns, the chan will be closed.
+
+To reconnect after a transport or protocol error, register a listener here and
+re-run your setup process.
+
+*/
 func (me *Connection) NotifyClose(c chan *Error) chan *Error {
 	me.m.Lock()
 	defer me.m.Unlock()
@@ -120,10 +135,10 @@ func (me *Connection) NotifyClose(c chan *Error) chan *Error {
 }
 
 /*
-Requests, and waits for the response to close the AMQP connection.
+Close requests and waits for the response to close the AMQP connection.
 
-It's advisable to use this message when publishing so to make sure that all
-kernel buffers have been flushed before exiting.
+It's advisable to use this message when publishing to ensure all kernel buffers
+have been flushed on the server and client before exiting.
 
 An error indicates that server may not have received this request to close but
 the connection should be treated as closed regardless.
@@ -349,7 +364,12 @@ func (me *Connection) isCapable(featureName string) bool {
 	return false
 }
 
-// Constructs and opens a unique channel for concurrent operations
+/*
+Channel opens a unique, concurrent server channel to process the bulk of AMQP
+messages.  Any error from methods on this receiver will render the receiver
+invalid and a new Channel should be opened.
+
+*/
 func (me *Connection) Channel() (*Channel, error) {
 	id := me.nextChannelId()
 	channel := newChannel(me, id)

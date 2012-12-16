@@ -6,9 +6,8 @@
 /*
 AMQP 0.9.1 client with RabbitMQ extensions
 
-Start out with understanding the AMQP 0.9.1 messaging model by reviewing these
-links. Much of the terminology in this library directly relates to AMQP
-concepts.
+Understand the AMQP 0.9.1 messaging model by reviewing these links first. Much
+of the terminology in this library directly relates to AMQP concepts.
 
   Resources
 
@@ -57,6 +56,10 @@ confirm mode.
 The Notify* methods with Connection and Channel receivers model the pattern of
 asynchronous events like closes due to exceptions, or messages that are sent out
 of band from an RPC call like basic.ack or basic.flow.
+
+Any asynchronous events, including Deliveries and Publishings must always have
+a receiver until the corresponding chans are closed.  Without asynchronous
+receivers, the sychronous methods will block.
 
 Typical Use Case
 

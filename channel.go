@@ -18,8 +18,12 @@ import (
 //  octet   short         long         size octets       octet
 const frameHeaderSize = 1 + 2 + 4 + 1
 
-// Represents an AMQP channel. Used for concurrent, interleaved publishers and
-// consumers on the same connection.
+/*
+Channel represents an AMQP channel. Used as a context for valid message
+exchange.  Errors on methods with this Channel as a receiver means this channel
+should be discarded and a new channel established.
+
+*/
 type Channel struct {
 	// Mutex for notify listeners
 	destructor sync.Once
@@ -351,8 +355,13 @@ func (me *Channel) recvContent(f frame) error {
 	panic("unreachable")
 }
 
-// Initiate a clean channel closure by sending a close message with the error
-// code set to '200'
+/*
+Close initiate a clean channel closure by sending a close message with the error
+code set to '200'.
+
+It is safe to call this method multiple times.
+
+*/
 func (me *Channel) Close() error {
 	defer me.shutdown(nil)
 	return me.call(
@@ -361,15 +370,17 @@ func (me *Channel) Close() error {
 	)
 }
 
-// Add a chan for when the server sends a channel or connection exception in
-// the form of a connection.close or channel.close method.  Connection
-// exceptions will be broadcast to all open channels and all channels will be
-// closed, where channel exceptions will only be broadcast to listeners to this
-// channel.
-//
-// The chan provided will be closed when the Channel is closed and on a
-// graceful close, no error will be sent.
-//
+/*
+NotifyClose registers a listener for when the server sends a channel or
+connection exception in the form of a Connection.Close or Channel.Close method.
+Connection exceptions will be broadcast to all open channels and all channels
+will be closed, where channel exceptions will only be broadcast to listeners to
+this channel.
+
+The chan provided will be closed when the Channel is closed and on a
+graceful close, no error will be sent.
+
+*/
 func (me *Channel) NotifyClose(c chan *Error) chan *Error {
 	me.m.Lock()
 	defer me.m.Unlock()
@@ -377,36 +388,39 @@ func (me *Channel) NotifyClose(c chan *Error) chan *Error {
 	return c
 }
 
-// Listens for basic.flow methods sent by the server.  When `true` is sent on
-// one of the listener channels, all publishes should pause until a `false` is
-// sent.
-//
-// Asks the producer to pause or restart the flow of content data sent by a
-// consumer. This is a simple flow-control mechanism that a server can use to
-// avoid overflowing its queues or otherwise finding itself receiving more
-// messages than it can process. Note that this method is not intended for
-// window control. It does not affect contents returned by basic.get-ok
-// methods.
-//
-// When a new channel is opened, it is active (flow is active). Some
-// applications assume that channels are inactive until started. To emulate
-// this behavior a client MAY open the channel, then pause it.
-//
-// Publishers should respond to a flow messages as rapidly as possible and the
-// server may disconnect over producing channels that do not respect these
-// messages.
-//
-// basic.flow-ok methods will always be returned to the server regardless of
-// the number of listeners there are.
-//
-// To control the flow of deliveries from the server.  Use the Channel.Flow()
-// method instead.
-//
-// Note: RabbitMQ will rather use TCP pushback on the network connection instead of
-// sending basic.flow.  This means that if a single channel is producing too
-// much on the same connection, all channels using that connection will suffer,
-// including acknowledgments from deliveries.
-//
+/*
+NotifyFlow registers a listener for basic.flow methods sent by the server.
+When `true` is sent on one of the listener channels, all publishers should
+pause until a `false` is sent.
+
+The server may ask the producer to pause or restart the flow of Publishings
+sent by on a channel. This is a simple flow-control mechanism that a server can
+use to avoid overflowing its queues or otherwise finding itself receiving more
+messages than it can process. Note that this method is not intended for window
+control. It does not affect contents returned by basic.get-ok methods.
+
+When a new channel is opened, it is active (flow is active). Some
+applications assume that channels are inactive until started. To emulate
+this behavior a client MAY open the channel, then pause it.
+
+Publishers should respond to a flow messages as rapidly as possible and the
+server may disconnect over producing channels that do not respect these
+messages.
+
+basic.flow-ok methods will always be returned to the server regardless of
+the number of listeners there are.
+
+To control the flow of deliveries from the server.  Use the Channel.Flow()
+method instead.
+
+Note: RabbitMQ will rather use TCP pushback on the network connection instead
+of sending basic.flow.  This means that if a single channel is producing too
+much on the same connection, all channels using that connection will suffer,
+including acknowledgments from deliveries.  Use different Connections if you
+desire to interleave consumers and producers in the same process to avoid your
+basic.ack messages from getting rate limited with your basic.publish messages.
+
+*/
 func (me *Channel) NotifyFlow(c chan bool) chan bool {
 	me.m.Lock()
 	defer me.m.Unlock()
@@ -414,13 +428,15 @@ func (me *Channel) NotifyFlow(c chan bool) chan bool {
 	return c
 }
 
-// Listens for basic.return methods.  These can be sent from the server when a
-// publish with the `immediate` flag lands on a queue that does not have
-// any ready consumers or when a publish with the `mandatory` flag does not
-// have a route.
-//
-// A return struct has a copy of the Publishing along with some error
-// information about why the publishing failed.
+/*
+NotifyReturn registers a listener for basic.return methods.  These can be sent
+from the server when a publish is undeliverable either from the mandatory or
+immediate flags.
+
+A return struct has a copy of the Publishing along with some error
+information about why the publishing failed.
+
+*/
 func (me *Channel) NotifyReturn(c chan Return) chan Return {
 	me.m.Lock()
 	defer me.m.Unlock()
@@ -429,16 +445,14 @@ func (me *Channel) NotifyReturn(c chan Return) chan Return {
 }
 
 /*
-Listener for reliable publishing.  Add a listener for basic.ack and basic.nack
-messages.  These messages will be sent by the server for every publish after
-`channel.Confirm(...)` has been called.  The value sent on these channels are
-the sequence number of the publishing.  It is up to client of this channel to
-maintain the sequence number and handle resends.
+NotifyConfirm registers a listener chan for reliable publishing to receive
+basic.ack and basic.nack messages.  These messages will be sent by the server
+for every publish after Channel.Confirm has been called.  The value sent
+on these channels are the sequence number of the publishing.  It is up to
+client of this channel to maintain the sequence number and handle resends.
 
-When multiple acknowledgments are received, an individual delivery tag will be
-sent between the last seen delivery tag up to and including the delivery tag
-in the basic.ack.  Listeners should expect one message per publishing on these
-channels combined.
+There will be either at most one Ack or Nack delivered for every Publishing.
+The Ack/Nack may arrive in a different order than the publishing's sequence.
 
 The order of acknowledgments is not bound to the order of deliveries.
 
@@ -506,9 +520,9 @@ func (me *Channel) confimMultiple(tag uint64, ch []chan uint64) {
 }
 
 /*
-Controls how many messages or how many bytes the server will try to keep on
-the network for consumers before receiving delivery acks.  The intent of Qos
-is to make sure the network buffers stay full between the server and client.
+Qos controls how many messages or how many bytes the server will try to keep on
+the network for consumers before receiving delivery acks.  The intent of Qos is
+to make sure the network buffers stay full between the server and client.
 
 With a prefetch count greater than zero, the server will deliver that many
 messages to consumers before acknowledgments are received.  The server ignores
@@ -548,14 +562,17 @@ func (me *Channel) Qos(prefetchCount, prefetchSize int, global bool) error {
 }
 
 /*
-Cancels deliveries the consumer chan established in Channel.Consume and
+Cancel stops deliveries to the consumer chan established in Channel.Consume and
 identified by consumer.
 
-Use this method to cleanly stop receiving deliveries from the server and
+Only use this method to cleanly stop receiving deliveries from the server and
 cleanly shut down the consumer chan identified by this tag.  Using this method
 and waiting for remaining messages to flush from the consumer chan will ensure
 all messages received on the network will be delivered to the receiver of your
 consumer chan.
+
+Continue consuming from the chan Delivery provided by Channel.Consume until the
+chan closes.
 
 When noWait is true, do not wait for the server to acknowledge the cancel.
 Only use this when you are certain there are no deliveries requiring
@@ -585,8 +602,8 @@ func (me *Channel) Cancel(consumer string, noWait bool) error {
 }
 
 /*
-Declares a queue to be the container of messages and source of consumers.
-This will create the queue if it doesn't already exist, and ensure that an
+QueueDeclare declares a queue to hold messages and deliver to consumers.
+Declaring creates a queue if it doesn't already exist, or ensures that an
 existing queue matches the same parameters.
 
 Every queue declared gets a default binding to the empty exchange "" which has
@@ -669,8 +686,8 @@ func (me *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noW
 }
 
 /*
-Passively declare this queue by name to inspect the current message count,
-consumer count and whether it has been declared.
+QueueInspect passively declares a queue by name to inspect the current message
+count, consumer count.
 
 Use this method to check how many unacknowledged messages reside in the queue
 and how many consumers are receiving deliveries and whether a queue by this
@@ -702,8 +719,8 @@ func (me *Channel) QueueInspect(name string) (Queue, error) {
 }
 
 /*
-Bind the exchange to the queue so that publishings to the exchange will be
-routed to the queue if the publishing's routing key matches the binding's
+QueueBind binds an exchange to a queue so that publishings to the exchange will
+be routed to the queue when the publishing routing key matches the binding
 routing key.
 
   QueueBind("pagers", "log", "alert", false, nil)
@@ -759,7 +776,7 @@ func (me *Channel) QueueBind(name, key, exchange string, noWait bool, args Table
 }
 
 /*
-Deletes a binding between an exchange and queue matching the key and
+QueueUnbind removes a binding between an exchange and queue matching the key and
 arguments.
 
 It is possible to send and empty string for the exchange name which means to
@@ -779,8 +796,8 @@ func (me *Channel) QueueUnbind(name, key, exchange string, args Table) error {
 }
 
 /*
-Remove all messages from the named queue which are not waiting to be
-acknowledged.  Messages that have been delivered but have not yet been
+QueuePurge removes all messages from the named queue which are not waiting to
+be acknowledged.  Messages that have been delivered but have not yet been
 acknowledged will not be removed.
 
 When successful, returns the number of messages purged.
@@ -801,8 +818,9 @@ func (me *Channel) QueuePurge(name string, noWait bool) (int, error) {
 }
 
 /*
-Removes the queue, any bindings it has and purges the messages based on server
-configuration, returning the number of messages purged.
+QueueDelete removes the queue from the server including all bindings then
+purges the messages based on server configuration, returning the number of
+messages purged.
 
 When ifUnused is true, the queue will not be deleted if there are any
 consumers on the queue.  If there are consumers, an error will be returned and
@@ -833,18 +851,20 @@ func (me *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int
 }
 
 /*
-Consumes deliveries from a queue.
+Consume immediately starts delivering queued messages.
 
-When this method returns any asynchronous deliveries sent by the server will be
-sent to the chan returned.  When the consumer is cancelled with Channel.Cancel
-or when the channel or connection is closed, the delivery chan will also be
-closed.  Consumers goroutines should range over the chan or check that the
-channel is open after every receive.
+Begin receiving on the returned chan Delivery before any other operation on the
+Connection or Channel.
+
+Continues deliveries to the returned chan Delivery until Channel.Cancel,
+Connection.Close, Channel.Close, or an AMQP exception occurs.  Consumers must
+range over the chan to ensure all deliveries are received.  Unreceived
+deliveries will block all methods on the same connection.
 
 All deliveries in AMQP must be acknowledged.  It is expected of the consumer to
 call Delivery.Ack after it has succesfully processed the delivery.  If the
-consumer is cancelled or the channel or connection is closed any
-unacknowledged deliveries will be requeued at the end of the same queue.
+consumer is cancelled or the channel or connection is closed any unacknowledged
+deliveries will be requeued at the end of the same queue.
 
 The consumer is identified by a string that is unique and scoped for all
 consumers on this channel.  If you wish to eventually cancel the consumer, use
@@ -911,9 +931,9 @@ func (me *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 }
 
 /*
-Declares an exchange on the server. If the exchange does not already exist,
-the server will create it.  If the exchange exists, the server verifies
-that it is of the provided type, durability and auto-delete flags.
+ExchangeDelcare declares an exchange on the server. If the exchange does not
+already exist, the server will create it.  If the exchange exists, the server
+verifies that it is of the provided type, durability and auto-delete flags.
 
 Errors returned from this method will close the channel.
 
@@ -979,9 +999,9 @@ func (me *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, inter
 }
 
 /*
-Deletes the named exchange. When an exchange is deleted all queue bindings on
-the exchange are also deleted.  If this exchange does not exist, the channel
-will be closed with an error.
+ExchangeDelete removes the named exchange from the server. When an exchange is
+deleted all queue bindings on the exchange are also deleted.  If this exchange
+does not exist, the channel will be closed with an error.
 
 When ifUnused is true, the server will only delete the exchange if it has no queue
 bindings.  If the exchange has queue bindings the server does not delete it
@@ -1004,9 +1024,9 @@ func (me *Channel) ExchangeDelete(name string, ifUnused, noWait bool) error {
 }
 
 /*
-Binds an exchange to another exchange to create inter-exchange routing
-topologies.  This can decouple the private topology and routing exchanges from
-exchanges intended solely for publishing endpoints.
+ExchangeBind binds an exchange to another exchange to create inter-exchange
+routing topologies on the server.  This can decouple the private topology and
+routing exchanges from exchanges intended solely for publishing endpoints.
 
 Binding two exchanges with identical arguments will not create duplicate
 bindings.
@@ -1048,9 +1068,10 @@ func (me *Channel) ExchangeBind(destination, key, source string, noWait bool, ar
 }
 
 /*
-Unbinds the destination exchange from the source exchange by removing the
-routing key between them.  This is the inverse of ExchangeBind.  If the binding
-does not currently exist, an error will be returned.
+ExchangeUnbind unbinds the destination exchange from the source exchange on the
+server by removing the routing key between them.  This is the inverse of
+ExchangeBind.  If the binding does not currently exist, an error will be
+returned.
 
 When noWait is true, do not wait for the server to confirm the deletion of the
 binding.  If any error occurs the channel will be closed.  Add a listener to
@@ -1074,7 +1095,7 @@ func (me *Channel) ExchangeUnbind(destination, key, source string, noWait bool, 
 }
 
 /*
-Publishes a Publishing to an exchange.
+Publish sends a Publishing from the client to an exchange on the server.
 
 When you want a single message to be delivered to a single queue, you can
 publish to the default exchange with the routingKey of the queue name.  This is
@@ -1142,8 +1163,9 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 }
 
 /*
-Synchronously deliver a single message from the head of a queue.  In almost all
-cases, using Channel.Consume will be preferred.
+Get synchronously receives a single Delivery from the head of a queue from the
+server to the client.  In almost all cases, using Channel.Consume will be
+preferred.
 
 If there was a delivery waiting on the queue and that delivery was received the
 second return value will be true.  If there was no delivery waiting or an error
@@ -1175,10 +1197,10 @@ func (me *Channel) Get(queue string, autoAck bool) (msg Delivery, ok bool, err e
 }
 
 /*
-Puts the channel into transaction mode.  All publishings and acknowledgments
-following this method will be atomically committed or rolled back for a
-single queue.  Call either Channel.TxCommit or Channel.TxRollback to leave a
-this transaction and immediately start a new transaction.
+Tx puts the channel into transaction mode on the server.  All publishings and
+acknowledgments following this method will be atomically committed or rolled
+back for a single queue.  Call either Channel.TxCommit or Channel.TxRollback to
+leave a this transaction and immediately start a new transaction.
 
 The atomicity across multiple queues is not defined as queue declarations and
 bindings are not included in the transaction.
@@ -1198,8 +1220,8 @@ func (me *Channel) Tx() error {
 }
 
 /*
-Atomically commit all publishings and acknowledgments for a single queue and
-immediately start a new transaction.
+TxCommit atomically commits all publishings and acknowledgments for a single
+queue and immediately start a new transaction.
 
 Calling this method without having called Channel.Tx is an error.
 
@@ -1212,8 +1234,8 @@ func (me *Channel) TxCommit() error {
 }
 
 /*
-Atomically roll back all publishings and acknowledgments for a single queue and
-immediately start a new transaction.
+TxRollback atomically rolls back all publishings and acknowledgments for a
+single queue and immediately start a new transaction.
 
 Calling this method without having called Channel.Tx is an error.
 
@@ -1226,10 +1248,9 @@ func (me *Channel) TxRollback() error {
 }
 
 /*
-This method is intended to be used as basic flow control for when the link is
-saturated or the client finds itself receiving more deliveries than it can
-handle.  Channels are opened with flow control not active, to open a channel
-with paused deliveries immediately call this method with true after calling
+Flow pauses the delivery of messages to consumers on this channel.  Channels
+are opened with flow control not active, to open a channel with paused
+deliveries immediately call this method with true after calling
 Connection.Channel.
 
 When active is true, this method asks the server to temporarily pause deliveries
@@ -1257,17 +1278,17 @@ func (me *Channel) Flow(active bool) error {
 }
 
 /*
-A RabbitMQ extension that puts this channel into confirm mode so that the client
-can ensure all publishings have successfully been received by the server.  After
-entering this mode, the server will send a basic.ack or basic.nack message with
-the deliver tag set to a 1 based incrementing index corresponding to every
-publishing received after the this method returns.
+Confirm puts this channel into confirm mode so that the client can ensure all
+publishings have successfully been received by the server.  After entering this
+mode, the server will send a basic.ack or basic.nack message with the deliver
+tag set to a 1 based incrementing index corresponding to every publishing
+received after the this method returns.
 
 Add a listener to Channel.NotifyConfirm to respond to the acknowledgments and
 negative acknowledgments.
 
-The order of acknowledgments is not related to the order of deliveries and will
-arrive at some point in the future.
+The order of acknowledgments is not related to the order of deliveries and all
+Ack and Nack confirmations will arrive at some point in the future.
 
 Unroutable mandatory or immediate messages are acknowledged immediately after
 any Channel.NotifyReturn listeners have been notified.  Other messages are
@@ -1297,7 +1318,7 @@ func (me *Channel) Confirm(noWait bool) error {
 }
 
 /*
-Asks the server to redeliver all unacknowledged deliveries on this channel.
+Recover redelivers all unacknowledged deliveries on this channel.
 
 When requeue is false, messages will be redelivered to the original consumer.
 

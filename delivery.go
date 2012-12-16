@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-// A delivery from the server to a consumer started with Queue.Consume or
-// Queue.Get.
+// Delivery captures the fields for a previously delivered message resident in
+// a queue to be delivered by the server to a consumer from Channel.Consume or
+// Channel.Get.
 type Delivery struct {
 	channel *Channel
 
@@ -88,6 +89,8 @@ func newDelivery(channel *Channel, msg messageWithContent) *Delivery {
 }
 
 /*
+Ack acknowledges that the client or server has finished work on a delivery.
+
 All deliveries in AMQP must be acknowledged.  If you called Channel.Consume
 with autoAck true then the server will be automatically ack each message and
 this method should not be called.  Otherwise, you must call Delivery.Ack after
@@ -111,7 +114,7 @@ func (me Delivery) Ack(multiple bool) error {
 }
 
 /*
-Negatively acknowledge processing of this message.
+Reject negatively acknowledge processing of this message.
 
 When requeue is true, queue this message to be delivered to a consumer on a
 different channel.  When requeue is false or the server is unable to queue this
@@ -131,8 +134,9 @@ func (me Delivery) Reject(requeue bool) error {
 }
 
 /*
-Uses the consumer identity in this delivery to cancel the consumer delegating
-to Channel.Cancel.  An error indicates the channel is closed.
+Cancel delegates to a Channel.Cancel and uses the consumer identity in this delivery to cancel the consumer.
+
+An error indicates the channel is closed.
 
 */
 func (me Delivery) Cancel(noWait bool) error {
@@ -140,8 +144,8 @@ func (me Delivery) Cancel(noWait bool) error {
 }
 
 /*
-RabbitMQ extension - Negatively acknowledge the delivery of message(s)
-identified by the deliveryTag.
+Nack negatively acknowledge the delivery of message(s) identified by the
+deliveryTag from either from either the client or server.
 
 When multiple is true, nack messages up to and including delivered messages up
 until the deliveryTag delivered on the same channel.

@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// A flattened struct of fields returned by the server when a Publishing is
-// unable to be delivered either due to the `mandatory` flag set and no route
-// found, or `immediate` flag set and no free consumer.
+// Return captures a flattened struct of fields returned by the server when a
+// Publishing is unable to be delivered either due to the `mandatory` flag set
+// and no route found, or `immediate` flag set and no free consumer.
 type Return struct {
 	ReplyCode  uint16 // reason
 	ReplyText  string // description
