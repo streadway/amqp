@@ -171,6 +171,9 @@ func (me *Channel) call(req message, res ...message) error {
 }
 
 func (me *Channel) sendClosed(msg message) (err error) {
+	me.sendM.Lock()
+	defer me.sendM.Unlock()
+
 	// After a 'channel.close' is sent or received the only valid response is
 	// channel.close-ok
 	if _, ok := msg.(*channelCloseOk); ok {
