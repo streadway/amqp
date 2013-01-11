@@ -839,6 +839,28 @@ func TestIntegrationConfirm(t *testing.T) {
 	}
 }
 
+// https://github.com/streadway/amqp/issues/46
+func TestRepeatedChannelExceptionWithPublishAndMaxProcsIssue46(t *testing.T) {
+	conn := integrationConnection(t, "issue46")
+	if conn != nil {
+		for i := 0; i < 100; i++ {
+			ch, err := conn.Channel()
+			if err != nil {
+				t.Fatalf("expected error only on publish, got error on channel.open: %v", err)
+			}
+
+			for j := 0; j < 10; j++ {
+				err = ch.Publish("not-existing-exchange", "some-key", false, false, Publishing{Body: []byte("some-data")})
+				if err, ok := err.(Error); ok {
+					if err.Code != 504 {
+						t.Fatalf("expected channel only exception, got: %v", err)
+					}
+				}
+			}
+		}
+	}
+}
+
 // https://github.com/streadway/amqp/issues/43
 func TestChannelExceptionWithCloseIssue43(t *testing.T) {
 	conn := integrationConnection(t, "issue43")
