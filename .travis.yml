@@ -4,8 +4,7 @@ services:
   - rabbitmq
 
 env:
- - AMQP_URL="amqp://guest:guest@127.0.0.1:5672/"
- - GOMAXPROCS=2
+ - AMQP_URL=amqp://guest:guest@127.0.0.1:5672/ GOMAXPROCS=2
 
 before_script:
  - sh -c "sleep 120 && killall -QUIT amqp.test" &
