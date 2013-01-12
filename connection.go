@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -47,8 +46,9 @@ type Connection struct {
 	writer *writer
 	sends  chan time.Time // timestamps of each frame sent
 
-	sequence uint32
-	channels map[uint16]*Channel
+	channelM  sync.RWMutex // channelId and channels map
+	channelId uint16       // channelId sequence for nextChannel
+	channels  map[uint16]*Channel
 
 	closes []chan *Error
 
@@ -111,10 +111,6 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	}
 	go me.reader()
 	return me, me.open(config)
-}
-
-func (me *Connection) nextChannelId() uint16 {
-	return uint16(atomic.AddUint32(&me.sequence, 1))
 }
 
 /*
@@ -196,6 +192,9 @@ func (me *Connection) send(f frame) error {
 
 func (me *Connection) shutdown(err *Error) {
 	me.destructor.Do(func() {
+		me.channelM.Lock()
+		defer me.channelM.Unlock()
+
 		if err != nil {
 			for _, c := range me.closes {
 				c <- err
@@ -256,7 +255,7 @@ func (me *Connection) dispatch0(f frame) {
 }
 
 func (me *Connection) dispatchN(f frame) {
-	if channel, ok := me.channels[f.channel()]; ok {
+	if channel := me.findChannel(f.channel()); channel != nil {
 		channel.recv(channel, f)
 	} else {
 		me.dispatchClosed(f)
@@ -371,10 +370,29 @@ invalid and a new Channel should be opened.
 
 */
 func (me *Connection) Channel() (*Channel, error) {
-	id := me.nextChannelId()
-	channel := newChannel(me, id)
-	me.channels[id] = channel
+	channel := me.nextChannel()
 	return channel, channel.open()
+}
+
+// nextChannel initializes a new channel and writes it to the channel map
+func (me *Connection) nextChannel() *Channel {
+	me.channelM.Lock()
+	defer me.channelM.Unlock()
+
+	me.channelId++
+	channel := newChannel(me, me.channelId)
+	me.channels[me.channelId] = channel
+
+	return channel
+}
+
+// findChannel gets the channel from the channel id.  Returns nil if the
+// channel is not found either due to it being closed or not yet initialized.
+func (me *Connection) findChannel(id uint16) *Channel {
+	me.channelM.RLock()
+	defer me.channelM.RUnlock()
+
+	return me.channels[id]
 }
 
 func (me *Connection) call(req message, res ...message) error {
