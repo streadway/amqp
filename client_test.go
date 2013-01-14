@@ -319,3 +319,67 @@ func TestConfirmMultiple(t *testing.T) {
 	}
 
 }
+
+func TestNotifyClosesAllChansAfterConnectionClose(t *testing.T) {
+	rwc, srv := newSession(t)
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %s (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %s (%s)", ch, err)
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("could not close connection: %s (%s)", c, err)
+	}
+
+	select {
+	case <-c.NotifyClose(make(chan *Error)):
+	case <-time.After(time.Millisecond):
+		t.Errorf("expected to close NotifyClose chan after Connection.Close")
+	}
+
+	select {
+	case <-ch.NotifyClose(make(chan *Error)):
+	case <-time.After(time.Millisecond):
+		t.Errorf("expected to close Connection.NotifyClose chan after Connection.Close")
+	}
+
+	select {
+	case <-ch.NotifyFlow(make(chan bool)):
+	case <-time.After(time.Millisecond):
+		t.Errorf("expected to close Channel.NotifyFlow chan after Connection.Close")
+	}
+
+	select {
+	case <-ch.NotifyReturn(make(chan Return)):
+	case <-time.After(time.Millisecond):
+		t.Errorf("expected to close Channel.NotifyReturn chan after Connection.Close")
+	}
+
+	ack, nack := ch.NotifyConfirm(make(chan uint64), make(chan uint64))
+
+	select {
+	case <-ack:
+	case <-time.After(time.Millisecond):
+		t.Errorf("expected to close acks on Channel.NotifyConfirm chan after Connection.Close")
+	}
+
+	select {
+	case <-nack:
+	case <-time.After(time.Millisecond):
+		t.Errorf("expected to close nacks Channel.NotifyConfirm chan after Connection.Close")
+	}
+}
