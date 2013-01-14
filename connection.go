@@ -37,8 +37,9 @@ type Config struct {
 // multiplexed on this channel.  There must always be active receivers for
 // every asynchronous message on this connection.
 type Connection struct {
-	destructor sync.Once
-	m          sync.Mutex // writer and notify mutex
+	destructor sync.Once  // shutdown once
+	sendM      sync.Mutex // conn writer mutex
+	m          sync.Mutex // struct field mutex
 
 	conn io.ReadWriteCloser
 
@@ -46,11 +47,11 @@ type Connection struct {
 	writer *writer
 	sends  chan time.Time // timestamps of each frame sent
 
-	channelM  sync.RWMutex // channelId and channels map
-	channelId uint16       // channelId sequence for nextChannel
+	channelId uint16 // channelId sequence for nextChannel
 	channels  map[uint16]*Channel
 
-	closes []chan *Error
+	noNotify bool // true when we will never notify again
+	closes   []chan *Error
 
 	errors chan *Error
 
@@ -126,7 +127,13 @@ re-run your setup process.
 func (me *Connection) NotifyClose(c chan *Error) chan *Error {
 	me.m.Lock()
 	defer me.m.Unlock()
-	me.closes = append(me.closes, c)
+
+	if me.noNotify {
+		close(c)
+	} else {
+		me.closes = append(me.closes, c)
+	}
+
 	return c
 }
 
@@ -166,9 +173,9 @@ func (me *Connection) closeWith(err *Error) error {
 }
 
 func (me *Connection) send(f frame) error {
-	me.m.Lock()
+	me.sendM.Lock()
 	err := me.writer.WriteFrame(f)
-	me.m.Unlock()
+	me.sendM.Unlock()
 
 	if err != nil {
 		// Assuming the connection is dead, and closeWith would be re-entrant so
@@ -192,8 +199,8 @@ func (me *Connection) send(f frame) error {
 
 func (me *Connection) shutdown(err *Error) {
 	me.destructor.Do(func() {
-		me.channelM.Lock()
-		defer me.channelM.Unlock()
+		me.m.Lock()
+		defer me.m.Unlock()
 
 		if err != nil {
 			for _, c := range me.closes {
@@ -218,6 +225,8 @@ func (me *Connection) shutdown(err *Error) {
 		for _, c := range me.closes {
 			close(c)
 		}
+
+		me.noNotify = true
 	})
 }
 
@@ -376,8 +385,8 @@ func (me *Connection) Channel() (*Channel, error) {
 
 // nextChannel initializes a new channel and writes it to the channel map
 func (me *Connection) nextChannel() *Channel {
-	me.channelM.Lock()
-	defer me.channelM.Unlock()
+	me.m.Lock()
+	defer me.m.Unlock()
 
 	me.channelId++
 	channel := newChannel(me, me.channelId)
@@ -389,8 +398,8 @@ func (me *Connection) nextChannel() *Channel {
 // findChannel gets the channel from the channel id.  Returns nil if the
 // channel is not found either due to it being closed or not yet initialized.
 func (me *Connection) findChannel(id uint16) *Channel {
-	me.channelM.RLock()
-	defer me.channelM.RUnlock()
+	me.m.Lock()
+	defer me.m.Unlock()
 
 	return me.channels[id]
 }

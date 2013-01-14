@@ -25,10 +25,9 @@ should be discarded and a new channel established.
 
 */
 type Channel struct {
-	// Mutex for notify listeners
 	destructor sync.Once
-	m          sync.Mutex
-	sendM      sync.Mutex
+	sendM      sync.Mutex // sequence channel frames
+	m          sync.Mutex // struct field mutex
 
 	connection *Connection
 
@@ -37,8 +36,8 @@ type Channel struct {
 
 	id uint16
 
-	// Writer lock for the notify slices
-	notify sync.Mutex
+	// true when we will never notify again
+	noNotify bool
 
 	// Channel and Connection exceptions will be broadcast on these listeners.
 	closes []chan *Error
@@ -54,8 +53,10 @@ type Channel struct {
 	// Listeners for Acks/Nacks when the channel is in Confirm mode
 	// the value is the sequentially increasing delivery tag
 	// starting at 1 immediately after the Confirm
-	acks           []chan uint64
-	nacks          []chan uint64
+	acks  []chan uint64
+	nacks []chan uint64
+
+	// When in confirm mode, track publish counter and order confirms
 	confirms       tagSet
 	publishCounter uint64
 
@@ -90,6 +91,9 @@ func newChannel(c *Connection, id uint16) *Channel {
 
 func (me *Channel) shutdown(e *Error) {
 	me.destructor.Do(func() {
+		me.m.Lock()
+		defer me.m.Unlock()
+
 		// Broadcast abnormal shutdown
 		if e != nil {
 			for _, c := range me.closes {
@@ -127,6 +131,8 @@ func (me *Channel) shutdown(e *Error) {
 		for _, c := range me.nacks {
 			close(c)
 		}
+
+		me.noNotify = true
 	})
 }
 
@@ -387,7 +393,13 @@ graceful close, no error will be sent.
 func (me *Channel) NotifyClose(c chan *Error) chan *Error {
 	me.m.Lock()
 	defer me.m.Unlock()
-	me.closes = append(me.closes, c)
+
+	if me.noNotify {
+		close(c)
+	} else {
+		me.closes = append(me.closes, c)
+	}
+
 	return c
 }
 
@@ -427,7 +439,13 @@ basic.ack messages from getting rate limited with your basic.publish messages.
 func (me *Channel) NotifyFlow(c chan bool) chan bool {
 	me.m.Lock()
 	defer me.m.Unlock()
-	me.flows = append(me.flows, c)
+
+	if me.noNotify {
+		close(c)
+	} else {
+		me.flows = append(me.flows, c)
+	}
+
 	return c
 }
 
@@ -443,7 +461,13 @@ information about why the publishing failed.
 func (me *Channel) NotifyReturn(c chan Return) chan Return {
 	me.m.Lock()
 	defer me.m.Unlock()
-	me.returns = append(me.returns, c)
+
+	if me.noNotify {
+		close(c)
+	} else {
+		me.returns = append(me.returns, c)
+	}
+
 	return c
 }
 
@@ -466,8 +490,15 @@ channel on completion.
 func (me *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64) {
 	me.m.Lock()
 	defer me.m.Unlock()
-	me.acks = append(me.acks, ack)
-	me.nacks = append(me.nacks, nack)
+
+	if me.noNotify {
+		close(ack)
+		close(nack)
+	} else {
+		me.acks = append(me.acks, ack)
+		me.nacks = append(me.nacks, nack)
+	}
+
 	return ack, nack
 }
 
