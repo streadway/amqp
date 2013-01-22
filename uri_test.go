@@ -150,6 +150,22 @@ func TestURISpec(t *testing.T) {
 	}
 }
 
+func TestURIUnknownScheme(t *testing.T) {
+	if _, err := ParseURI("http://example.com/"); err == nil {
+		t.Fatal("Expected error when parsing non-amqp scheme")
+	}
+}
+
+func TestURIScheme(t *testing.T) {
+	if _, err := ParseURI("amqp://example.com/"); err != nil {
+		t.Fatal("Expected to parse amqp scheme, got %v", err)
+	}
+
+	if _, err := ParseURI("amqps://example.com/"); err != nil {
+		t.Fatal("Expected to parse amqps scheme, got %v", err)
+	}
+}
+
 func TestURIDefaults(t *testing.T) {
 	url := "amqp://"
 	uri, err := ParseURI(url)
@@ -186,7 +202,19 @@ func TestURIDefaultPortAmqpNotIncluded(t *testing.T) {
 	}
 }
 
-func TestURIDefaultPortAmqpsNotIncluded(t *testing.T) {
+func TestURIDefaultPortAmqp(t *testing.T) {
+	url := "amqp://foo.bar/"
+	uri, err := ParseURI(url)
+	if err != nil {
+		t.Fatal("Could not parse")
+	}
+
+	if uri.Port != 5672 {
+		t.Fatal("Default port not correct for amqp, got:", uri.Port)
+	}
+}
+
+func TestURIDefaultPortAmqpsNotIncludedInString(t *testing.T) {
 	url := "amqps://foo.bar:5671/"
 	uri, err := ParseURI(url)
 	if err != nil {
@@ -195,5 +223,17 @@ func TestURIDefaultPortAmqpsNotIncluded(t *testing.T) {
 
 	if uri.String() != "amqps://foo.bar/" {
 		t.Fatal("Defaults not encoded properly got:", uri.String())
+	}
+}
+
+func TestURIDefaultPortAmqps(t *testing.T) {
+	url := "amqps://foo.bar/"
+	uri, err := ParseURI(url)
+	if err != nil {
+		t.Fatal("Could not parse")
+	}
+
+	if uri.Port != 5671 {
+		t.Fatal("Default port not correct for amqps, got:", uri.Port)
 	}
 }

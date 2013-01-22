@@ -7,6 +7,7 @@ package amqp
 
 import (
 	"bufio"
+	"crypto/tls"
 	"io"
 	"net"
 	"reflect"
@@ -67,18 +68,33 @@ type readDeadliner interface {
 	SetReadDeadline(time.Time) error
 }
 
-// Dial accepts a string in the AMQP URI format, and returns a new Connection
+// Dial accepts a string in the AMQP URI format and returns a new Connection
 // over TCP using PlainAuth.  Defaults to a server heartbeat interval of 10
 // seconds and sets the initial read deadline to 30 seconds.
-func Dial(amqp string) (*Connection, error) {
-	uri, err := ParseURI(amqp)
+//
+// Dial uses the zero value of tls.Config when it encounters an amqps://
+// scheme.  It is equivalent to calling DialTLS(amqp, nil).
+func Dial(url string) (*Connection, error) {
+	return DialTLS(url, nil)
+}
+
+// DialTLS accepts a string in the AMQP URI format and returns a new Connection
+// over TCP using PlainAuth.  Defaults to a server heartbeat interval of 10
+// seconds and sets the initial read deadline to 30 seconds.
+//
+// DialTLS uses the provided tls.Config when encountering an amqps:// scheme.
+func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
+	var err error
+	var conn net.Conn
+
+	uri, err := ParseURI(url)
 	if err != nil {
 		return nil, err
 	}
 
 	addr := net.JoinHostPort(uri.Host, strconv.FormatInt(int64(uri.Port), 10))
 
-	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
+	conn, err = net.DialTimeout("tcp", addr, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +102,30 @@ func Dial(amqp string) (*Connection, error) {
 	// Heartbeating hasn't started yet, don't stall forever on a dead server.
 	if err := conn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
 		return nil, err
+	}
+
+	// amqps schemes get a client TLS encapulation.  With the dial and heartbeat
+	// timeouts so that TLS tunnels don't establish a tunnel to a dead server.
+	if uri.Scheme == "amqps" {
+		if amqps == nil {
+			amqps = new(tls.Config)
+		}
+
+		// Use the URI's host for hostname validation unless otherwise set. Make a
+		// copy so not to modify the caller's reference.
+		if amqps.ServerName == "" {
+			c := *amqps
+			c.ServerName = uri.Host
+			amqps = &c
+		}
+
+		client := tls.Client(conn, amqps)
+		if err := client.Handshake(); err != nil {
+			conn.Close()
+			return nil, err
+		}
+
+		conn = client
 	}
 
 	return Open(conn, Config{
