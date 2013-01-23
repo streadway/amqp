@@ -6,13 +6,14 @@
 package amqp
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
 )
 
-var errURIScheme = fmt.Errorf("AMQP scheme must be either 'amqp://' or 'amqps://'")
+var errURIScheme = errors.New("AMQP scheme must be either 'amqp://' or 'amqps://'")
 
 var schemePorts = map[string]int{
 	"amqp":  5672,
