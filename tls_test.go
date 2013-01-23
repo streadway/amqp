@@ -37,8 +37,8 @@ func (s *tlsServer) Serve() {
 func tlsConfig() *tls.Config {
 	cfg := new(tls.Config)
 
-	cfg.RootCAs = x509.NewCertPool()
-	cfg.RootCAs.AppendCertsFromPEM([]byte(caCert))
+	cfg.ClientCAs = x509.NewCertPool()
+	cfg.ClientCAs.AppendCertsFromPEM([]byte(caCert))
 
 	cert, err := tls.X509KeyPair([]byte(serverCert), []byte(serverKey))
 	if err != nil {
@@ -80,10 +80,10 @@ func TestTLSHandshake(t *testing.T) {
 	cfg.RootCAs = x509.NewCertPool()
 	cfg.RootCAs.AppendCertsFromPEM([]byte(caCert))
 
-	cert, err := tls.X509KeyPair([]byte(clientCert), []byte(clientKey))
+	cert, _ := tls.X509KeyPair([]byte(clientCert), []byte(clientKey))
 	cfg.Certificates = append(cfg.Certificates, cert)
 
-	_, err = amqp.DialTLS(srv.URL, cfg)
+	_, err := amqp.DialTLS(srv.URL, cfg)
 
 	select {
 	case <-time.After(10 * time.Millisecond):
@@ -169,22 +169,22 @@ QKWExCP1p7f4ZzYYY3/NELpYLDhol+PwhhNgSyCesFpJuvZCY04=
 
 const clientCert = `
 -----BEGIN CERTIFICATE-----
-MIIC3DCCAcSgAwIBAgIBAjANBgkqhkiG9w0BAQUFADATMREwDwYDVQQDEwhNeVRl
-c3RDQTAeFw0xMzAxMTYyMTMwMzVaFw0xNDAxMTYyMTMwMzVaMB8xDDAKBgNVBAMM
-A250aDEPMA0GA1UECgwGY2xpZW50MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-CgKCAQEAuKjq7EQKNEsps9r0x/ed09eqasUSOPsNx7SVoHkDq2BkE8xWuLch2ifT
-A37wKvzFd1DeF9iARpt3n2a0etisMDOnZvWOLh14qVT8YJ6VPnppfkMAq7sRq539
-jDHd5E7VYniPOmWldRduC96pVzgsbbdpMUW8az4kVJXcDp7qSMuXG13YA/SYVWcG
-t9hfPyDJOR1kz8btJkAHGYVS2gK9TCewOYwBo8kBPQxT4A+D8eR9zZEhlraF8k0y
-5RGVUwocUG/U3gPgyrG+OIk9xeO8pNRh/QhgT9y5XZl1eCiJSRSXT3C+FyQxTs7k
-3vMIWAylTH1AmCGEty08yTD+JF7hnwIDAQABoy8wLTAJBgNVHRMEAjAAMAsGA1Ud
-DwQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAjANBgkqhkiG9w0BAQUFAAOCAQEA
-AvQ9zawNv8oZIsvxYCD1qTVj/R8DN36tMxhKUMBYNQpXQZoMkuHQKC8dgJxYoSSY
-G4Q8n1n/ZFut133TfKFVWPol1p9NnNv5wPxXqApB3zlMqXAxnYqTmwAxC+T3Yb5V
-4pyK9m9OTu2uJgvpm3XVB0NTzL1RNjkZDscp09aA62S6bXkRYvohjfmPqrpjUTxF
-Q6iKxcSDmINO7qQlN0WdGFdbbx/VXw/fcfeizYhiCWa2jt6Kohugp87ic2TyXFo8
-rIlr8G4m94jsu0+93IzxB3HohyMsaCXX9WD0Ip6KsMn8r9JGfsFqGzuiCj9IYE3O
-fO6tEpd5LN3fzux/jtiQFg==
+MIIC4jCCAcqgAwIBAgIBBDANBgkqhkiG9w0BAQUFADATMREwDwYDVQQDEwhNeVRl
+c3RDQTAeFw0xMzAxMjMyMjA5MTlaFw0xNDAxMjMyMjA5MTlaMCUxEjAQBgNVBAMM
+CTEyNy4wLjAuMTEPMA0GA1UECgwGY2xpZW50MIIBIjANBgkqhkiG9w0BAQEFAAOC
+AQ8AMIIBCgKCAQEAuKjq7EQKNEsps9r0x/ed09eqasUSOPsNx7SVoHkDq2BkE8xW
+uLch2ifTA37wKvzFd1DeF9iARpt3n2a0etisMDOnZvWOLh14qVT8YJ6VPnppfkMA
+q7sRq539jDHd5E7VYniPOmWldRduC96pVzgsbbdpMUW8az4kVJXcDp7qSMuXG13Y
+A/SYVWcGt9hfPyDJOR1kz8btJkAHGYVS2gK9TCewOYwBo8kBPQxT4A+D8eR9zZEh
+lraF8k0y5RGVUwocUG/U3gPgyrG+OIk9xeO8pNRh/QhgT9y5XZl1eCiJSRSXT3C+
+FyQxTs7k3vMIWAylTH1AmCGEty08yTD+JF7hnwIDAQABoy8wLTAJBgNVHRMEAjAA
+MAsGA1UdDwQEAwIHgDATBgNVHSUEDDAKBggrBgEFBQcDAjANBgkqhkiG9w0BAQUF
+AAOCAQEAi6bJ9lyUqunl2KXKHn5Lne59YBqJ3XEqFlN/9H5MrMheOusoDtduzTYj
+rm2hCY84ZceKZdz2F5vsz1XakX2apbPVBOVWPOUylyVWlRRGB7PSXsSHyU8CXI96
+2HtpK/WiWuVOXwdxIX/MlyL5dx8ckvje0YXMJYS1c+OGEmeRBNMBitVRI3ZhcjAw
+SIj71EiXG1EsF2Ok7H1bXiEgjmFr4Ui4CpmeITybGAqoVeA9+t09FFFwABS1wlOM
+ZGcOWPhEGv6vCpaCLLdAaU9K+BYnBhtVIhNpt5Q1gtj/pLauVWa2Ouhcq41l8HPR
+tKIEURQFA5C0JL68IPorTQt5z+D+bg==
 -----END CERTIFICATE-----
 `
 
