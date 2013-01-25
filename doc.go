@@ -61,7 +61,7 @@ Any asynchronous events, including Deliveries and Publishings must always have
 a receiver until the corresponding chans are closed.  Without asynchronous
 receivers, the sychronous methods will block.
 
-Typical Use Case
+Use Case
 
 It's important as a client to an AMQP topology to ensure the state of the
 broker matches your expectations.  For both publish and consume use cases,
@@ -89,6 +89,20 @@ prior to calling Channel.Publish or Channel.Consume.
   // Use your connection on this topology with either Publish or Consume, or
   // inspect your queues with QueueInspect.  It's unwise to mix Publish and
   // Consume to let TCP do its job well.
+
+SSL/TLS - Secure connections
+
+When Dial encounters an amqps:// scheme, it will use the zero value of a
+tls.Config.  This will only perform server certificate and host verification.
+
+Use DialTLS when you wish to provide a client certificate (recommended),
+include a private certificate authority's certificate in the cert chain for
+server validity, or run insecure by not verifying the server certificate dial
+your own connection.  DialTLS will use the provided tls.Config when it
+encounters an amqps:// scheme and will dial a plain connection when it
+encounters an amqp:// scheme.
+
+SSL/TLS in RabbitMQ is documented here: http://www.rabbitmq.com/ssl.html
 
 */
 package amqp

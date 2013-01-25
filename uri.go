@@ -6,13 +6,16 @@
 package amqp
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
 )
 
-var defaultPorts = map[string]int{
+var errURIScheme = errors.New("AMQP scheme must be either 'amqp://' or 'amqps://'")
+
+var schemePorts = map[string]int{
 	"amqp":  5672,
 	"amqps": 5671,
 }
@@ -56,8 +59,12 @@ func ParseURI(uri string) (URI, error) {
 		return me, err
 	}
 
-	if u.Scheme == "amqp" || u.Scheme == "amqps" {
+	defaultPort, okScheme := schemePorts[u.Scheme]
+
+	if okScheme {
 		me.Scheme = u.Scheme
+	} else {
+		return me, errURIScheme
 	}
 
 	host, port := splitHostPort(u.Host)
@@ -67,9 +74,13 @@ func ParseURI(uri string) (URI, error) {
 	}
 
 	if port != "" {
-		if port32, err := strconv.ParseInt(port, 10, 32); err == nil {
-			me.Port = int(port32)
+		port32, err := strconv.ParseInt(port, 10, 32)
+		if err != nil {
+			return me, err
 		}
+		me.Port = int(port32)
+	} else {
+		me.Port = defaultPort
 	}
 
 	if u.User != nil {
@@ -146,7 +157,7 @@ func (me URI) String() string {
 
 	authority += me.Host
 
-	if defaultPort, found := defaultPorts[me.Scheme]; !found || defaultPort != me.Port {
+	if defaultPort, found := schemePorts[me.Scheme]; !found || defaultPort != me.Port {
 		authority += ":" + strconv.FormatInt(int64(me.Port), 10)
 	}
 
