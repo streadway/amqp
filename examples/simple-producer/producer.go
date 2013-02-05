@@ -78,8 +78,8 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 	if err = channel.Publish(
 		exchange,   // publish to an exchange
 		routingKey, // routing to 0 or more queues
-		true,       // mandatory
-		true,       // immediate
+		false,      // mandatory
+		false,      // immediate
 		amqp.Publishing{
 			Headers:         amqp.Table{},
 			ContentType:     "text/plain",
