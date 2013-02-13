@@ -839,6 +839,70 @@ func TestIntegrationConfirm(t *testing.T) {
 	}
 }
 
+// https://github.com/streadway/amqp/issues/48
+func TestDeadlockConsumerIssue48(t *testing.T) {
+	if conn := integrationConnection(t, "issue48"); conn != nil {
+		defer conn.Close()
+
+		deadline := make(chan bool)
+		go func() {
+			select {
+			case <-time.After(5 * time.Second):
+				panic("expected to receive 2 deliveries while in an RPC, got a deadlock")
+			case <-deadline:
+				// pass
+			}
+		}()
+
+		ch, err := conn.Channel()
+		if err != nil {
+			t.Fatalf("got error on channel.open: %v", err)
+		}
+
+		queue := "test-issue48"
+
+		if _, err := ch.QueueDeclare(queue, false, true, false, false, nil); err != nil {
+			t.Fatalf("expected to declare a queue", err)
+		}
+
+		if err := ch.Confirm(false); err != nil {
+			t.Fatalf("got error on confirm: %v", err)
+		}
+
+		ack, nack := make(chan uint64, 2), make(chan uint64, 2)
+		ch.NotifyConfirm(ack, nack)
+
+		for i := 0; i < cap(ack); i++ {
+			// Fill the queue with some new or remaining publishings
+			ch.Publish("", queue, false, false, Publishing{Body: []byte("")})
+		}
+
+		for i := 0; i < cap(ack); i++ {
+			// Wait for them to land on the queue so they'll be delivered on consume
+			<-ack
+		}
+
+		// Consuming should send them all on the wire
+		msgs, err := ch.Consume(queue, "", false, false, false, false, nil)
+		if err != nil {
+			t.Fatalf("got error on consume: %v", err)
+		}
+
+		// We pop one off the chan, the other is on the wire
+		<-msgs
+
+		// Opening a new channel (any RPC) while another delivery is on the wire
+		if _, err := conn.Channel(); err != nil {
+			t.Fatalf("got error on consume: %v", err)
+		}
+
+		// We pop the next off the chan
+		<-msgs
+
+		deadline <- true
+	}
+}
+
 // https://github.com/streadway/amqp/issues/46
 func TestRepeatedChannelExceptionWithPublishAndMaxProcsIssue46(t *testing.T) {
 	conn := integrationConnection(t, "issue46")

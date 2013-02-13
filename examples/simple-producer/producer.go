@@ -70,7 +70,7 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 			return fmt.Errorf("Channel could not be put into confirm mode: %s", err)
 		}
 
-		ack, nack := channel.NotifyConfirm(make(chan uint64), make(chan uint64))
+		ack, nack := channel.NotifyConfirm(make(chan uint64, 1), make(chan uint64, 1))
 
 		defer confirmOne(ack, nack)
 	}
