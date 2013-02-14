@@ -132,7 +132,8 @@ func ExampleChannel_Confirm_bridge() {
 		log.Fatalf("exchange.declare destination: %s", err)
 	}
 
-	pubAcks, pubNacks := chd.NotifyConfirm(make(chan uint64), make(chan uint64))
+	// Buffer of 1 for our single outstanding publishing
+	pubAcks, pubNacks := chd.NotifyConfirm(make(chan uint64, 1), make(chan uint64, 1))
 
 	if err := chd.Confirm(false); err != nil {
 		log.Fatalf("confirm.select destination: %s", err)
