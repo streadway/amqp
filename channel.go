@@ -569,9 +569,9 @@ acknowledgments from the consumers.  This option is ignored when consumers are
 started with noAck.
 
 When global is true, these Qos settings apply to all existing and future
-consumers on all channels on the same connection.  When false, the Qos
-settings will apply to all existing
-and future consumers on this channel.
+consumers on all channels on the same connection.  When false, the Qos settings
+will apply to all existing and future consumers on this channel.  RabbitMQ does
+not implement the global flag.
 
 To get round-robin behavior between consumers consuming from the same queue on
 different connections, set the prefetch count to 1, and the next available
