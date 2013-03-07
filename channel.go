@@ -124,12 +124,22 @@ func (me *Channel) shutdown(e *Error) {
 			close(c)
 		}
 
+		// A seen map to keep from double closing the ack and nacks. the other
+		// channels are different types and are not shared
+		seen := make(map[chan uint64]bool)
+
 		for _, c := range me.acks {
-			close(c)
+			if !seen[c] {
+				close(c)
+				seen[c] = true
+			}
 		}
 
 		for _, c := range me.nacks {
-			close(c)
+			if !seen[c] {
+				close(c)
+				seen[c] = true
+			}
 		}
 
 		me.noNotify = true

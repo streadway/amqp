@@ -52,6 +52,7 @@ TravisCI will also run the integration tests.
  * [Peter Bourgon](https://github.com/peterbourgon)
  * [Michael Klishin](https://github.com/michaelklishin)
  * [Richard Musiol](https://github.com/neelance)
+ * [Dan Markham](https://github.com/dmarkham)
 
 # License
 
