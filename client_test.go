@@ -320,6 +320,42 @@ func TestConfirmMultiple(t *testing.T) {
 
 }
 
+func TestNotifyClosesReusedPublisherConfirmChan(t *testing.T) {
+	rwc, srv := newSession(t)
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(1, &confirmSelect{})
+		srv.send(1, &confirmSelectOk{})
+
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %s (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %s (%s)", ch, err)
+	}
+
+	ackAndNack := make(chan uint64)
+	ch.NotifyConfirm(ackAndNack, ackAndNack)
+
+	if err := ch.Confirm(false); err != nil {
+		t.Fatalf("expected to enter confirm mode: %v", err)
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("could not close connection: %s (%s)", c, err)
+	}
+}
+
 func TestNotifyClosesAllChansAfterConnectionClose(t *testing.T) {
 	rwc, srv := newSession(t)
 
