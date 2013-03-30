@@ -145,10 +145,10 @@ func (me URI) PlainAuth() *PlainAuth {
 func (me URI) String() string {
 	var authority string
 
-	if me.Username != "" && me.Username != defaultURI.Username {
+	if me.Username != defaultURI.Username || me.Password != defaultURI.Password {
 		authority += me.Username
 
-		if me.Password != "" && me.Password != defaultURI.Password {
+		if me.Password != defaultURI.Password {
 			authority += ":" + me.Password
 		}
 
@@ -161,10 +161,10 @@ func (me URI) String() string {
 		authority += ":" + strconv.FormatInt(int64(me.Port), 10)
 	}
 
-	vhost := me.Vhost
-	if !strings.HasPrefix(vhost, "/") {
-		vhost = "/" + vhost
+	var vhost string
+	if me.Vhost != defaultURI.Vhost {
+		vhost = me.Vhost
 	}
 
-	return fmt.Sprintf("%s://%s%s", me.Scheme, authority, vhost)
+	return fmt.Sprintf("%s://%s/%s", me.Scheme, authority, url.QueryEscape(vhost))
 }
