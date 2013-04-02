@@ -215,12 +215,11 @@ func (me *Connection) closeWith(err *Error) error {
 
 func (me *Connection) send(f frame) error {
 	me.sendM.Lock()
-	defer me.sendM.Unlock()
-
 	err := me.writer.WriteFrame(f)
+	me.sendM.Unlock()
 
 	if err != nil {
-		// shutdown must never send
+		// shutdown could be re-entrant from signaling notify chans
 		me.shutdown(&Error{
 			Code:   FrameError,
 			Reason: err.Error(),
