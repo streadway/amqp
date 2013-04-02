@@ -215,12 +215,12 @@ func (me *Connection) closeWith(err *Error) error {
 
 func (me *Connection) send(f frame) error {
 	me.sendM.Lock()
+	defer me.sendM.Unlock()
+
 	err := me.writer.WriteFrame(f)
-	me.sendM.Unlock()
 
 	if err != nil {
-		// Assuming the connection is dead, and closeWith would be re-entrant so
-		// shutdown all the things
+		// shutdown must never send
 		me.shutdown(&Error{
 			Code:   FrameError,
 			Reason: err.Error(),
@@ -249,9 +249,9 @@ func (me *Connection) shutdown(err *Error) {
 			}
 		}
 
-		for id, c := range me.channels {
-			delete(me.channels, id)
-			c.shutdown(err)
+		for _, ch := range me.channels {
+			ch.shutdown(err)
+			delete(me.channels, ch.id)
 		}
 
 		if err != nil {

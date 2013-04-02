@@ -101,8 +101,6 @@ func (me *Channel) shutdown(e *Error) {
 			}
 		}
 
-		delete(me.connection.channels, me.id)
-
 		me.send = (*Channel).sendClosed
 
 		// Notify RPC if we're selecting
@@ -143,6 +141,8 @@ func (me *Channel) shutdown(e *Error) {
 		}
 
 		me.noNotify = true
+
+		delete(me.connection.channels, me.id)
 	})
 }
 
