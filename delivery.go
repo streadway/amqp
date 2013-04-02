@@ -145,7 +145,7 @@ func (me Delivery) Cancel(noWait bool) error {
 
 /*
 Nack negatively acknowledge the delivery of message(s) identified by the
-deliveryTag from either from either the client or server.
+deliveryTag from either the client or server.
 
 When multiple is true, nack messages up to and including delivered messages up
 until the deliveryTag delivered on the same channel.
