@@ -268,11 +268,20 @@ func readField(r io.Reader) (v interface{}, err error) {
 		if err = binary.Read(r, binary.BigEndian, &size); err != nil {
 			return
 		}
-		array := make([]interface{}, size)
-		for i, _ := range array {
-			if array[i], err = readField(r); err != nil {
+
+		arrayBuf := make([]byte, size)
+		io.ReadFull(r, arrayBuf)
+
+		arryReader := bytes.NewReader(arrayBuf)
+		array := []interface{}{}
+
+		//TODO maybe this could be refactored to be prettier
+		for arryReader.Len() > 0 {
+			var answer interface{}
+			if answer, err = readField(arryReader); err != nil {
 				return
 			}
+			array = append(array, answer)
 		}
 		return array, nil
 
