@@ -354,16 +354,23 @@ func writeField(w io.Writer, value interface{}) (err error) {
 		enc = append(buf[:5], []byte(v)...)
 
 	case []interface{}: // field-array
-		buf[0] = 'A'
-		binary.BigEndian.PutUint32(buf[1:5], uint32(len(v)))
-		if _, err = w.Write(buf[:5]); err != nil {
-			return
-		}
+		sec := new(bytes.Buffer)
 		for _, val := range v {
-			if err = writeField(w, val); err != nil {
+			if err = writeField(sec, val); err != nil {
 				return
 			}
 		}
+
+		buf[0] = 'A'
+		binary.BigEndian.PutUint32(buf[1:5], uint32(sec.Len()))
+		if _, err = w.Write(buf[:5]); err != nil {
+			return
+		}
+
+		if _, err = w.Write(sec.Bytes()); err != nil {
+			return
+		}
+
 		return
 
 	case time.Time: // timestamp

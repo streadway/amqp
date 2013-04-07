@@ -268,13 +268,21 @@ func readField(r io.Reader) (v interface{}, err error) {
 		if err = binary.Read(r, binary.BigEndian, &size); err != nil {
 			return
 		}
-		array := make([]interface{}, size)
-		for i, _ := range array {
-			if array[i], err = readField(r); err != nil {
-				return
+
+		lim := &io.LimitedReader{R: r, N: int64(size)}
+		arr := make([]interface{}, 0)
+		var field interface{}
+
+		for {
+			if field, err = readField(lim); err != nil {
+				if err == io.EOF {
+					return arr, nil
+				} else {
+					return nil, err
+				}
 			}
+			arr = append(arr, field)
 		}
-		return array, nil
 
 	case 'T': // timestamp
 		return readTimestamp(r)

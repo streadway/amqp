@@ -839,6 +839,87 @@ func TestIntegrationConfirm(t *testing.T) {
 	}
 }
 
+// Sets up the topology where rejected messages will be forwarded
+// to a fanout exchange, with a single queue bound.
+//
+// Relates to https://github.com/streadway/amqp/issues/56
+//
+func TestDeclareArgsRejectToDeadLetterQueue(t *testing.T) {
+	if conn := integrationConnection(t, "declareArgs"); conn != nil {
+		defer conn.Close()
+
+		ex, q := "declareArgs", "declareArgs-deliveries"
+		dlex, dlq := ex+"-dead-letter", q+"-dead-letter"
+
+		ch, _ := conn.Channel()
+
+		if err := ch.ExchangeDeclare(ex, "fanout", false, true, false, false, nil); err != nil {
+			t.Fatalf("cannot declare %v: got: %v", ex, err)
+		}
+
+		if err := ch.ExchangeDeclare(dlex, "fanout", false, true, false, false, nil); err != nil {
+			t.Fatalf("cannot declare %v: got: %v", dlex, err)
+		}
+
+		if _, err := ch.QueueDeclare(dlq, false, true, false, false, nil); err != nil {
+			t.Fatalf("cannot declare %v: got: %v", dlq, err)
+		}
+
+		if err := ch.QueueBind(dlq, "#", dlex, false, nil); err != nil {
+			t.Fatalf("cannot bind %v to %v: got: %v", dlq, dlex, err)
+		}
+
+		if _, err := ch.QueueDeclare(q, false, true, false, false, Table{
+			"x-dead-letter-exchange": dlex,
+		}); err != nil {
+			t.Fatalf("cannot declare %v with dlq %v: got: %v", q, dlex, err)
+		}
+
+		if err := ch.QueueBind(q, "#", ex, false, nil); err != nil {
+			t.Fatalf("cannot bind %v: got: %v", ex, err)
+		}
+
+		fails, err := ch.Consume(q, "", false, false, false, false, nil)
+		if err != nil {
+			t.Fatalf("cannot consume %v: got: %v", q, err)
+		}
+
+		// Reject everything consumed
+		go func() {
+			for d := range fails {
+				d.Reject(false)
+			}
+		}()
+
+		// Publish the 'poison'
+		if err := ch.Publish(ex, q, true, false, Publishing{Body: []byte("ignored")}); err != nil {
+			t.Fatalf("publishing failed")
+		}
+
+		// spin-get until message arrives on the dead-letter queue with a
+		// synchronous parse to exercise the array field (x-death) set by the
+		// server relating to issue-56
+		for i := 0; i < 10; i++ {
+			d, got, err := ch.Get(dlq, false)
+			if !got && err == nil {
+				continue
+			} else if err != nil {
+				t.Fatalf("expected success in parsing reject, got: %v", err)
+			} else {
+				// pass if we've parsed an array
+				if v, ok := d.Headers["x-death"]; ok {
+					if _, ok := v.([]interface{}); ok {
+						return
+					}
+				}
+				t.Fatalf("array field x-death expected in the headers, got: %v (%T)", d.Headers, d.Headers["x-death"])
+			}
+		}
+
+		t.Fatalf("expectd dead-letter after 10 get attempts")
+	}
+}
+
 // https://github.com/streadway/amqp/issues/48
 func TestDeadlockConsumerIssue48(t *testing.T) {
 	if conn := integrationConnection(t, "issue48"); conn != nil {
