@@ -257,9 +257,6 @@ func (me *Connection) shutdown(err *Error) {
 			me.errors <- err
 		}
 
-		close(me.sends)
-		me.sends = nil
-
 		me.conn.Close()
 
 		for _, c := range me.closes {
@@ -370,7 +367,7 @@ func (me *Connection) reader() {
 
 // Ensures that at least one frame is being sent at the tuned interval with a
 // jitter tolerance of 1s
-func (me *Connection) heartbeater(interval time.Duration) {
+func (me *Connection) heartbeater(interval time.Duration, done chan *Error) {
 	last := time.Now()
 	tick := time.Tick(interval)
 
@@ -390,6 +387,8 @@ func (me *Connection) heartbeater(interval time.Duration) {
 			} else {
 				return
 			}
+		case <-done:
+			return
 		}
 	}
 }
@@ -548,7 +547,7 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 	// "The client should start sending heartbeats after receiving a
 	// Connection.Tune method"
 	if me.Config.Heartbeat > 0 {
-		go me.heartbeater(me.Config.Heartbeat)
+		go me.heartbeater(me.Config.Heartbeat, me.NotifyClose(make(chan *Error, 1)))
 	}
 
 	if err := me.send(&methodFrame{
