@@ -48,8 +48,7 @@ type Connection struct {
 	writer *writer
 	sends  chan time.Time // timestamps of each frame sent
 
-	channelId uint16 // channelId sequence for nextChannel
-	channels  map[uint16]*Channel
+	channels channelRegistry
 
 	noNotify bool // true when we will never notify again
 	closes   []chan *Error
@@ -146,8 +145,8 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	me := &Connection{
 		conn:     conn,
 		writer:   &writer{bufio.NewWriter(conn)},
+		channels: channelRegistry{channels: make(map[uint16]*Channel)},
 		rpc:      make(chan message),
-		channels: make(map[uint16]*Channel),
 		sends:    make(chan time.Time),
 		errors:   make(chan *Error, 1),
 	}
@@ -248,9 +247,8 @@ func (me *Connection) shutdown(err *Error) {
 			}
 		}
 
-		for _, ch := range me.channels {
+		for _, ch := range me.channels.removeAll() {
 			ch.shutdown(err)
-			delete(me.channels, ch.id)
 		}
 
 		if err != nil {
@@ -301,7 +299,7 @@ func (me *Connection) dispatch0(f frame) {
 }
 
 func (me *Connection) dispatchN(f frame) {
-	if channel := me.findChannel(f.channel()); channel != nil {
+	if channel := me.channels.get(f.channel()); channel != nil {
 		channel.recv(channel, f)
 	} else {
 		me.dispatchClosed(f)
@@ -418,29 +416,10 @@ invalid and a new Channel should be opened.
 
 */
 func (me *Connection) Channel() (*Channel, error) {
-	channel := me.nextChannel()
+	id := me.channels.next()
+	channel := newChannel(me, id)
+	me.channels.add(id, channel)
 	return channel, channel.open()
-}
-
-// nextChannel initializes a new channel and writes it to the channel map
-func (me *Connection) nextChannel() *Channel {
-	me.m.Lock()
-	defer me.m.Unlock()
-
-	me.channelId++
-	channel := newChannel(me, me.channelId)
-	me.channels[me.channelId] = channel
-
-	return channel
-}
-
-// findChannel gets the channel from the channel id.  Returns nil if the
-// channel is not found either due to it being closed or not yet initialized.
-func (me *Connection) findChannel(id uint16) *Channel {
-	me.m.Lock()
-	defer me.m.Unlock()
-
-	return me.channels[id]
 }
 
 func (me *Connection) call(req message, res ...message) error {

@@ -142,7 +142,7 @@ func (me *Channel) shutdown(e *Error) {
 
 		me.noNotify = true
 
-		delete(me.connection.channels, me.id)
+		me.connection.channels.remove(me.id)
 	})
 }
 
