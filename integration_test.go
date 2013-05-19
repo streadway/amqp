@@ -839,6 +839,25 @@ func TestIntegrationConfirm(t *testing.T) {
 	}
 }
 
+// Declares a queue with the x-message-ttl extension to exercise integer
+// serialization.
+//
+// Relates to https://github.com/streadway/amqp/issues/60
+//
+func TestDeclareArgsXMessageTTL(t *testing.T) {
+	if conn := integrationConnection(t, "declareTTL"); conn != nil {
+		defer conn.Close()
+
+		ch, _ := conn.Channel()
+		args := Table{"x-message-ttl": int32(9000000)}
+
+		// should not drop the connection
+		if _, err := ch.QueueDeclare("declareWithTTL", false, true, false, false, args); err != nil {
+			t.Fatalf("cannot declare with TTL: got: %v", err)
+		}
+	}
+}
+
 // Sets up the topology where rejected messages will be forwarded
 // to a fanout exchange, with a single queue bound.
 //
