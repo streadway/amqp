@@ -67,9 +67,13 @@ type Field struct {
 	Asserts  []Assert `xml:"assert"`
 }
 
+type Response struct {
+	Name string `xml:"name,attr"`
+}
+
 type Method struct {
 	Name        string    `xml:"name,attr"`
-	Response    string    `xml:"response>name,attr"`
+	Response    Response  `xml:"response"`
 	Synchronous bool      `xml:"synchronous,attr"`
 	Content     bool      `xml:"content,attr"`
 	Index       string    `xml:"index,attr"`
