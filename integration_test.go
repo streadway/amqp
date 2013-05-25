@@ -11,7 +11,6 @@ import (
 	"bytes"
 	devrand "crypto/rand"
 	"encoding/binary"
-	"flag"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -22,8 +21,6 @@ import (
 	"testing/quick"
 	"time"
 )
-
-var urlFlag = flag.String("amqp", "amqp://", "Integration URL to use for builds tagged with 'integration'")
 
 func TestIntegrationOpenClose(t *testing.T) {
 	if c := integrationConnection(t, "open-close"); c != nil {
@@ -1288,7 +1285,12 @@ func TestRabbitMQQueueNackMultipleRequeue(t *testing.T) {
 // Returns a conneciton to the AMQP if the AMQP_URL environment
 // variable is set and a connnection can be established.
 func integrationConnection(t *testing.T, name string) *Connection {
-	conn, err := Dial(*urlFlag)
+	url := os.Getenv("AMQP_URL")
+	if url == "" {
+		url = "amqp://"
+	}
+
+	conn, err := Dial(url)
 	if err != nil {
 		t.Errorf("Failed to connect to integration server: %s", err)
 		return nil
