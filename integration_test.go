@@ -968,7 +968,7 @@ func TestDeadlockConsumerIssue48(t *testing.T) {
 		queue := "test-issue48"
 
 		if _, err := ch.QueueDeclare(queue, false, true, false, false, nil); err != nil {
-			t.Fatalf("expected to declare a queue", err)
+			t.Fatalf("expected to declare a queue: %v", err)
 		}
 
 		if err := ch.Confirm(false); err != nil {

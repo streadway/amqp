@@ -77,7 +77,7 @@ func ExampleDialTLS() {
 
 	conn, err := amqp.DialTLS("amqps://server-name-from-certificate/", cfg)
 
-	log.Print("conn: %v, err: %v", conn, err)
+	log.Printf("conn: %v, err: %v", conn, err)
 }
 
 func ExampleChannel_Confirm_bridge() {
@@ -205,7 +205,7 @@ func ExampleChannel_Consume() {
 	// See the Channel.Publish example for the complimentary declare.
 	err = c.ExchangeDeclare("logs", "topic", true, false, false, false, nil)
 	if err != nil {
-		log.Fatal("exchange.declare: %s", err)
+		log.Fatalf("exchange.declare: %s", err)
 	}
 
 	// Establish our queue topologies that we are responsible for
@@ -223,12 +223,12 @@ func ExampleChannel_Consume() {
 	for _, b := range bindings {
 		_, err = c.QueueDeclare(b.queue, true, false, false, false, nil)
 		if err != nil {
-			log.Fatal("queue.declare: %s", err)
+			log.Fatalf("queue.declare: %v", err)
 		}
 
 		err = c.QueueBind(b.queue, b.key, "logs", false, nil)
 		if err != nil {
-			log.Fatal("queue.bind: %s", err)
+			log.Fatalf("queue.bind: %v", err)
 		}
 	}
 
@@ -236,7 +236,7 @@ func ExampleChannel_Consume() {
 	// channel, we want at least 3 messages in flight.
 	err = c.Qos(3, 0, false)
 	if err != nil {
-		log.Fatal("basic.qos: %s", err)
+		log.Fatalf("basic.qos: %v", err)
 	}
 
 	// Establish our consumers that have different responsibilities.  Our first
@@ -245,7 +245,7 @@ func ExampleChannel_Consume() {
 
 	pages, err := c.Consume("page", "pager", false, false, false, false, nil)
 	if err != nil {
-		log.Fatal("basic.consume: %s", err)
+		log.Fatalf("basic.consume: %v", err)
 	}
 
 	go func() {
@@ -261,7 +261,7 @@ func ExampleChannel_Consume() {
 
 	emails, err := c.Consume("email", "", false, false, false, false, nil)
 	if err != nil {
-		log.Fatal("basic.consume: %s", err)
+		log.Fatalf("basic.consume: %v", err)
 	}
 
 	go func() {
@@ -276,7 +276,7 @@ func ExampleChannel_Consume() {
 
 	firehose, err := c.Consume("firehose", "", true, false, false, false, nil)
 	if err != nil {
-		log.Fatal("basic.consume: %s", err)
+		log.Fatalf("basic.consume: %v", err)
 	}
 
 	// To show how to process the items in parallel, we'll use a work pool.
@@ -295,7 +295,7 @@ func ExampleChannel_Consume() {
 	// goroutine
 	err = c.Cancel("pager", false)
 	if err != nil {
-		log.Fatal("basic.cancel: %s", err)
+		log.Fatalf("basic.cancel: %v", err)
 	}
 
 	// deferred closing the Connection will also finish the consumer's ranges of
@@ -327,7 +327,7 @@ func ExampleChannel_Publish() {
 	// See the Channel.Consume example for the complimentary declare.
 	err = c.ExchangeDeclare("logs", "topic", true, false, false, false, nil)
 	if err != nil {
-		log.Fatal("exchange.declare: %s", err)
+		log.Fatalf("exchange.declare: %v", err)
 	}
 
 	// Prepare this message to be persistent.  Your publishing requirements may
@@ -345,6 +345,6 @@ func ExampleChannel_Publish() {
 	if err != nil {
 		// Since publish is asynchronous this can happen if the network connection
 		// is reset or if the server has run out of resources.
-		log.Fatal("basic.publish: %s", err)
+		log.Fatalf("basic.publish: %v", err)
 	}
 }

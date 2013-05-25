@@ -87,7 +87,7 @@ func TestTLSHandshake(t *testing.T) {
 
 	select {
 	case <-time.After(10 * time.Millisecond):
-		t.Fatalf("did not succeed to handshake the TLS connection after 10ms, got: %v")
+		t.Fatalf("did not succeed to handshake the TLS connection after 10ms")
 	case header := <-srv.Header:
 		if string(header) != "AMQP" {
 			t.Fatalf("expected to handshake a TLS connection, got err: %v", err)

@@ -52,13 +52,13 @@ func ExampleConnection_reconnect() {
 		// We would rather show how the messages are not lost between reconnects.
 		_, pub, err := setup(url, queue)
 		if err != nil {
-			fmt.Println("err publisher setup: %v", err)
+			fmt.Println("err publisher setup:", err)
 			return
 		}
 
 		// Purge the queue from the publisher side to establish initial state
 		if _, err := pub.QueuePurge(queue, false); err != nil {
-			fmt.Println("err purge: %v", err)
+			fmt.Println("err purge:", err)
 			return
 		}
 
@@ -68,7 +68,7 @@ func ExampleConnection_reconnect() {
 
 			conn, deliveries, err := consume(url, queue)
 			if err != nil {
-				fmt.Println("err consume: %v", err)
+				fmt.Println("err consume:", err)
 				return
 			}
 
@@ -77,7 +77,7 @@ func ExampleConnection_reconnect() {
 			if err := pub.Publish("", queue, false, false, amqp.Publishing{
 				Body: []byte(fmt.Sprintf("%d", i)),
 			}); err != nil {
-				fmt.Println("err publish: %v", err)
+				fmt.Println("err publish:", err)
 				return
 			}
 

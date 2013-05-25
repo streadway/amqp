@@ -247,11 +247,11 @@ func TestURIUnknownScheme(t *testing.T) {
 
 func TestURIScheme(t *testing.T) {
 	if _, err := ParseURI("amqp://example.com/"); err != nil {
-		t.Fatal("Expected to parse amqp scheme, got %v", err)
+		t.Fatalf("Expected to parse amqp scheme, got %v", err)
 	}
 
 	if _, err := ParseURI("amqps://example.com/"); err != nil {
-		t.Fatal("Expected to parse amqps scheme, got %v", err)
+		t.Fatalf("Expected to parse amqps scheme, got %v", err)
 	}
 }
 
