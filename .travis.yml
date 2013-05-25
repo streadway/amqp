@@ -8,3 +8,6 @@ env:
 
 before_script:
  - sh -c "sleep 120 && killall -QUIT amqp.test" &
+
+script: "go test -v github.com/streadway/amqp -amqp=$AMQP_URL"
+

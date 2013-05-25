@@ -3,11 +3,18 @@
 // license that can be found in the LICENSE file.
 // Source code and contact info at http://github.com/streadway/amqp
 
+// +build integration
+
 package amqp
 
 import (
 	"bytes"
+	devrand "crypto/rand"
+	"encoding/binary"
+	"flag"
 	"fmt"
+	"hash/crc32"
+	"io"
 	"math/rand"
 	"os"
 	"reflect"
@@ -15,6 +22,8 @@ import (
 	"testing/quick"
 	"time"
 )
+
+var urlFlag = flag.String("amqp", "amqp://", "Integration URL to use for builds tagged with 'integration'")
 
 func TestIntegrationOpenClose(t *testing.T) {
 	if c := integrationConnection(t, "open-close"); c != nil {
@@ -1270,4 +1279,96 @@ func TestRabbitMQQueueNackMultipleRequeue(t *testing.T) {
 			}
 		}
 	}
+}
+
+/*
+ * Support for integration tests
+ */
+
+// Returns a conneciton to the AMQP if the AMQP_URL environment
+// variable is set and a connnection can be established.
+func integrationConnection(t *testing.T, name string) *Connection {
+	conn, err := Dial(*urlFlag)
+	if err != nil {
+		t.Errorf("Failed to connect to integration server: %s", err)
+		return nil
+	}
+
+	if name != "" {
+		conn.conn = &logIO{t, name, conn.conn}
+	}
+
+	return conn
+}
+
+// Returns a connection, channel and delcares a queue when the AMQP_URL is in the environment
+func integrationQueue(t *testing.T, name string) (*Connection, *Channel) {
+	if conn := integrationConnection(t, name); conn != nil {
+		if channel, err := conn.Channel(); err == nil {
+			if _, err = channel.QueueDeclare(name, false, true, false, false, nil); err == nil {
+				return conn, channel
+			}
+		}
+	}
+	return nil, nil
+}
+
+// Delegates to integrationConnection and only returns a connection if the
+// product is RabbitMQ
+func integrationRabbitMQ(t *testing.T, name string) *Connection {
+	if conn := integrationConnection(t, "connect"); conn != nil {
+		if server, ok := conn.Properties["product"]; ok && server == "RabbitMQ" {
+			return conn
+		}
+	}
+
+	return nil
+}
+
+func assertConsumeBody(t *testing.T, messages <-chan Delivery, body []byte) *Delivery {
+	select {
+	case msg := <-messages:
+		if bytes.Compare(msg.Body, body) != 0 {
+			t.Fatalf("Message body does not match have: %v expect %v", msg.Body, body)
+			return &msg
+		}
+		return &msg
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("Timeout waiting for %s", body)
+		return nil
+	}
+	panic("unreachable")
+}
+
+// Pulls out the CRC and verifies the remaining content against the CRC
+func assertMessageCrc32(t *testing.T, msg []byte, assert string) {
+	size := binary.BigEndian.Uint32(msg[:4])
+
+	crc := crc32.NewIEEE()
+	crc.Write(msg[8:])
+
+	if binary.BigEndian.Uint32(msg[4:8]) != crc.Sum32() {
+		t.Fatalf("Message does not match CRC: %s", assert)
+	}
+
+	if int(size) != len(msg)-8 {
+		t.Fatalf("Message does not match size, should=%d, is=%d: %s", size, len(msg)-8, assert)
+	}
+}
+
+// Creates a random body size with a leading 32-bit CRC in network byte order
+// that verifies the remaining slice
+func generateCrc32Random(size int) []byte {
+	msg := make([]byte, size+8)
+	if _, err := io.ReadFull(devrand.Reader, msg); err != nil {
+		panic(err)
+	}
+
+	crc := crc32.NewIEEE()
+	crc.Write(msg[8:])
+
+	binary.BigEndian.PutUint32(msg[0:4], uint32(size))
+	binary.BigEndian.PutUint32(msg[4:8], crc.Sum32())
+
+	return msg
 }
