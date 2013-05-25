@@ -1391,3 +1391,48 @@ func (me *Channel) Recover(requeue bool) error {
 		&basicRecoverOk{},
 	)
 }
+
+/*
+Ack acknowledges a delivery by its delivery tag when having been consumed with
+Channel.Consume or Channel.Get.
+
+Ack acknowledges all message received prior to the delivery tag when multiple
+is true.
+
+See also Delivery.Ack
+*/
+func (me *Channel) Ack(tag uint64, multiple bool) error {
+	return me.send(me, &basicAck{
+		DeliveryTag: tag,
+		Multiple:    multiple,
+	})
+}
+
+/*
+Nack negatively acknowledges a delivery by its delivery tag.  Prefer this
+method to notify the server that you were not able to process this delivery and
+it must be redelivered or dropped.
+
+See also Delivery.Nack
+*/
+func (me *Channel) Nack(tag uint64, multiple bool, requeue bool) error {
+	return me.send(me, &basicNack{
+		DeliveryTag: tag,
+		Multiple:    multiple,
+		Requeue:     requeue,
+	})
+}
+
+/*
+Reject negatively acknowledges a delivery by its delivery tag.  Prefer Nack
+over Reject when communicating with a RabbitMQ server because you can Nack
+multiple messages, reducing the amount of protocol messages to exchange.
+
+See also Delivery.Reject
+*/
+func (me *Channel) Reject(tag uint64, requeue bool) error {
+	return me.send(me, &basicReject{
+		DeliveryTag: tag,
+		Requeue:     requeue,
+	})
+}
