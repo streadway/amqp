@@ -36,7 +36,7 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 	// all in one go. In a real service, you probably want to maintain a
 	// long-lived connection as state, and publish against that.
 
-	log.Printf("dialing %s", amqpURI)
+	log.Printf("dialing %q", amqpURI)
 	connection, err := amqp.Dial(amqpURI)
 	if err != nil {
 		return fmt.Errorf("Dial: %s", err)
@@ -49,7 +49,7 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 		return fmt.Errorf("Channel: %s", err)
 	}
 
-	log.Printf("got Channel, declaring %q Exchange (%s)", exchangeType, exchange)
+	log.Printf("got Channel, declaring %q Exchange (%q)", exchangeType, exchange)
 	if err := channel.ExchangeDeclare(
 		exchange,     // name
 		exchangeType, // type
@@ -75,7 +75,7 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 		defer confirmOne(ack, nack)
 	}
 
-	log.Printf("declared Exchange, publishing %dB body (%s)", len(body), body)
+	log.Printf("declared Exchange, publishing %dB body (%q)", len(body), body)
 	if err = channel.Publish(
 		exchange,   // publish to an exchange
 		routingKey, // routing to 0 or more queues
