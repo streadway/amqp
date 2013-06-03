@@ -333,6 +333,7 @@ func (me *Channel) recvHeader(f frame) error {
 		me.header = frame
 
 		if frame.Size == 0 {
+			me.message.setContent(me.header.Properties, me.body)
 			me.dispatch(me.message) // termination state
 			return me.transition((*Channel).recvMethod)
 		} else {

@@ -589,6 +589,51 @@ func TestPublishEmptyBody(t *testing.T) {
 	}
 }
 
+func TestPublishEmptyBodyWithHeadersIssue67(t *testing.T) {
+	c := integrationConnection(t, "issue67")
+	if c != nil {
+		defer c.Close()
+
+		ch, err := c.Channel()
+		if err != nil {
+			t.Errorf("Failed to create channel")
+			return
+		}
+
+		queue := "test-TestPublishEmptyBodyWithHeaders"
+
+		if _, err := ch.QueueDeclare(queue, false, true, false, false, nil); err != nil {
+			t.Fatalf("Could not declare")
+		}
+
+		messages, err := ch.Consume(queue, "", false, false, false, false, nil)
+		if err != nil {
+			t.Fatalf("Could not consume")
+		}
+
+		headers := Table{
+			"ham": "spam",
+		}
+
+		err = ch.Publish("", queue, false, false, Publishing{Headers: headers})
+		if err != nil {
+			t.Fatalf("Could not publish")
+		}
+
+		select {
+		case msg := <-messages:
+			if msg.Headers["ham"] == nil {
+				t.Fatalf("Headers aren't sent")
+			}
+			if msg.Headers["ham"] != "spam" {
+				t.Fatalf("Headers are wrong")
+			}
+		case <-time.After(200 * time.Millisecond):
+			t.Errorf("Timeout on receive")
+		}
+	}
+}
+
 func TestQuickPublishConsumeOnly(t *testing.T) {
 	c1 := integrationConnection(t, "quick-pub")
 	c2 := integrationConnection(t, "quick-sub")
