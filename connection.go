@@ -44,9 +44,10 @@ type Connection struct {
 
 	conn io.ReadWriteCloser
 
-	rpc    chan message
-	writer *writer
-	sends  chan time.Time // timestamps of each frame sent
+	rpc       chan message
+	writer    *writer
+	sends     chan time.Time     // timestamps of each frame sent
+	deadlines chan readDeadliner // heartbeater updates read deadlines
 
 	channels channelRegistry
 
@@ -57,9 +58,8 @@ type Connection struct {
 
 	Config Config // The negotiated Config after connection.open
 
-	Major int // Server's major version
-	Minor int // Server's minor version
-
+	Major      int   // Server's major version
+	Minor      int   // Server's minor version
 	Properties Table // Server properties
 }
 
@@ -143,14 +143,15 @@ to use your own custom transport.
 */
 func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	me := &Connection{
-		conn:     conn,
-		writer:   &writer{bufio.NewWriter(conn)},
-		channels: channelRegistry{channels: make(map[uint16]*Channel)},
-		rpc:      make(chan message),
-		sends:    make(chan time.Time),
-		errors:   make(chan *Error, 1),
+		conn:      conn,
+		writer:    &writer{bufio.NewWriter(conn)},
+		channels:  channelRegistry{channels: make(map[uint16]*Channel)},
+		rpc:       make(chan message),
+		sends:     make(chan time.Time),
+		errors:    make(chan *Error, 1),
+		deadlines: make(chan readDeadliner, 1),
 	}
-	go me.reader()
+	go me.reader(conn)
 	return me, me.open(config)
 }
 
@@ -338,9 +339,10 @@ func (me *Connection) dispatchClosed(f frame) {
 // Reads each frame off the IO and hand off to the connection object that
 // will demux the streams and dispatch to one of the opened channels or
 // handle on channel 0 (the connection channel).
-func (me *Connection) reader() {
-	buf := bufio.NewReader(me.conn)
+func (me *Connection) reader(r io.Reader) {
+	buf := bufio.NewReader(r)
 	frames := &reader{buf}
+	conn, haveDeadliner := r.(readDeadliner)
 
 	for {
 		frame, err := frames.ReadFrame()
@@ -352,13 +354,8 @@ func (me *Connection) reader() {
 
 		me.demux(frame)
 
-		// Reset the blocking read deadline on the underlying connection when it
-		// implements SetReadDeadline to three times the requested heartbeat interval.
-		// On error, resort to blocking reads.
-		if me.Config.Heartbeat > 0 {
-			if c, ok := me.conn.(readDeadliner); ok {
-				c.SetReadDeadline(time.Now().Add(3 * me.Config.Heartbeat))
-			}
+		if haveDeadliner {
+			me.deadlines <- conn
 		}
 	}
 }
@@ -366,25 +363,42 @@ func (me *Connection) reader() {
 // Ensures that at least one frame is being sent at the tuned interval with a
 // jitter tolerance of 1s
 func (me *Connection) heartbeater(interval time.Duration, done chan *Error) {
-	last := time.Now()
-	tick := time.Tick(interval)
+	const maxServerHeartbeatsInFlight = 3
+
+	var sendTicks <-chan time.Time
+	if interval > 0 {
+		sendTicks = time.Tick(interval)
+	}
+
+	lastSent := time.Now()
 
 	for {
 		select {
-		case at := <-tick:
-			if at.Sub(last) > interval-time.Second {
+		case at, stillSending := <-me.sends:
+			// When actively sending, depend on sent frames to reset server timer
+			if stillSending {
+				lastSent = at
+			} else {
+				return
+			}
+
+		case at := <-sendTicks:
+			// When idle, fill the space with a heartbeat frame
+			if at.Sub(lastSent) > interval-time.Second {
 				if err := me.send(&heartbeatFrame{}); err != nil {
 					// send heartbeats even after close/closeOk so we
 					// tick until the connection starts erroring
 					return
 				}
 			}
-		case at, open := <-me.sends:
-			if open {
-				last = at
-			} else {
-				return
+
+		case conn := <-me.deadlines:
+			// When reading, reset our side of the deadline, if we've negotiated one with
+			// a deadline that covers at least 2 server heartbeats
+			if interval > 0 {
+				conn.SetReadDeadline(time.Now().Add(maxServerHeartbeatsInFlight * interval))
 			}
+
 		case <-done:
 			return
 		}
@@ -525,9 +539,7 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 
 	// "The client should start sending heartbeats after receiving a
 	// Connection.Tune method"
-	if me.Config.Heartbeat > 0 {
-		go me.heartbeater(me.Config.Heartbeat, me.NotifyClose(make(chan *Error, 1)))
-	}
+	go me.heartbeater(me.Config.Heartbeat, me.NotifyClose(make(chan *Error, 1)))
 
 	if err := me.send(&methodFrame{
 		ChannelId: 0,
