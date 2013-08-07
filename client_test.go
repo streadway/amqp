@@ -65,9 +65,9 @@ func (t *server) send(channel int, m message) {
 	}
 }
 
-// Currently drops all but method frames expected on the given channel
+// drops all but method frames expected on the given channel
 func (t *server) recv(channel int, m message) message {
-	defer time.AfterFunc(10*time.Millisecond, func() { panic("recv deadlock") }).Stop()
+	defer time.AfterFunc(time.Second, func() { panic("recv deadlock") }).Stop()
 
 	var remaining int
 	var header *headerFrame
@@ -91,6 +91,10 @@ func (t *server) recv(channel int, m message) message {
 			// start content state
 			header = f
 			remaining = int(header.Size)
+			if remaining == 0 {
+				m.(messageWithContent).setContent(header.Properties, nil)
+				return m
+			}
 
 		case *bodyFrame:
 			// continue until terminated
@@ -112,6 +116,9 @@ func (t *server) recv(channel int, m message) message {
 			} else {
 				t.Fatalf("expected method type: %T, got: %T", m, f.Method)
 			}
+
+		default:
+			t.Fatalf("unexpected frame: %+v", f)
 		}
 	}
 
