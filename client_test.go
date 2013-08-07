@@ -426,3 +426,45 @@ func TestNotifyClosesAllChansAfterConnectionClose(t *testing.T) {
 		t.Errorf("expected to close nacks Channel.NotifyConfirm chan after Connection.Close")
 	}
 }
+
+// Should not panic when sending bodies split at differnet boundaries
+func TestPublishBodySliceIssue74(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+
+	const frameSize = 100
+	const publishings = frameSize * 3
+
+	done := make(chan bool)
+	base := make([]byte, publishings)
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		for i := 0; i < publishings; i++ {
+			srv.recv(1, &basicPublish{})
+		}
+
+		done <- true
+	}()
+
+	cfg := defaultConfig()
+	cfg.FrameSize = frameSize
+
+	c, err := Open(rwc, cfg)
+	if err != nil {
+		t.Fatalf("could not create connection: %s (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %s (%s)", ch, err)
+	}
+
+	for i := 0; i < publishings; i++ {
+		go ch.Publish("", "q", false, false, Publishing{Body: base[0:i]})
+	}
+
+	<-done
+}
