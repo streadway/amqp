@@ -475,7 +475,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <chassis name="server" implement="MAY"/>
       <field name="requeue" domain="bit"/>
     </method>
-    <method name="recover" index="110">
+    <method name="recover" synchronous="1" index="110">
       <chassis name="server" implement="MUST"/>
       <field name="requeue" domain="bit"/>
     </method>
