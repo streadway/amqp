@@ -132,6 +132,15 @@ type Publishing struct {
 	Body []byte
 }
 
+// Blocking notifies the server's TCP flow control of the Connection.  When a
+// server hits a memory or disk alarm it will block all connections until the
+// resources are reclaimed.  Use NotifyBlock on the Connection to receive these
+// events.
+type Blocking struct {
+	Active bool   // TCP pushback active/inactive on server
+	Reason string // Server reason for activation
+}
+
 // Decimal matches the AMQP decimal type.  Scale is the number of decimal
 // digits Scale == 2, Value == 12345, Decimal == 123.45
 type Decimal struct {
