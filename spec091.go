@@ -60,18 +60,12 @@ func isSoftExceptionCode(code int) bool {
 	return false
 }
 
-/*
-   This method starts the connection negotiation process by telling the client the
-   protocol version that the server proposes, along with a list of security mechanisms
-   which the client can use for authentication.
-*/
 type connectionStart struct {
-	VersionMajor     byte   // protocol major version
-	VersionMinor     byte   // protocol minor version
-	ServerProperties Table  // server properties
-	Mechanisms       string // available security mechanisms
-	Locales          string // available message locales
-
+	VersionMajor     byte
+	VersionMinor     byte
+	ServerProperties Table
+	Mechanisms       string
+	Locales          string
 }
 
 func (me *connectionStart) id() (uint16, uint16) {
@@ -128,15 +122,11 @@ func (me *connectionStart) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method selects a SASL security mechanism.
-*/
 type connectionStartOk struct {
-	ClientProperties Table  // client properties
-	Mechanism        string // selected security mechanism
-	Response         string // security response data
-	Locale           string // selected message locale
-
+	ClientProperties Table
+	Mechanism        string
+	Response         string
+	Locale           string
 }
 
 func (me *connectionStartOk) id() (uint16, uint16) {
@@ -189,14 +179,8 @@ func (me *connectionStartOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   The SASL protocol works by exchanging challenges and responses until both peers have
-   received sufficient information to authenticate each other. This method challenges
-   the client to provide more information.
-*/
 type connectionSecure struct {
-	Challenge string // security challenge data
-
+	Challenge string
 }
 
 func (me *connectionSecure) id() (uint16, uint16) {
@@ -225,13 +209,8 @@ func (me *connectionSecure) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method attempts to authenticate, passing a block of SASL data for the security
-   mechanism at the server side.
-*/
 type connectionSecureOk struct {
-	Response string // security response data
-
+	Response string
 }
 
 func (me *connectionSecureOk) id() (uint16, uint16) {
@@ -260,15 +239,10 @@ func (me *connectionSecureOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method proposes a set of connection configuration values to the client. The
-   client can accept and/or adjust these.
-*/
 type connectionTune struct {
-	ChannelMax uint16 // proposed maximum channels
-	FrameMax   uint32 // proposed maximum frame size
-	Heartbeat  uint16 // desired heartbeat delay
-
+	ChannelMax uint16
+	FrameMax   uint32
+	Heartbeat  uint16
 }
 
 func (me *connectionTune) id() (uint16, uint16) {
@@ -313,15 +287,10 @@ func (me *connectionTune) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method sends the client's connection tuning parameters to the server.
-   Certain fields are negotiated, others provide capability information.
-*/
 type connectionTuneOk struct {
-	ChannelMax uint16 // negotiated maximum channels
-	FrameMax   uint32 // negotiated maximum frame size
-	Heartbeat  uint16 // desired heartbeat delay
-
+	ChannelMax uint16
+	FrameMax   uint32
+	Heartbeat  uint16
 }
 
 func (me *connectionTuneOk) id() (uint16, uint16) {
@@ -366,14 +335,8 @@ func (me *connectionTuneOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method opens a connection to a virtual host, which is a collection of
-   resources, and acts to separate multiple application domains within a server.
-   The server may apply arbitrary limits per virtual host, such as the number
-   of each type of entity that may be used, per connection and/or in total.
-*/
 type connectionOpen struct {
-	VirtualHost string // virtual host name
+	VirtualHost string
 	reserved1   string
 	reserved2   bool
 }
@@ -425,9 +388,6 @@ func (me *connectionOpen) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method signals to the client that the connection is ready for use.
-*/
 type connectionOpenOk struct {
 	reserved1 string
 }
@@ -458,18 +418,11 @@ func (me *connectionOpenOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method indicates that the sender wants to close the connection. This may be
-   due to internal conditions (e.g. a forced shut-down) or due to an error handling
-   a specific method, i.e. an exception. When a close is due to an exception, the
-   sender provides the class and method id of the method which caused the exception.
-*/
 type connectionClose struct {
 	ReplyCode uint16
 	ReplyText string
-	ClassId   uint16 // failing method class
-	MethodId  uint16 // failing method ID
-
+	ClassId   uint16
+	MethodId  uint16
 }
 
 func (me *connectionClose) id() (uint16, uint16) {
@@ -520,10 +473,6 @@ func (me *connectionClose) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method confirms a Connection.Close method and tells the recipient that it is
-   safe to release resources for the connection and close the socket.
-*/
 type connectionCloseOk struct {
 }
 
@@ -545,9 +494,6 @@ func (me *connectionCloseOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method opens a channel to the server.
-*/
 type channelOpen struct {
 	reserved1 string
 }
@@ -578,9 +524,6 @@ func (me *channelOpen) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method signals to the client that the channel is ready for use.
-*/
 type channelOpenOk struct {
 	reserved1 string
 }
@@ -611,16 +554,8 @@ func (me *channelOpenOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method asks the peer to pause or restart the flow of content data sent by
-   a consumer. This is a simple flow-control mechanism that a peer can use to avoid
-   overflowing its queues or otherwise finding itself receiving more messages than
-   it can process. Note that this method is not intended for window control. It does
-   not affect contents returned by Basic.Get-Ok methods.
-*/
 type channelFlow struct {
-	Active bool // start/stop content frames
-
+	Active bool
 }
 
 func (me *channelFlow) id() (uint16, uint16) {
@@ -656,12 +591,8 @@ func (me *channelFlow) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   Confirms to the peer that a flow command was received and processed.
-*/
 type channelFlowOk struct {
-	Active bool // current flow setting
-
+	Active bool
 }
 
 func (me *channelFlowOk) id() (uint16, uint16) {
@@ -697,18 +628,11 @@ func (me *channelFlowOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method indicates that the sender wants to close the channel. This may be due to
-   internal conditions (e.g. a forced shut-down) or due to an error handling a specific
-   method, i.e. an exception. When a close is due to an exception, the sender provides
-   the class and method id of the method which caused the exception.
-*/
 type channelClose struct {
 	ReplyCode uint16
 	ReplyText string
-	ClassId   uint16 // failing method class
-	MethodId  uint16 // failing method ID
-
+	ClassId   uint16
+	MethodId  uint16
 }
 
 func (me *channelClose) id() (uint16, uint16) {
@@ -759,10 +683,6 @@ func (me *channelClose) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method confirms a Channel.Close method and tells the recipient that it is safe
-   to release resources for the channel.
-*/
 type channelCloseOk struct {
 }
 
@@ -784,21 +704,16 @@ func (me *channelCloseOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method creates an exchange if it does not already exist, and if the exchange
-   exists, verifies that it is of the correct and expected class.
-*/
 type exchangeDeclare struct {
 	reserved1  uint16
 	Exchange   string
-	Type       string // exchange type
-	Passive    bool   // do not create exchange
-	Durable    bool   // request a durable exchange
-	AutoDelete bool   // auto-delete when unused
-	Internal   bool   // create internal exchange
+	Type       string
+	Passive    bool
+	Durable    bool
+	AutoDelete bool
+	Internal   bool
 	NoWait     bool
-	Arguments  Table // arguments for declaration
-
+	Arguments  Table
 }
 
 func (me *exchangeDeclare) id() (uint16, uint16) {
@@ -884,10 +799,6 @@ func (me *exchangeDeclare) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method confirms a Declare method and confirms the name of the exchange,
-   essential for automatically-named exchanges.
-*/
 type exchangeDeclareOk struct {
 }
 
@@ -909,14 +820,10 @@ func (me *exchangeDeclareOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method deletes an exchange. When an exchange is deleted all queue bindings on
-   the exchange are cancelled.
-*/
 type exchangeDelete struct {
 	reserved1 uint16
 	Exchange  string
-	IfUnused  bool // delete only if unused
+	IfUnused  bool
 	NoWait    bool
 }
 
@@ -974,7 +881,6 @@ func (me *exchangeDelete) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method confirms the deletion of an exchange.  */
 type exchangeDeleteOk struct {
 }
 
@@ -996,15 +902,13 @@ func (me *exchangeDeleteOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method binds an exchange to an exchange.  */
 type exchangeBind struct {
 	reserved1   uint16
-	Destination string // name of the destination exchange to bind to
-	Source      string // name of the source exchange to bind to
-	RoutingKey  string // message routing key
+	Destination string
+	Source      string
+	RoutingKey  string
 	NoWait      bool
-	Arguments   Table // arguments for binding
-
+	Arguments   Table
 }
 
 func (me *exchangeBind) id() (uint16, uint16) {
@@ -1076,7 +980,6 @@ func (me *exchangeBind) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method confirms that the bind was successful.  */
 type exchangeBindOk struct {
 }
 
@@ -1098,15 +1001,13 @@ func (me *exchangeBindOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method unbinds an exchange from an exchange.  */
 type exchangeUnbind struct {
 	reserved1   uint16
 	Destination string
 	Source      string
-	RoutingKey  string // routing key of binding
+	RoutingKey  string
 	NoWait      bool
-	Arguments   Table // arguments of binding
-
+	Arguments   Table
 }
 
 func (me *exchangeUnbind) id() (uint16, uint16) {
@@ -1178,7 +1079,6 @@ func (me *exchangeUnbind) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method confirms that the unbind was successful.  */
 type exchangeUnbindOk struct {
 }
 
@@ -1200,21 +1100,15 @@ func (me *exchangeUnbindOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method creates or checks a queue. When creating a new queue the client can
-   specify various properties that control the durability of the queue and its
-   contents, and the level of sharing for the queue.
-*/
 type queueDeclare struct {
 	reserved1  uint16
 	Queue      string
-	Passive    bool // do not create queue
-	Durable    bool // request a durable queue
-	Exclusive  bool // request an exclusive queue
-	AutoDelete bool // auto-delete queue when unused
+	Passive    bool
+	Durable    bool
+	Exclusive  bool
+	AutoDelete bool
 	NoWait     bool
-	Arguments  Table // arguments for declaration
-
+	Arguments  Table
 }
 
 func (me *queueDeclare) id() (uint16, uint16) {
@@ -1294,15 +1188,10 @@ func (me *queueDeclare) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method confirms a Declare method and confirms the name of the queue, essential
-   for automatically-named queues.
-*/
 type queueDeclareOk struct {
 	Queue         string
 	MessageCount  uint32
-	ConsumerCount uint32 // number of consumers
-
+	ConsumerCount uint32
 }
 
 func (me *queueDeclareOk) id() (uint16, uint16) {
@@ -1345,20 +1234,13 @@ func (me *queueDeclareOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method binds a queue to an exchange. Until a queue is bound it will not
-   receive any messages. In a classic messaging model, store-and-forward queues
-   are bound to a direct exchange and subscription queues are bound to a topic
-   exchange.
-*/
 type queueBind struct {
 	reserved1  uint16
 	Queue      string
-	Exchange   string // name of the exchange to bind to
-	RoutingKey string // message routing key
+	Exchange   string
+	RoutingKey string
 	NoWait     bool
-	Arguments  Table // arguments for binding
-
+	Arguments  Table
 }
 
 func (me *queueBind) id() (uint16, uint16) {
@@ -1430,7 +1312,6 @@ func (me *queueBind) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method confirms that the bind was successful.  */
 type queueBindOk struct {
 }
 
@@ -1452,14 +1333,12 @@ func (me *queueBindOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method unbinds a queue from an exchange.  */
 type queueUnbind struct {
 	reserved1  uint16
 	Queue      string
 	Exchange   string
-	RoutingKey string // routing key of binding
-	Arguments  Table  // arguments of binding
-
+	RoutingKey string
+	Arguments  Table
 }
 
 func (me *queueUnbind) id() (uint16, uint16) {
@@ -1516,7 +1395,6 @@ func (me *queueUnbind) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method confirms that the unbind was successful.  */
 type queueUnbindOk struct {
 }
 
@@ -1538,10 +1416,6 @@ func (me *queueUnbindOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method removes all messages from a queue which are not awaiting
-   acknowledgment.
-*/
 type queuePurge struct {
 	reserved1 uint16
 	Queue     string
@@ -1597,7 +1471,6 @@ func (me *queuePurge) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method confirms the purge of a queue.  */
 type queuePurgeOk struct {
 	MessageCount uint32
 }
@@ -1628,16 +1501,11 @@ func (me *queuePurgeOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method deletes a queue. When a queue is deleted any pending messages are sent
-   to a dead-letter queue if this is defined in the server configuration, and all
-   consumers on the queue are cancelled.
-*/
 type queueDelete struct {
 	reserved1 uint16
 	Queue     string
-	IfUnused  bool // delete only if unused
-	IfEmpty   bool // delete only if empty
+	IfUnused  bool
+	IfEmpty   bool
 	NoWait    bool
 }
 
@@ -1700,7 +1568,6 @@ func (me *queueDelete) read(r io.Reader) (err error) {
 	return
 }
 
-/*  This method confirms the deletion of a queue.  */
 type queueDeleteOk struct {
 	MessageCount uint32
 }
@@ -1731,18 +1598,10 @@ func (me *queueDeleteOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method requests a specific quality of service. The QoS can be specified for the
-   current channel or for all channels on the connection. The particular properties and
-   semantics of a qos method always depend on the content class semantics. Though the
-   qos method could in principle apply to both peers, it is currently meaningful only
-   for the server.
-*/
 type basicQos struct {
-	PrefetchSize  uint32 // prefetch window in octets
-	PrefetchCount uint16 // prefetch window in messages
-	Global        bool   // apply to entire connection
-
+	PrefetchSize  uint32
+	PrefetchCount uint16
+	Global        bool
 }
 
 func (me *basicQos) id() (uint16, uint16) {
@@ -1794,11 +1653,6 @@ func (me *basicQos) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method tells the client that the requested QoS levels could be handled by the
-   server. The requested QoS applies to all active consumers until a new QoS is
-   defined.
-*/
 type basicQosOk struct {
 }
 
@@ -1820,21 +1674,15 @@ func (me *basicQosOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method asks the server to start a "consumer", which is a transient request for
-   messages from a specific queue. Consumers last as long as the channel they were
-   declared on, or until the client cancels them.
-*/
 type basicConsume struct {
 	reserved1   uint16
 	Queue       string
 	ConsumerTag string
 	NoLocal     bool
 	NoAck       bool
-	Exclusive   bool // request exclusive access
+	Exclusive   bool
 	NoWait      bool
-	Arguments   Table // arguments for declaration
-
+	Arguments   Table
 }
 
 func (me *basicConsume) id() (uint16, uint16) {
@@ -1915,10 +1763,6 @@ func (me *basicConsume) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   The server provides the client with a consumer tag, which is used by the client
-   for methods called on the consumer at a later stage.
-*/
 type basicConsumeOk struct {
 	ConsumerTag string
 }
@@ -1949,23 +1793,6 @@ func (me *basicConsumeOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method cancels a consumer. This does not affect already delivered
-   messages, but it does mean the server will not send any more messages for
-   that consumer. The client may receive an arbitrary number of messages in
-   between sending the cancel method and receiving the cancel-ok reply.
-
-   It may also be sent from the server to the client in the event
-   of the consumer being unexpectedly cancelled (i.e. cancelled
-   for any reason other than the server receiving the
-   corresponding basic.cancel from the client). This allows
-   clients to be notified of the loss of consumers due to events
-   such as queue deletion. Note that as it is not a MUST for
-   clients to accept this method from the client, it is advisable
-   for the broker to be able to identify those clients that are
-   capable of accepting the method, through some means of
-   capability negotiation.
-*/
 type basicCancel struct {
 	ConsumerTag string
 	NoWait      bool
@@ -2012,9 +1839,6 @@ func (me *basicCancel) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method confirms that the cancellation was completed.
-*/
 type basicCancelOk struct {
 	ConsumerTag string
 }
@@ -2045,17 +1869,12 @@ func (me *basicCancelOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method publishes a message to a specific exchange. The message will be routed
-   to queues as defined by the exchange configuration and distributed to any active
-   consumers when the transaction, if any, is committed.
-*/
 type basicPublish struct {
 	reserved1  uint16
 	Exchange   string
-	RoutingKey string // Message routing key
-	Mandatory  bool   // indicate mandatory routing
-	Immediate  bool   // request immediate delivery
+	RoutingKey string
+	Mandatory  bool
+	Immediate  bool
 	Properties properties
 	Body       []byte
 }
@@ -2128,17 +1947,11 @@ func (me *basicPublish) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method returns an undeliverable message that was published with the "immediate"
-   flag set, or an unroutable message published with the "mandatory" flag set. The
-   reply code and text provide information about the reason that the message was
-   undeliverable.
-*/
 type basicReturn struct {
 	ReplyCode  uint16
 	ReplyText  string
 	Exchange   string
-	RoutingKey string // Message routing key
+	RoutingKey string
 	Properties properties
 	Body       []byte
 }
@@ -2197,18 +2010,12 @@ func (me *basicReturn) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method delivers a message to the client, via a consumer. In the asynchronous
-   message delivery model, the client starts a consumer using the Consume method, then
-   the server responds with Deliver methods as and when messages arrive for that
-   consumer.
-*/
 type basicDeliver struct {
 	ConsumerTag string
 	DeliveryTag uint64
 	Redelivered bool
 	Exchange    string
-	RoutingKey  string // Message routing key
+	RoutingKey  string
 	Properties  properties
 	Body        []byte
 }
@@ -2284,11 +2091,6 @@ func (me *basicDeliver) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method provides a direct access to the messages in a queue using a synchronous
-   dialogue that is designed for specific types of application where synchronous
-   functionality is more important than performance.
-*/
 type basicGet struct {
 	reserved1 uint16
 	Queue     string
@@ -2344,16 +2146,11 @@ func (me *basicGet) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method delivers a message to the client following a get method. A message
-   delivered by 'get-ok' must be acknowledged unless the no-ack option was set in the
-   get method.
-*/
 type basicGetOk struct {
 	DeliveryTag  uint64
 	Redelivered  bool
 	Exchange     string
-	RoutingKey   string // Message routing key
+	RoutingKey   string
 	MessageCount uint32
 	Properties   properties
 	Body         []byte
@@ -2430,10 +2227,6 @@ func (me *basicGetOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method tells the client that the queue has no messages available for the
-   client.
-*/
 type basicGetEmpty struct {
 	reserved1 string
 }
@@ -2464,21 +2257,9 @@ func (me *basicGetEmpty) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   When sent by the client, this method acknowledges one or more
-   messages delivered via the Deliver or Get-Ok methods.
-
-   When sent by server, this method acknowledges one or more
-   messages published with the Publish method on a channel in
-   confirm mode.
-
-   The acknowledgement can be for a single message or a set of
-   messages up to and including a specific message.
-*/
 type basicAck struct {
 	DeliveryTag uint64
-	Multiple    bool // acknowledge multiple messages
-
+	Multiple    bool
 }
 
 func (me *basicAck) id() (uint16, uint16) {
@@ -2522,15 +2303,9 @@ func (me *basicAck) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method allows a client to reject a message. It can be used to interrupt and
-   cancel large incoming messages, or return untreatable messages to their original
-   queue.
-*/
 type basicReject struct {
 	DeliveryTag uint64
-	Requeue     bool // requeue the message
-
+	Requeue     bool
 }
 
 func (me *basicReject) id() (uint16, uint16) {
@@ -2574,14 +2349,8 @@ func (me *basicReject) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method asks the server to redeliver all unacknowledged messages on a
-   specified channel. Zero or more messages may be redelivered.  This method
-   is deprecated in favour of the synchronous Recover/Recover-Ok.
-*/
 type basicRecoverAsync struct {
-	Requeue bool // requeue the message
-
+	Requeue bool
 }
 
 func (me *basicRecoverAsync) id() (uint16, uint16) {
@@ -2617,14 +2386,8 @@ func (me *basicRecoverAsync) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method asks the server to redeliver all unacknowledged messages on a
-   specified channel. Zero or more messages may be redelivered.  This method
-   replaces the asynchronous Recover.
-*/
 type basicRecover struct {
-	Requeue bool // requeue the message
-
+	Requeue bool
 }
 
 func (me *basicRecover) id() (uint16, uint16) {
@@ -2660,9 +2423,6 @@ func (me *basicRecover) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method acknowledges a Basic.Recover method.
-*/
 type basicRecoverOk struct {
 }
 
@@ -2684,20 +2444,10 @@ func (me *basicRecoverOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method allows a client to reject one or more incoming messages. It can be
-   used to interrupt and cancel large incoming messages, or return untreatable
-   messages to their original queue.
-
-   This method is also used by the server to inform publishers on channels in
-   confirm mode of unhandled messages.  If a publisher receives this method, it
-   probably needs to republish the offending messages.
-*/
 type basicNack struct {
 	DeliveryTag uint64
-	Multiple    bool // reject multiple messages
-	Requeue     bool // requeue the message
-
+	Multiple    bool
+	Requeue     bool
 }
 
 func (me *basicNack) id() (uint16, uint16) {
@@ -2746,10 +2496,6 @@ func (me *basicNack) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method sets the channel to use standard transactions. The client must use this
-   method at least once on a channel before using the Commit or Rollback methods.
-*/
 type txSelect struct {
 }
 
@@ -2771,10 +2517,6 @@ func (me *txSelect) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method confirms to the client that the channel was successfully set to use
-   standard transactions.
-*/
 type txSelectOk struct {
 }
 
@@ -2796,10 +2538,6 @@ func (me *txSelectOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method commits all message publications and acknowledgments performed in
-   the current transaction.  A new transaction starts immediately after a commit.
-*/
 type txCommit struct {
 }
 
@@ -2821,10 +2559,6 @@ func (me *txCommit) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method confirms to the client that the commit succeeded. Note that if a commit
-   fails, the server raises a channel exception.
-*/
 type txCommitOk struct {
 }
 
@@ -2846,12 +2580,6 @@ func (me *txCommitOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method abandons all message publications and acknowledgments performed in
-   the current transaction. A new transaction starts immediately after a rollback.
-   Note that unacked messages will not be automatically redelivered by rollback;
-   if that is required an explicit recover call should be issued.
-*/
 type txRollback struct {
 }
 
@@ -2873,10 +2601,6 @@ func (me *txRollback) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method confirms to the client that the rollback succeeded. Note that if an
-   rollback fails, the server raises a channel exception.
-*/
 type txRollbackOk struct {
 }
 
@@ -2898,11 +2622,6 @@ func (me *txRollbackOk) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method sets the channel to use publisher acknowledgements.
-   The client can only use this method on a non-transactional
-   channel.
-*/
 type confirmSelect struct {
 	Nowait bool
 }
@@ -2940,10 +2659,6 @@ func (me *confirmSelect) read(r io.Reader) (err error) {
 	return
 }
 
-/*
-   This method confirms to the client that the channel was successfully
-   set to use publisher acknowledgements.
-*/
 type confirmSelectOk struct {
 }
 
