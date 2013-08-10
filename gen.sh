@@ -1,5 +1,2 @@
 #!/bin/sh
-
-cd spec
-go build . && ./spec < amqp0-9-1.extended.xml | gofmt > ../spec091.go
-cd ..
+go run spec/gen.go < spec/amqp0-9-1.stripped.extended.xml | gofmt > spec091.go
