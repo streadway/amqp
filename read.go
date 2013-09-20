@@ -306,13 +306,14 @@ func readArray(r io.Reader) ([]interface{}, error) {
 	for {
 		if field, err = readField(lim); err != nil {
 			if err == io.EOF {
-				return arr, nil
-			} else {
-				return nil, err
+				break
 			}
+			return nil, err
 		}
 		arr = append(arr, field)
 	}
+
+	return arr, nil
 }
 
 // Checks if this bit mask matches the flags bitset

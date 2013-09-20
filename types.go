@@ -168,7 +168,6 @@ type Table map[string]interface{}
 
 func validateField(f interface{}) error {
 	switch fv := f.(type) {
-	// Supported primative types
 	case nil, bool, byte, int16, int32, int64, float32, float64, string, []byte, Decimal, time.Time:
 		return nil
 
@@ -187,10 +186,9 @@ func validateField(f interface{}) error {
 			}
 		}
 		return nil
-
-	default:
-		return fmt.Errorf("value %t not supported", f)
 	}
+
+	return fmt.Errorf("value %t not supported", f)
 }
 
 func (t Table) Validate() error {
