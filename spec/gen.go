@@ -171,7 +171,8 @@ var (
 	func isSoftExceptionCode(code int) bool {
 		switch code {
 		{{range $c := .Constants}} {{if $c.IsSoftError}} case {{$c.Value}}:
-		{{end}}{{end}}return true
+			return true
+		{{end}}{{end}}
 		}
 		return false
 	}
