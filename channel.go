@@ -317,6 +317,9 @@ func (me *Channel) recvMethod(f frame) error {
 	case *bodyFrame:
 		// drop
 		return me.transition((*Channel).recvMethod)
+
+	default:
+		panic("unexpected frame type")
 	}
 
 	panic("unreachable")
@@ -343,6 +346,9 @@ func (me *Channel) recvHeader(f frame) error {
 	case *bodyFrame:
 		// drop and reset
 		return me.transition((*Channel).recvMethod)
+
+	default:
+		panic("unexpected frame type")
 	}
 
 	panic("unreachable")
@@ -370,6 +376,9 @@ func (me *Channel) recvContent(f frame) error {
 		}
 
 		return me.transition((*Channel).recvContent)
+
+	default:
+		panic("unexpected frame type")
 	}
 
 	panic("unreachable")
