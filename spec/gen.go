@@ -3,6 +3,8 @@
 // license that can be found in the LICENSE file.
 // Source code and contact info at http://github.com/streadway/amqp
 
+// +build ignore
+
 package main
 
 import (
