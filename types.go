@@ -161,8 +161,11 @@ type Decimal struct {
 // value of an unsupported type.
 //
 // The caller must be specific in which precision of integer it wishes to
-// encode.  In most cases an int32 will be expected by the server or other
-// clients.
+// encode.
+//
+// Use a type assertion when reading values from a table for type converstion.
+//
+// RabbitMQ expects int32 for integer values.
 //
 type Table map[string]interface{}
 
