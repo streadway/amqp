@@ -890,6 +890,75 @@ func TestIntegrationConfirm(t *testing.T) {
 	}
 }
 
+// https://github.com/streadway/amqp/issues/61
+func TestRoundTripAllFieldValueTypes61(t *testing.T) {
+	if conn := integrationConnection(t, "issue61"); conn != nil {
+		defer conn.Close()
+		timestamp := time.Unix(100000000, 0)
+
+		headers := Table{
+			"A": []interface{}{
+				[]interface{}{"nested array", int32(3)},
+				Decimal{2, 1},
+				Table{"S": "nested table in array"},
+				int32(2 << 20),
+				string("array string"),
+				timestamp,
+				nil,
+				byte(2),
+				float64(2.64),
+				float32(2.32),
+				int64(2 << 60),
+				int16(2 << 10),
+				bool(true),
+				[]byte{'b', '2'},
+			},
+			"D": Decimal{1, 1},
+			"F": Table{"S": "nested table in table"},
+			"I": int32(1 << 20),
+			"S": string("string"),
+			"T": timestamp,
+			"V": nil,
+			"b": byte(1),
+			"d": float64(1.64),
+			"f": float32(1.32),
+			"l": int64(1 << 60),
+			"s": int16(1 << 10),
+			"t": bool(true),
+			"x": []byte{'b', '1'},
+		}
+
+		queue := "test.issue61-roundtrip"
+		ch, _ := conn.Channel()
+
+		if _, err := ch.QueueDeclare(queue, false, true, false, false, nil); err != nil {
+			t.Fatalf("Could not declare")
+		}
+
+		msgs, err := ch.Consume(queue, "", false, false, false, false, nil)
+		if err != nil {
+			t.Fatalf("Could not consume")
+		}
+
+		err = ch.Publish("", queue, false, false, Publishing{Body: []byte("ignored"), Headers: headers})
+		if err != nil {
+			t.Fatalf("Could not publish: %v", err)
+		}
+
+		msg, ok := <-msgs
+
+		if !ok {
+			t.Fatalf("Channel closed prematurely likely due to publish exception")
+		}
+
+		for k, v := range headers {
+			if !reflect.DeepEqual(v, msg.Headers[k]) {
+				t.Errorf("Round trip header not the same for key %q: expected: %#v, got %#v", k, v, msg.Headers[k])
+			}
+		}
+	}
+}
+
 // Declares a queue with the x-message-ttl extension to exercise integer
 // serialization.
 //

@@ -21,6 +21,7 @@ var (
 	ErrFrame           = &Error{Code: FrameError, Reason: "frame could not be parsed"}
 	ErrCommandInvalid  = &Error{Code: CommandInvalid, Reason: "unexpected command received"}
 	ErrUnexpectedFrame = &Error{Code: UnexpectedFrame, Reason: "unexpected frame received"}
+	ErrFieldType       = &Error{Code: SyntaxError, Reason: "unsupported table field type"}
 )
 
 // Error captures the code and reason a channel or connection has been closed
@@ -139,9 +140,63 @@ type Decimal struct {
 	Value int32
 }
 
-// Table matches the amqp table type for string to field mappings.  Most Go types are supported in
-// table serialization.
+// Table stores user supplied fields of the following types:
+//
+//   bool
+//   byte
+//   float32
+//   float64
+//   int16
+//   int32
+//   int64
+//   nil
+//   string
+//   time.Time
+//   amqp.Decimal
+//   amqp.Table
+//   []byte
+//   []interface{} - containing above types
+//
+// Functions taking a table will immediately fail when the table contains a
+// value of an unsupported type.
+//
+// The caller must be specific in which precision of integer it wishes to
+// encode.
+//
+// Use a type assertion when reading values from a table for type converstion.
+//
+// RabbitMQ expects int32 for integer values.
+//
 type Table map[string]interface{}
+
+func validateField(f interface{}) error {
+	switch fv := f.(type) {
+	case nil, bool, byte, int16, int32, int64, float32, float64, string, []byte, Decimal, time.Time:
+		return nil
+
+	case []interface{}:
+		for _, v := range fv {
+			if err := validateField(v); err != nil {
+				return fmt.Errorf("in array %s", err)
+			}
+		}
+		return nil
+
+	case Table:
+		for k, v := range fv {
+			if err := validateField(v); err != nil {
+				return fmt.Errorf("table field %q %s", k, err)
+			}
+		}
+		return nil
+	}
+
+	return fmt.Errorf("value %t not supported", f)
+}
+
+func (t Table) Validate() error {
+	return validateField(t)
+}
 
 // Heap interface for maintaining delivery tags
 type tagSet []uint64

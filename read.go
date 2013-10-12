@@ -148,27 +148,20 @@ func readTimestamp(r io.Reader) (v time.Time, err error) {
 }
 
 /*
-	field-table         = long-uint *field-value-pair
-	field-value-pair    = field-name field-value
-	field-name          = short-string
-	field-value         = 't' boolean
-											/ 'b' short-short-int
-											/ 'B' short-short-uint
-											/ 'U' short-int
-											/ 'u' short-uint
-											/ 'I' long-int
-											/ 'i' long-uint
-											/ 'L' long-long-int
-											/ 'l' long-long-uint
-											/ 'f' float
-											/ 'd' double
-											/ 'D' decimal-value
-											/ 's' short-string
-											/ 'S' long-string
-											/ 'A' field-array
-											/ 'T' timestamp
-											/ 'F' field-table
-											/ 'V'                       ; no field
+'A': []interface{}
+'D': Decimal
+'F': Table
+'I': int32
+'S': string
+'T': time.Time
+'V': nil
+'b': byte
+'d': float64
+'f': float32
+'l': int64
+'s': int16
+'t': bool
+'x': []byte
 */
 func readField(r io.Reader) (v interface{}, err error) {
 	var typ byte
@@ -177,120 +170,83 @@ func readField(r io.Reader) (v interface{}, err error) {
 	}
 
 	switch typ {
-	case 't': // boolean
+	case 't':
 		var value uint8
 		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return
 		}
 		return (value != 0), nil
 
-	case 'b': // short-short-int
-		var value int8
-		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
+	case 'b':
+		var value [1]byte
+		if _, err = io.ReadFull(r, value[0:1]); err != nil {
 			return
 		}
-		return value, nil
+		return value[0], nil
 
-	case 'B': // short-short-uint
-		var value uint8
-		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
-			return
-		}
-		return value, nil
-
-	case 'U': // short-int
+	case 's':
 		var value int16
 		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return
 		}
 		return value, nil
 
-	case 'u': // short-uint
-		var value uint16
-		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
-			return
-		}
-		return value, nil
-
-	case 'I': // long-int
+	case 'I':
 		var value int32
 		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return
 		}
 		return value, nil
 
-	case 'i': // long-uint
-		var value uint32
-		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
-			return
-		}
-		return value, nil
-
-	case 'L': // long-long-int
+	case 'l':
 		var value int64
 		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return
 		}
 		return value, nil
 
-	case 'l': // long-long-uint
-		var value uint64
-		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
-			return
-		}
-		return value, nil
-
-	case 'f': // float
+	case 'f':
 		var value float32
 		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return
 		}
 		return value, nil
 
-	case 'd': // double
+	case 'd':
 		var value float64
 		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return
 		}
 		return value, nil
 
-	case 'D': // decimal-value
+	case 'D':
 		return readDecimal(r)
 
-	case 's': // short-string
-		return readShortstr(r)
-
-	case 'S': // long-string
+	case 'S':
 		return readLongstr(r)
 
-	case 'A': // field-array
-		var size uint32
-		if err = binary.Read(r, binary.BigEndian, &size); err != nil {
-			return
-		}
+	case 'A':
+		return readArray(r)
 
-		lim := &io.LimitedReader{R: r, N: int64(size)}
-		arr := make([]interface{}, 0)
-		var field interface{}
-
-		for {
-			if field, err = readField(lim); err != nil {
-				if err == io.EOF {
-					return arr, nil
-				} else {
-					return nil, err
-				}
-			}
-			arr = append(arr, field)
-		}
-
-	case 'T': // timestamp
+	case 'T':
 		return readTimestamp(r)
 
-	case 'F': // field-table
+	case 'F':
 		return readTable(r)
 
-	case 'V': // no field
+	case 'x':
+		var len int32
+		if err = binary.Read(r, binary.BigEndian, &len); err != nil {
+			return nil, err
+		}
+
+		value := make([]byte, len)
+		if _, err = io.ReadFull(r, value); err != nil {
+			return nil, err
+		}
+		return value, err
+
+	case 'V':
 		return nil, nil
 	}
 
@@ -333,6 +289,31 @@ func readTable(r io.Reader) (table Table, err error) {
 	}
 
 	return
+}
+
+func readArray(r io.Reader) ([]interface{}, error) {
+	var size uint32
+	var err error
+
+	if err = binary.Read(r, binary.BigEndian, &size); err != nil {
+		return nil, err
+	}
+
+	lim := &io.LimitedReader{R: r, N: int64(size)}
+	arr := make([]interface{}, 0)
+	var field interface{}
+
+	for {
+		if field, err = readField(lim); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		arr = append(arr, field)
+	}
+
+	return arr, nil
 }
 
 // Checks if this bit mask matches the flags bitset
