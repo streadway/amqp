@@ -53,6 +53,7 @@ type Connection struct {
 
 	noNotify bool // true when we will never notify again
 	closes   []chan *Error
+	blocks   []chan Blocking
 
 	errors chan *Error
 
@@ -179,6 +180,30 @@ func (me *Connection) NotifyClose(c chan *Error) chan *Error {
 }
 
 /*
+NotifyBlock registers a listener for RabbitMQ specific TCP flow control method
+extensions connection.blocked and connection.unblocked.  Flow control is active
+with a reason when Blocking.Blocked is true.  When a Connection is blocked, all
+methods will block across all connections until server resources become free
+again.
+
+This optional extension is supported by the server when the
+"connection.blocked" server capability key is true.
+
+*/
+func (me *Connection) NotifyBlocked(c chan Blocking) chan Blocking {
+	me.m.Lock()
+	defer me.m.Unlock()
+
+	if me.noNotify {
+		close(c)
+	} else {
+		me.blocks = append(me.blocks, c)
+	}
+
+	return c
+}
+
+/*
 Close requests and waits for the response to close the AMQP connection.
 
 It's advisable to use this message when publishing to ensure all kernel buffers
@@ -262,6 +287,10 @@ func (me *Connection) shutdown(err *Error) {
 			close(c)
 		}
 
+		for _, c := range me.blocks {
+			close(c)
+		}
+
 		me.noNotify = true
 	})
 }
@@ -288,6 +317,14 @@ func (me *Connection) dispatch0(f frame) {
 			})
 
 			me.shutdown(newError(m.ReplyCode, m.ReplyText))
+		case *connectionBlocked:
+			for _, c := range me.blocks {
+				c <- Blocking{Active: true, Reason: m.Reason}
+			}
+		case *connectionUnblocked:
+			for _, c := range me.blocks {
+				c <- Blocking{Active: false}
+			}
 		default:
 			me.rpc <- m
 		}
@@ -512,6 +549,13 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 	ok := &connectionStartOk{
 		Mechanism: auth.Mechanism(),
 		Response:  auth.Response(),
+		ClientProperties: Table{ // Open an issue if you wish these refined/parameterizable
+			"product": "https://github.com/streadway/amqp",
+			"version": "β",
+			"capabilities": Table{
+				"connection.blocked": true,
+			},
+		},
 	}
 	tune := &connectionTune{}
 
