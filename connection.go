@@ -446,18 +446,9 @@ func (me *Connection) heartbeater(interval time.Duration, done chan *Error) {
 // Table for server identified capabilities like "basic.ack" or
 // "confirm.select".
 func (me *Connection) isCapable(featureName string) bool {
-	if me.Properties != nil {
-		if v, ok := me.Properties["capabilities"]; ok {
-			if capabilities, ok := v.(Table); ok {
-				if feature, ok := capabilities[featureName]; ok {
-					if has, ok := feature.(bool); ok && has {
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
+	capabilities, _ := me.Properties["capabilities"].(Table)
+	hasFeature, _ := capabilities[featureName].(bool)
+	return hasFeature
 }
 
 /*
