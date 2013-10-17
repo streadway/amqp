@@ -501,6 +501,57 @@ func (me *connectionCloseOk) read(r io.Reader) (err error) {
 	return
 }
 
+type connectionBlocked struct {
+	Reason string
+}
+
+func (me *connectionBlocked) id() (uint16, uint16) {
+	return 10, 60
+}
+
+func (me *connectionBlocked) wait() bool {
+	return false
+}
+
+func (me *connectionBlocked) write(w io.Writer) (err error) {
+
+	if err = writeShortstr(w, me.Reason); err != nil {
+		return
+	}
+
+	return
+}
+
+func (me *connectionBlocked) read(r io.Reader) (err error) {
+
+	if me.Reason, err = readShortstr(r); err != nil {
+		return
+	}
+
+	return
+}
+
+type connectionUnblocked struct {
+}
+
+func (me *connectionUnblocked) id() (uint16, uint16) {
+	return 10, 61
+}
+
+func (me *connectionUnblocked) wait() bool {
+	return false
+}
+
+func (me *connectionUnblocked) write(w io.Writer) (err error) {
+
+	return
+}
+
+func (me *connectionUnblocked) read(r io.Reader) (err error) {
+
+	return
+}
+
 type channelOpen struct {
 	reserved1 string
 }
@@ -2780,6 +2831,22 @@ func (me *reader) parseMethodFrame(channel uint16, size uint32) (f frame, err er
 		case 51: // connection close-ok
 			//fmt.Println("NextMethod: class:10 method:51")
 			method := &connectionCloseOk{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
+
+		case 60: // connection blocked
+			//fmt.Println("NextMethod: class:10 method:60")
+			method := &connectionBlocked{}
+			if err = method.read(me.r); err != nil {
+				return
+			}
+			mf.Method = method
+
+		case 61: // connection unblocked
+			//fmt.Println("NextMethod: class:10 method:61")
+			method := &connectionUnblocked{}
 			if err = method.read(me.r); err != nil {
 				return
 			}

@@ -190,6 +190,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <chassis name="client" implement="MUST"/>
       <chassis name="server" implement="MUST"/>
     </method>
+    <method name="blocked" index="60">
+      <chassis name="server" implement="MAY"/>
+      <field name="reason" type="shortstr"/>
+    </method>
+    <method name="unblocked" index="61">
+      <chassis name="server" implement="MAY"/>
+    </method>
   </class>
   <class name="channel" handler="channel" index="20">
     <chassis name="server" implement="MUST"/>
