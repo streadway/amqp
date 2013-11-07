@@ -15,10 +15,10 @@ import (
 
 type server struct {
 	*testing.T
-	r reader        // framer <- client
-	w writer        // framer -> client
-	S io.ReadWriter // Server IO
-	C io.ReadWriter // Client IO
+	r reader             // framer <- client
+	w writer             // framer -> client
+	S io.ReadWriteCloser // Server IO
+	C io.ReadWriteCloser // Client IO
 }
 
 func defaultConfig() Config {
@@ -478,8 +478,7 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 		srv.channelOpen(1)
 		srv.recv(1, &basicPublish{})
 		// Mimic a broken io pipe so that Publish catches the error and goes into shutdown
-		c := srv.C.(*logIO)
-		c.Close()
+		srv.C.Close()
 	}()
 
 	c, err := Open(rwc, defaultConfig())
@@ -492,7 +491,7 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 		t.Fatalf("couldn't open channel: %s (%s)", ch, err)
 	}
 
-	defer time.AfterFunc(1*time.Second, func() { panic("Publish deadlock") }).Stop()
+	defer time.AfterFunc(100*time.Millisecond, func() { panic("Publish deadlock") }).Stop()
 	for {
 		if err := ch.Publish("exchange", "q", false, false, Publishing{Body: []byte("test")}); err != nil {
 			t.Log("successfully caught disconnect error", err)
