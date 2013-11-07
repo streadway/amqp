@@ -55,7 +55,7 @@ func (t *server) expectBytes(b []byte) {
 }
 
 func (t *server) send(channel int, m message) {
-	defer time.AfterFunc(10*time.Millisecond, func() { panic("send deadlock") }).Stop()
+	defer time.AfterFunc(time.Second, func() { panic("send deadlock") }).Stop()
 
 	if err := t.w.WriteFrame(&methodFrame{
 		ChannelId: uint16(channel),
@@ -491,7 +491,7 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 		t.Fatalf("couldn't open channel: %s (%s)", ch, err)
 	}
 
-	defer time.AfterFunc(100*time.Millisecond, func() { panic("Publish deadlock") }).Stop()
+	defer time.AfterFunc(500*time.Millisecond, func() { panic("Publish deadlock") }).Stop()
 	for {
 		if err := ch.Publish("exchange", "q", false, false, Publishing{Body: []byte("test")}); err != nil {
 			t.Log("successfully caught disconnect error", err)
