@@ -36,6 +36,9 @@ please file an issue.
 See [the godoc page](http://godoc.org/github.com/streadway/amqp)
 for up-to-the-minute documentation and usage.
 
+RabbitMQ tutorials [port to Go](https://github.com/rabbitmq/rabbitmq-tutorials/tree/master/go)
+is also available.
+
 # Contributing
 
 Pull requests are very much welcomed.  Create your pull request on a non-master
