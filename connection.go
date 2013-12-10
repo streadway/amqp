@@ -83,6 +83,19 @@ func Dial(url string) (*Connection, error) {
 //
 // DialTLS uses the provided tls.Config when encountering an amqps:// scheme.
 func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
+	return dialTLS(url, amqps, nil)
+}
+
+// DialTLSWithConfig accepts a string in the AMQP URI format and returns a new Connection
+// over TCP using PlainAuth.  Sets the initial read deadline to 30 seconds.
+//
+// DialTLSWithConfig uses the provided tls.Config when encountering an amqps:// scheme.
+// DialTLSWithConfig uses the provided config to setup server heartbeat
+func DialTLSWithConfig(url string, amqps *tls.Config, config *Config) (*Connection, error) {
+	return dialTLS(url, amqps, config)
+}
+
+func dialTLS(url string, amqps *tls.Config, config *Config) (*Connection, error) {
 	var err error
 	var conn net.Conn
 
@@ -128,11 +141,15 @@ func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 		conn = client
 	}
 
-	return Open(conn, Config{
-		SASL:      []Authentication{uri.PlainAuth()},
-		Vhost:     uri.Vhost,
-		Heartbeat: 10 * time.Second,
-	})
+	if config == nil {
+		config = &Config{
+			SASL:      []Authentication{uri.PlainAuth()},
+			Vhost:     uri.Vhost,
+			Heartbeat: 10 * time.Second,
+		}
+	}
+
+	return Open(conn, *config)
 }
 
 /*
