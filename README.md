@@ -38,7 +38,7 @@ Things not intended to be supported.
       We will accpet patches for other protocol support but have no plans for
       implementation ourselves.
   * Anything other than PLAIN and EXTERNAL authentication mechanisms.
-      Keeping the mechanisms interface modular makes it possible to extend
+    * Keeping the mechanisms interface modular makes it possible to extend
       outside of this package.  If other mechanisms prove to be popular, then
       we would accept patches to include them in this pacakge.
 
