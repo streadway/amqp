@@ -26,10 +26,10 @@ Things not intended to be supported.
     * Reconnection would require understanding the error paths when the
       topology cannot be declared on reconnect.  This would require a new set
       of types and code paths that are best suited at the call-site of this
-      package.  AMQP has a dynamic topology that needs all peers to agree, if
+      package.  AMQP has a dynamic topology that needs all peers to agree. If
       this doesn't happen, the behavior is undefined.  Instead of producing a
       possible interface with undefined behavior, this package is designed to
-      be simple for the caller to implement the necessary conneciton-time
+      be simple for the caller to implement the necessary connection-time
       topology declaration so that reconnection is trivial and encapsulated in
       the caller's application code.
   * AMQP Protocol negotiation for forward or backward compatibility.
