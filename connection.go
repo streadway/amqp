@@ -25,9 +25,12 @@ const defaultConnectionTimeout = 30 * time.Second
 // will be stored in the returned connection's Config field.
 type Config struct {
 	// The SASL mechanisms to try in the client request, and the successful
-	// mechanism used on the Connection object
+	// mechanism used on the Connection object.  Dial sets this to the PlainAuth
+	// from the URL.
 	SASL []Authentication
 
+	// Vhost specifies the namespace of permissions, exchanges, queues and
+	// bindings on the server.  Dial sets this to the path parsed from the URL.
 	Vhost string
 
 	Channels  int           // 0 max channels means unlimited
