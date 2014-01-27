@@ -803,9 +803,9 @@ In the case that multiple bindings may cause the message to be routed to the
 same queue, the server will only route the publishing once.  This is possible
 with topic exchanges.
 
-  QueueBind("pagers", "amq.topic", "alert", false, nil)
-  QueueBind("emails", "amq.topic", "info", false, nil)
-  QueueBind("emails", "amq.topic", "#", false, nil) // match everything
+  QueueBind("pagers", "alert", "amq.topic", false, nil)
+  QueueBind("emails", "info", "amq.topic", false, nil)
+  QueueBind("emails", "#", "amq.topic", false, nil) // match everything
 
   Delivery       Exchange        Key       Queue
   -----------------------------------------------
