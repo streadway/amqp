@@ -786,8 +786,8 @@ QueueBind binds an exchange to a queue so that publishings to the exchange will
 be routed to the queue when the publishing routing key matches the binding
 routing key.
 
-  QueueBind("pagers", "log", "alert", false, nil)
-  QueueBind("emails", "log", "info", false, nil)
+  QueueBind("pagers", "alert", "log", false, nil)
+  QueueBind("emails", "info", "log", false, nil)
 
   Delivery       Exchange  Key       Queue
   -----------------------------------------------
