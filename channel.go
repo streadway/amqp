@@ -1216,12 +1216,12 @@ for every publishing you publish, only exiting when all publishings are
 accounted for.
 
 */
-func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) error {
+func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) (uint64, error) {
 	me.m.Lock()
 	defer me.m.Unlock()
 
 	if err := msg.Headers.Validate(); err != nil {
-		return err
+		return 0, err
 	}
 
 	if err := me.send(me, &basicPublish{
@@ -1246,7 +1246,7 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 			AppId:           msg.AppId,
 		},
 	}); err != nil {
-		return err
+		return 0, err
 	}
 
 	me.publishCounter += 1
@@ -1255,7 +1255,7 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 		heap.Push(&me.confirms, me.publishCounter)
 	}
 
-	return nil
+	return me.publishCounter, nil
 }
 
 /*
