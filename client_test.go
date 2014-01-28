@@ -256,7 +256,7 @@ func TestOpenFailedVhost(t *testing.T) {
 	}
 }
 
-func TestConfirmMultiple(t *testing.T) {
+func TestConfirmMultipleOrdersDeliveryTags(t *testing.T) {
 	rwc, srv := newSession(t)
 	defer rwc.Close()
 

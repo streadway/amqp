@@ -501,7 +501,8 @@ resends on basic.nack.
 
 There will be either at most one Ack or Nack delivered for every Publishing.
 
-The order of acknowledgments is not bound to the order of publishings.
+Acknowledgments will be received in the order of delivery from the
+NotifyConfirm channels even if the server acknowledges them out of order.
 
 The capacity of the ack and nack channels must be at least as large as the
 number of outstanding publishings.  Not having enough buffered chans will
