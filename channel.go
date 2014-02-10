@@ -1217,9 +1217,6 @@ accounted for.
 
 */
 func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) error {
-	me.m.Lock()
-	defer me.m.Unlock()
-
 	if err := msg.Headers.Validate(); err != nil {
 		return err
 	}
@@ -1248,6 +1245,9 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 	}); err != nil {
 		return err
 	}
+
+	me.m.Lock()
+	defer me.m.Unlock()
 
 	me.publishCounter += 1
 

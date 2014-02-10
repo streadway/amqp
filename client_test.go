@@ -15,10 +15,10 @@ import (
 
 type server struct {
 	*testing.T
-	r reader        // framer <- client
-	w writer        // framer -> client
-	S io.ReadWriter // Server IO
-	C io.ReadWriter // Client IO
+	r reader             // framer <- client
+	w writer             // framer -> client
+	S io.ReadWriteCloser // Server IO
+	C io.ReadWriteCloser // Client IO
 }
 
 func defaultConfig() Config {
@@ -55,7 +55,7 @@ func (t *server) expectBytes(b []byte) {
 }
 
 func (t *server) send(channel int, m message) {
-	defer time.AfterFunc(10*time.Millisecond, func() { panic("send deadlock") }).Stop()
+	defer time.AfterFunc(time.Second, func() { panic("send deadlock") }).Stop()
 
 	if err := t.w.WriteFrame(&methodFrame{
 		ChannelId: uint16(channel),
@@ -467,4 +467,35 @@ func TestPublishBodySliceIssue74(t *testing.T) {
 	}
 
 	<-done
+}
+
+func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+		srv.recv(1, &basicPublish{})
+		// Mimic a broken io pipe so that Publish catches the error and goes into shutdown
+		srv.S.Close()
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("couldn't create connection: %s (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("couldn't open channel: %s (%s)", ch, err)
+	}
+
+	defer time.AfterFunc(500*time.Millisecond, func() { panic("Publish deadlock") }).Stop()
+	for {
+		if err := ch.Publish("exchange", "q", false, false, Publishing{Body: []byte("test")}); err != nil {
+			t.Log("successfully caught disconnect error", err)
+			return
+		}
+	}
 }
