@@ -17,19 +17,34 @@ import (
 	"time"
 )
 
-// Config is used in Open to specify the desired tuning parameters used during
-// a connection open handshake.  The negotiated tuning will be stored in the
-// returned connection's Config field.
+const defaultHeartbeat = 10 * time.Second
+const defaultConnectionTimeout = 30 * time.Second
+
+// Config is used in DialConfig and Open to specify the desired tuning
+// parameters used during a connection open handshake.  The negotiated tuning
+// will be stored in the returned connection's Config field.
 type Config struct {
 	// The SASL mechanisms to try in the client request, and the successful
-	// mechanism used on the Connection object
+	// mechanism used on the Connection object.  Dial sets this to the PlainAuth
+	// from the URL.
 	SASL []Authentication
 
+	// Vhost specifies the namespace of permissions, exchanges, queues and
+	// bindings on the server.  Dial sets this to the path parsed from the URL.
 	Vhost string
 
 	Channels  int           // 0 max channels means unlimited
 	FrameSize int           // 0 max bytes means unlimited
 	Heartbeat time.Duration // less than 1s interval means no heartbeats
+
+	// TLSClientConfig specifies the client configuration of the TLS connection
+	// when establishing a tls transport.
+	TLSClientConfig *tls.Config
+
+	// ConnectionTimeout specifies the duration to wait for Dialed TCP session to
+	// be established.  ConnectionTimeout is also used as the initial read timout
+	// for the AMQP connection handshake.
+	ConnectionTimeout time.Duration
 }
 
 // Connection manages the serialization and deserialization of frames from IO
@@ -75,7 +90,10 @@ type readDeadliner interface {
 // Dial uses the zero value of tls.Config when it encounters an amqps://
 // scheme.  It is equivalent to calling DialTLS(amqp, nil).
 func Dial(url string) (*Connection, error) {
-	return DialTLS(url, nil)
+	return DialConfig(url, Config{
+		Heartbeat:         defaultHeartbeat,
+		ConnectionTimeout: defaultConnectionTimeout,
+	})
 }
 
 // DialTLS accepts a string in the AMQP URI format and returns a new Connection
@@ -84,6 +102,18 @@ func Dial(url string) (*Connection, error) {
 //
 // DialTLS uses the provided tls.Config when encountering an amqps:// scheme.
 func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
+	return DialConfig(url, Config{
+		Heartbeat:         defaultHeartbeat,
+		ConnectionTimeout: defaultConnectionTimeout,
+		TLSClientConfig:   amqps,
+	})
+}
+
+// DialConfig accepts a string in the AMQP URI format and a configuration for
+// the transport and connection setup, returning a new Connection.  Defaults to
+// a server heartbeat interval of 10 seconds and sets the initial read deadline
+// to 30 seconds.
+func DialConfig(url string, config Config) (*Connection, error) {
 	var err error
 	var conn net.Conn
 
@@ -92,35 +122,41 @@ func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 		return nil, err
 	}
 
+	if config.SASL == nil {
+		config.SASL = []Authentication{uri.PlainAuth()}
+	}
+
+	if config.Vhost == "" {
+		config.Vhost = uri.Vhost
+	}
+
+	if uri.Scheme == "amqps" && config.TLSClientConfig == nil {
+		config.TLSClientConfig = new(tls.Config)
+	}
+
 	addr := net.JoinHostPort(uri.Host, strconv.FormatInt(int64(uri.Port), 10))
 
-	conn, err = net.DialTimeout("tcp", addr, 30*time.Second)
+	conn, err = net.DialTimeout("tcp", addr, config.ConnectionTimeout)
 	if err != nil {
 		return nil, err
 	}
 
 	// Heartbeating hasn't started yet, don't stall forever on a dead server.
-	if err := conn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(config.ConnectionTimeout)); err != nil {
 		return nil, err
 	}
 
-	// amqps schemes get a client TLS encapulation.  With the dial and heartbeat
-	// timeouts so that TLS tunnels don't establish a tunnel to a dead server.
-	if uri.Scheme == "amqps" {
-		if amqps == nil {
-			amqps = new(tls.Config)
-		}
-
+	if config.TLSClientConfig != nil {
 		// Use the URI's host for hostname validation unless otherwise set. Make a
 		// copy so not to modify the caller's reference when the caller reuses a
 		// tls.Config for a different URL.
-		if amqps.ServerName == "" {
-			c := *amqps
+		if config.TLSClientConfig.ServerName == "" {
+			c := *config.TLSClientConfig
 			c.ServerName = uri.Host
-			amqps = &c
+			config.TLSClientConfig = &c
 		}
 
-		client := tls.Client(conn, amqps)
+		client := tls.Client(conn, config.TLSClientConfig)
 		if err := client.Handshake(); err != nil {
 			conn.Close()
 			return nil, err
@@ -129,11 +165,7 @@ func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 		conn = client
 	}
 
-	return Open(conn, Config{
-		SASL:      []Authentication{uri.PlainAuth()},
-		Vhost:     uri.Vhost,
-		Heartbeat: 10 * time.Second,
-	})
+	return Open(conn, config)
 }
 
 /*

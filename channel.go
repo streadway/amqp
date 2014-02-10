@@ -501,7 +501,8 @@ resends on basic.nack.
 
 There will be either at most one Ack or Nack delivered for every Publishing.
 
-The order of acknowledgments is not bound to the order of publishings.
+Acknowledgments will be received in the order of delivery from the
+NotifyConfirm channels even if the server acknowledges them out of order.
 
 The capacity of the ack and nack channels must be at least as large as the
 number of outstanding publishings.  Not having enough buffered chans will
@@ -786,8 +787,8 @@ QueueBind binds an exchange to a queue so that publishings to the exchange will
 be routed to the queue when the publishing routing key matches the binding
 routing key.
 
-  QueueBind("pagers", "log", "alert", false, nil)
-  QueueBind("emails", "log", "info", false, nil)
+  QueueBind("pagers", "alert", "log", false, nil)
+  QueueBind("emails", "info", "log", false, nil)
 
   Delivery       Exchange  Key       Queue
   -----------------------------------------------
@@ -803,9 +804,9 @@ In the case that multiple bindings may cause the message to be routed to the
 same queue, the server will only route the publishing once.  This is possible
 with topic exchanges.
 
-  QueueBind("pagers", "amq.topic", "alert", false, nil)
-  QueueBind("emails", "amq.topic", "info", false, nil)
-  QueueBind("emails", "amq.topic", "#", false, nil) // match everything
+  QueueBind("pagers", "alert", "amq.topic", false, nil)
+  QueueBind("emails", "info", "amq.topic", false, nil)
+  QueueBind("emails", "#", "amq.topic", false, nil) // match everything
 
   Delivery       Exchange        Key       Queue
   -----------------------------------------------
