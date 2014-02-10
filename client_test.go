@@ -478,7 +478,7 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 		srv.channelOpen(1)
 		srv.recv(1, &basicPublish{})
 		// Mimic a broken io pipe so that Publish catches the error and goes into shutdown
-		srv.C.Close()
+		srv.S.Close()
 	}()
 
 	c, err := Open(rwc, defaultConfig())
