@@ -277,7 +277,7 @@ func (me *Connection) send(f frame) error {
 
 	if err != nil {
 		// shutdown could be re-entrant from signaling notify chans
-		me.shutdown(&Error{
+		go me.shutdown(&Error{
 			Code:   FrameError,
 			Reason: err.Error(),
 		})

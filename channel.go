@@ -1221,6 +1221,9 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 		return err
 	}
 
+	me.m.Lock()
+	defer me.m.Unlock()
+
 	if err := me.send(me, &basicPublish{
 		Exchange:   exchange,
 		RoutingKey: key,
@@ -1245,9 +1248,6 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 	}); err != nil {
 		return err
 	}
-
-	me.m.Lock()
-	defer me.m.Unlock()
 
 	me.publishCounter += 1
 
