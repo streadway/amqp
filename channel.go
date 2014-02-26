@@ -740,11 +740,11 @@ func (me *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noW
 			Messages:  int(res.MessageCount),
 			Consumers: int(res.ConsumerCount),
 		}, nil
-	} else {
-		return Queue{
-			Name: name,
-		}, nil
 	}
+
+	return Queue{
+		Name: name,
+	}, nil
 
 	panic("unreachable")
 }
@@ -784,11 +784,11 @@ func (me *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusi
 			Messages:  int(res.MessageCount),
 			Consumers: int(res.ConsumerCount),
 		}, nil
-	} else {
-		return Queue{
-			Name: name,
-		}, nil
 	}
+
+	return Queue{
+		Name: name,
+	}, nil
 
 	panic("unreachable")
 }
