@@ -248,6 +248,7 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 
 		deleteQueueFirstOptions := []bool{true, false}
 		for _, deleteQueueFirst := range deleteQueueFirstOptions {
+
 			if err := channel.ExchangeDeclare(
 				exchangeName, // name
 				"direct",     // type
