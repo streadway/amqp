@@ -42,6 +42,81 @@ func TestIntegrationOpenCloseChannel(t *testing.T) {
 	}
 }
 
+// https://github.com/streadway/amqp/issues/94
+func TestIntegrationExchangePassive(t *testing.T) {
+	c := integrationConnection(t, "exch")
+	if c != nil {
+		defer c.Close()
+
+		/*
+			this channel will close when we purposely trigger an error
+			with ExchangeDeclarePassive
+		*/
+		channel1, err := c.Channel()
+		if err != nil {
+			t.Fatalf("create channel1: %s", err)
+		}
+		t.Logf("create channel1 OK")
+
+		exchange := "test-integration-passive-exchange"
+
+		if err := channel1.ExchangeDeclarePassive(
+			exchange, // name
+			"direct", // type
+			false,    // duration (note: is durable)
+			true,     // auto-delete
+			false,    // internal
+			false,    // nowait
+			nil,      // args
+		); err == nil {
+			t.Fatal("exchange declare passive should have non-nil error")
+		}
+		t.Logf("declare exchange passive OK")
+
+		channel2, err := c.Channel()
+		if err != nil {
+			t.Fatalf("create channel2: %s", err)
+		}
+		t.Logf("create channel2 OK")
+
+		if err := channel2.ExchangeDeclare(
+			exchange, // name
+			"direct", // type
+			false,    // duration
+			true,     // auto-delete
+			false,    // internal
+			false,    // nowait
+			nil,      // args
+		); err != nil {
+			t.Fatalf("declare exchange: %s", err)
+		}
+		t.Logf("declare exchange OK")
+
+		if err := channel2.ExchangeDeclarePassive(
+			exchange, // name
+			"direct", // type
+			false,    // duration (note: is durable)
+			true,     // auto-delete
+			false,    // internal
+			false,    // nowait
+			nil,      // args
+		); err != nil {
+			t.Fatalf("exchange declare passive %s", err)
+		}
+		t.Logf("declare exchange passive OK")
+
+		if err := channel2.ExchangeDelete(exchange, false, false); err != nil {
+			t.Fatalf("delete exchange: %s", err)
+		}
+		t.Logf("delete exchange OK")
+
+		if err := channel2.Close(); err != nil {
+			t.Fatalf("close channel: %s", err)
+		}
+		t.Logf("close channel OK")
+	}
+}
+
 func TestIntegrationExchange(t *testing.T) {
 	c := integrationConnection(t, "exch")
 	if c != nil {
@@ -77,6 +152,83 @@ func TestIntegrationExchange(t *testing.T) {
 			t.Fatalf("close channel: %s", err)
 		}
 		t.Logf("close channel OK")
+	}
+}
+
+// https://github.com/streadway/amqp/issues/94
+func TestIntegrationPassiveQueue(t *testing.T) {
+	c := integrationConnection(t, "queue")
+	if c != nil {
+		defer c.Close()
+
+		channel1, err := c.Channel()
+		if err != nil {
+			t.Fatalf("create channel1: %s", err)
+		}
+		t.Logf("create channel1 OK")
+
+		exchangeName := "test-passive-queue-exchange"
+		queueName := "test-passive-queue"
+
+		if err := channel1.ExchangeDeclare(
+			exchangeName, // name
+			"direct",     // type
+			true,         // duration (note: is durable)
+			false,        // auto-delete
+			false,        // internal
+			false,        // nowait
+			nil,          // args
+		); err != nil {
+			t.Fatalf("declare exchange: %s", err)
+		}
+		t.Logf("declare exchange OK")
+
+		if _, err := channel1.QueueDeclarePassive(
+			queueName, // name
+			true,      // duration (note: durable)
+			false,     // auto-delete
+			false,     // exclusive
+			false,     // noWait
+			nil,       // arguments
+		); err == nil {
+			t.Fatal("queue declare passive should have non-nil error")
+		}
+		t.Logf("declare passive queue OK")
+
+		channel2, err := c.Channel()
+		if err != nil {
+			t.Fatalf("create channel2: %s", err)
+		}
+		t.Logf("create channel2 OK")
+
+		if _, err := channel2.QueueDeclare(
+			queueName, // name
+			true,      // duration (note: durable)
+			false,     // auto-delete
+			false,     // exclusive
+			false,     // noWait
+			nil,       // arguments
+		); err != nil {
+			t.Fatalf("queue declare: %s", err)
+		}
+		t.Logf("declare queue OK")
+
+		if _, err := channel2.QueueDeclarePassive(
+			queueName, // name
+			true,      // duration (note: durable)
+			false,     // auto-delete
+			false,     // exclusive
+			false,     // noWait
+			nil,       // arguments
+		); err != nil {
+			t.Fatalf("queue declare passive: %s", err)
+		}
+		t.Logf("declare passive queue OK")
+
+		if err := channel2.Close(); err != nil {
+			t.Fatalf("close channel2: %s", err)
+		}
+		t.Logf("close channel2 OK")
 	}
 }
 

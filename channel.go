@@ -740,11 +740,55 @@ func (me *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noW
 			Messages:  int(res.MessageCount),
 			Consumers: int(res.ConsumerCount),
 		}, nil
-	} else {
+	}
+
+	return Queue{
+		Name: name,
+	}, nil
+
+	panic("unreachable")
+}
+
+/*
+
+QueueDeclarePassive is functionally and parametrically equivalent to
+QueueDeclare, except that it sets the "passive" attribute to true. A passive
+queue is assumed by RabbitMQ to already exist, and attempting to connect to a
+non-existent queue will cause RabbitMQ to throw an exception. This function
+can be used to test for the existence of a queue.
+
+*/
+func (me *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
+	if err := args.Validate(); err != nil {
+		return Queue{}, err
+	}
+
+	req := &queueDeclare{
+		Queue:      name,
+		Passive:    true,
+		Durable:    durable,
+		AutoDelete: autoDelete,
+		Exclusive:  exclusive,
+		NoWait:     noWait,
+		Arguments:  args,
+	}
+	res := &queueDeclareOk{}
+
+	if err := me.call(req, res); err != nil {
+		return Queue{}, err
+	}
+
+	if req.wait() {
 		return Queue{
-			Name: name,
+			Name:      res.Queue,
+			Messages:  int(res.MessageCount),
+			Consumers: int(res.ConsumerCount),
 		}, nil
 	}
+
+	return Queue{
+		Name: name,
+	}, nil
 
 	panic("unreachable")
 }
@@ -1072,6 +1116,35 @@ func (me *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, inter
 			Exchange:   name,
 			Type:       kind,
 			Passive:    false,
+			Durable:    durable,
+			AutoDelete: autoDelete,
+			Internal:   internal,
+			NoWait:     noWait,
+			Arguments:  args,
+		},
+		&exchangeDeclareOk{},
+	)
+}
+
+/*
+
+ExchangeDeclarePassive is functionally and parametrically equivalent to
+ExchangeDeclare, except that it sets the "passive" attribute to true. A passive
+exchange is assumed by RabbitMQ to already exist, and attempting to connect to a
+non-existent exchange will cause RabbitMQ to throw an exception. This function
+can be used to detect the existence of an exchange.
+
+*/
+func (me *Channel) ExchangeDeclarePassive(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
+	if err := args.Validate(); err != nil {
+		return err
+	}
+
+	return me.call(
+		&exchangeDeclare{
+			Exchange:   name,
+			Type:       kind,
+			Passive:    true,
 			Durable:    durable,
 			AutoDelete: autoDelete,
 			Internal:   internal,
