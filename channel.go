@@ -1055,7 +1055,7 @@ func (me *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 }
 
 /*
-ExchangeDelcare declares an exchange on the server. If the exchange does not
+ExchangeDeclare declares an exchange on the server. If the exchange does not
 already exist, the server will create it.  If the exchange exists, the server
 verifies that it is of the provided type, durability and auto-delete flags.
 
