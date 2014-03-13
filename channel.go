@@ -50,6 +50,8 @@ type Channel struct {
 	// publishings or undeliverable messages on immediate publishings.
 	returns []chan Return
 
+	// Listeners for when the server notifies the client that
+	// a subscription has been cancelled.
 	cancels []chan string
 
 	// Listeners for Acks/Nacks when the channel is in Confirm mode
@@ -503,6 +505,13 @@ func (me *Channel) NotifyReturn(c chan Return) chan Return {
 	return c
 }
 
+/*
+NotifyCancel registers a listener for basic.cancel methods.  These can be sent
+from the server when a queue is deleted or when consuming from a mirrored queue.
+
+The subscription tag is returned to the listener.
+
+*/
 func (me *Channel) NotifyCancel(c chan string) chan string {
 	me.m.Lock()
 	defer me.m.Unlock()
