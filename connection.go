@@ -576,7 +576,8 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 			"product": "https://github.com/streadway/amqp",
 			"version": "β",
 			"capabilities": Table{
-				"connection.blocked": true,
+				"connection.blocked":     true,
+				"consumer_cancel_notify": true,
 			},
 		},
 	}

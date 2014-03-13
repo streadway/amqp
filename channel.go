@@ -50,6 +50,8 @@ type Channel struct {
 	// publishings or undeliverable messages on immediate publishings.
 	returns []chan Return
 
+	cancels []chan string
+
 	// Listeners for Acks/Nacks when the channel is in Confirm mode
 	// the value is the sequentially increasing delivery tag
 	// starting at 1 immediately after the Confirm
@@ -119,6 +121,10 @@ func (me *Channel) shutdown(e *Error) {
 		}
 
 		for _, c := range me.returns {
+			close(c)
+		}
+
+		for _, c := range me.cancels {
 			close(c)
 		}
 
@@ -262,6 +268,12 @@ func (me *Channel) dispatch(msg message) {
 			c <- m.Active
 		}
 		me.send(me, &channelFlowOk{Active: m.Active})
+
+	case *basicCancel:
+		for _, c := range me.cancels {
+			c <- m.ConsumerTag
+		}
+		me.send(me, &basicCancelOk{ConsumerTag: m.ConsumerTag})
 
 	case *basicReturn:
 		ret := newReturn(*m)
@@ -486,6 +498,19 @@ func (me *Channel) NotifyReturn(c chan Return) chan Return {
 		close(c)
 	} else {
 		me.returns = append(me.returns, c)
+	}
+
+	return c
+}
+
+func (me *Channel) NotifyCancel(c chan string) chan string {
+	me.m.Lock()
+	defer me.m.Unlock()
+
+	if me.noNotify {
+		close(c)
+	} else {
+		me.cancels = append(me.cancels, c)
 	}
 
 	return c
