@@ -1017,6 +1017,35 @@ func TestIntegrationReturn(t *testing.T) {
 	}
 }
 
+func TestIntegrationCancel(t *testing.T) {
+	queue := "cancel"
+	consumerTag := "test.cancel"
+
+	if c, ch := integrationQueue(t, queue); c != nil {
+		defer c.Close()
+
+		cancels := ch.NotifyCancel(make(chan string, 1))
+
+		go func() {
+			if _, err := ch.Consume(queue, consumerTag, false, false, false, false, nil); err != nil {
+				t.Fatalf("cannot consume from %q to test NotifyCancel: %v", queue, err)
+			}
+			if _, err := ch.QueueDelete(queue, false, false, false); err != nil {
+				t.Fatalf("cannot delete integration queue: %v", err)
+			}
+		}()
+
+		select {
+		case tag := <-cancels:
+			if want, got := consumerTag, tag; want != got {
+				t.Fatalf("expected to be notified of deleted queue with consumer tag, got: %q", got)
+			}
+		case <-time.After(200 * time.Millisecond):
+			t.Fatalf("expected to be notified of deleted queue with 200ms")
+		}
+	}
+}
+
 func TestIntegrationConfirm(t *testing.T) {
 	if c, ch := integrationQueue(t, "confirm"); c != nil {
 		defer c.Close()
