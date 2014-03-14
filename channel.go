@@ -51,7 +51,7 @@ type Channel struct {
 	returns []chan Return
 
 	// Listeners for when the server notifies the client that
-	// a subscription has been cancelled.
+	// a consumer has been cancelled.
 	cancels []chan string
 
 	// Listeners for Acks/Nacks when the channel is in Confirm mode
@@ -507,7 +507,8 @@ func (me *Channel) NotifyReturn(c chan Return) chan Return {
 
 /*
 NotifyCancel registers a listener for basic.cancel methods.  These can be sent
-from the server when a queue is deleted or when consuming from a mirrored queue.
+from the server when a queue is deleted or when consuming from a mirrored queue
+where the master has just failed (and was moved to another node)
 
 The subscription tag is returned to the listener.
 
