@@ -19,6 +19,8 @@ import (
 
 const defaultHeartbeat = 10 * time.Second
 const defaultConnectionTimeout = 30 * time.Second
+const defaultProduct = "https://github.com/streadway/amqp"
+const defaultVersion = "β"
 
 // Config is used in DialConfig and Open to specify the desired tuning
 // parameters used during a connection open handshake.  The negotiated tuning
@@ -45,6 +47,16 @@ type Config struct {
 	// be established.  ConnectionTimeout is also used as the initial read timout
 	// for the AMQP connection handshake.
 	ConnectionTimeout time.Duration
+
+	// The product name that the client advertises to the server.
+	// This is an optional setting - if the application does not set this,
+	// the underlying library will use a generic product name.
+	ClientProduct string
+
+	// The product version that the client advertises to the server.
+	// This is an optional setting - if the application does not set this,
+	// the underlying library will use a generic product version.
+	ClientVersion string
 }
 
 // Connection manages the serialization and deserialization of frames from IO
@@ -128,6 +140,22 @@ func DialConfig(url string, config Config) (*Connection, error) {
 
 	if config.Vhost == "" {
 		config.Vhost = uri.Vhost
+	}
+
+	if config.ClientProduct == "" {
+		config.ClientProduct = defaultProduct
+	}
+
+	if config.ClientVersion == "" {
+		config.ClientVersion = defaultVersion
+	}
+
+	if config.ConnectionTimeout == 0 {
+		config.ConnectionTimeout = defaultConnectionTimeout
+	}
+
+	if config.Heartbeat == 0 {
+		config.Heartbeat = defaultHeartbeat
 	}
 
 	if uri.Scheme == "amqps" && config.TLSClientConfig == nil {
@@ -573,8 +601,8 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 		Mechanism: auth.Mechanism(),
 		Response:  auth.Response(),
 		ClientProperties: Table{ // Open an issue if you wish these refined/parameterizable
-			"product": "https://github.com/streadway/amqp",
-			"version": "β",
+			"product": config.ClientProduct,
+			"version": config.ClientVersion,
 			"capabilities": Table{
 				"connection.blocked":     true,
 				"consumer_cancel_notify": true,
