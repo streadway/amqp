@@ -15,6 +15,7 @@ import (
 	"hash/crc32"
 	"io"
 	"math/rand"
+	"net"
 	"os"
 	"reflect"
 	"testing"
@@ -39,6 +40,40 @@ func TestIntegrationOpenCloseChannel(t *testing.T) {
 		if _, err := c.Channel(); err != nil {
 			t.Errorf("Channel could not be opened: %s", err)
 		}
+	}
+}
+
+func TestIntegrationOpenConfig(t *testing.T) {
+	config := Config{}
+
+	c, err := DialConfig(integrationURLFromEnv(), config)
+	if err != nil {
+		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
+	}
+
+	if _, err := c.Channel(); err != nil {
+		t.Fatalf("expected to open channel: %s", err)
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("connection close: %s", err)
+	}
+}
+
+func TestIntegrationOpenConfigWithNetDial(t *testing.T) {
+	config := Config{Dial: net.Dial}
+
+	c, err := DialConfig(integrationURLFromEnv(), config)
+	if err != nil {
+		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
+	}
+
+	if _, err := c.Channel(); err != nil {
+		t.Fatalf("expected to open channel: %s", err)
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("connection close: %s", err)
 	}
 }
 
@@ -1577,25 +1612,30 @@ func TestRabbitMQQueueNackMultipleRequeue(t *testing.T) {
  * Support for integration tests
  */
 
-// Returns a conneciton to the AMQP if the AMQP_URL environment
-// variable is set and a connnection can be established.
-func integrationConnection(t *testing.T, name string) *Connection {
+func integrationURLFromEnv() string {
 	url := os.Getenv("AMQP_URL")
 	if url == "" {
 		url = "amqp://"
 	}
+	return url
+}
 
-	conn, err := Dial(url)
-	if err != nil {
-		t.Errorf("Failed to connect to integration server: %s", err)
-		return nil
-	}
-
+func loggedConnection(t *testing.T, conn *Connection, name string) *Connection {
 	if name != "" {
 		conn.conn = &logIO{t, name, conn.conn}
 	}
-
 	return conn
+}
+
+// Returns a conneciton to the AMQP if the AMQP_URL environment
+// variable is set and a connnection can be established.
+func integrationConnection(t *testing.T, name string) *Connection {
+	conn, err := Dial(integrationURLFromEnv())
+	if err != nil {
+		t.Errorf("dial integration server: %s", err)
+		return nil
+	}
+	return loggedConnection(t, conn, name)
 }
 
 // Returns a connection, channel and delcares a queue when the AMQP_URL is in the environment
