@@ -25,8 +25,8 @@ const defaultConnectionTimeout = 30 * time.Second
 // will be stored in the returned connection's Config field.
 type Config struct {
 	// The SASL mechanisms to try in the client request, and the successful
-	// mechanism used on the Connection object.  Dial sets this to the PlainAuth
-	// from the URL.
+	// mechanism used on the Connection object.
+	// If SASL is nil, PlainAuth from the URL is used.
 	SASL []Authentication
 
 	// Vhost specifies the namespace of permissions, exchanges, queues and
@@ -35,16 +35,19 @@ type Config struct {
 
 	Channels  int           // 0 max channels means unlimited
 	FrameSize int           // 0 max bytes means unlimited
-	Heartbeat time.Duration // less than 1s interval means no heartbeats
+	Heartbeat time.Duration // less than 1s uses the server's interval
 
 	// TLSClientConfig specifies the client configuration of the TLS connection
 	// when establishing a tls transport.
+	// If the URL uses an amqps scheme, then an empty tls.Config with the
+	// ServerName from the URL is used.
 	TLSClientConfig *tls.Config
 
-	// ConnectionTimeout specifies the duration to wait for Dialed TCP session to
-	// be established.  ConnectionTimeout is also used as the initial read timout
-	// for the AMQP connection handshake.
-	ConnectionTimeout time.Duration
+	// Dial returns a net.Conn prepared for a TLS handshake with TSLClientConfig,
+	// then an AMQP connection handshake.
+	// If Dial is nil, net.DialTimeout with a 30s connection and 30s read
+	// deadline is used.
+	Dial func(network, addr string) (net.Conn, error)
 }
 
 // Connection manages the serialization and deserialization of frames from IO
@@ -83,6 +86,21 @@ type readDeadliner interface {
 	SetReadDeadline(time.Time) error
 }
 
+// defaultDial establishes a connection when config.Dial is not provided
+func defaultDial(network, addr string) (net.Conn, error) {
+	conn, err := net.DialTimeout(network, addr, defaultConnectionTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	// Heartbeating hasn't started yet, don't stall forever on a dead server.
+	if err := conn.SetReadDeadline(time.Now().Add(defaultConnectionTimeout)); err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
 // Dial accepts a string in the AMQP URI format and returns a new Connection
 // over TCP using PlainAuth.  Defaults to a server heartbeat interval of 10
 // seconds and sets the initial read deadline to 30 seconds.
@@ -91,8 +109,7 @@ type readDeadliner interface {
 // scheme.  It is equivalent to calling DialTLS(amqp, nil).
 func Dial(url string) (*Connection, error) {
 	return DialConfig(url, Config{
-		Heartbeat:         defaultHeartbeat,
-		ConnectionTimeout: defaultConnectionTimeout,
+		Heartbeat: defaultHeartbeat,
 	})
 }
 
@@ -103,9 +120,8 @@ func Dial(url string) (*Connection, error) {
 // DialTLS uses the provided tls.Config when encountering an amqps:// scheme.
 func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 	return DialConfig(url, Config{
-		Heartbeat:         defaultHeartbeat,
-		ConnectionTimeout: defaultConnectionTimeout,
-		TLSClientConfig:   amqps,
+		Heartbeat:       defaultHeartbeat,
+		TLSClientConfig: amqps,
 	})
 }
 
@@ -136,13 +152,13 @@ func DialConfig(url string, config Config) (*Connection, error) {
 
 	addr := net.JoinHostPort(uri.Host, strconv.FormatInt(int64(uri.Port), 10))
 
-	conn, err = net.DialTimeout("tcp", addr, config.ConnectionTimeout)
-	if err != nil {
-		return nil, err
+	dialer := config.Dial
+	if dialer == nil {
+		dialer = defaultDial
 	}
 
-	// Heartbeating hasn't started yet, don't stall forever on a dead server.
-	if err := conn.SetReadDeadline(time.Now().Add(config.ConnectionTimeout)); err != nil {
+	conn, err = dialer("tcp", addr)
+	if err != nil {
 		return nil, err
 	}
 
