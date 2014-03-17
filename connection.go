@@ -45,11 +45,6 @@ type Config struct {
 	// ServerName from the URL is used.
 	TLSClientConfig *tls.Config
 
-	// ConnectionTimeout specifies the duration to wait for Dialed TCP session to
-	// be established.  ConnectionTimeout is also used as the initial read timout
-	// for the AMQP connection handshake.
-	ConnectionTimeout time.Duration
-
 	// Properties is table of properties that the client advertises to the server.
 	// This is an optional setting - if the application does not set this,
 	// the underlying library will use a generic set of client properties.
@@ -156,14 +151,6 @@ func DialConfig(url string, config Config) (*Connection, error) {
 
 	if config.Vhost == "" {
 		config.Vhost = uri.Vhost
-	}
-
-	if config.ConnectionTimeout == 0 {
-		config.ConnectionTimeout = defaultConnectionTimeout
-	}
-
-	if config.Heartbeat == 0 {
-		config.Heartbeat = defaultHeartbeat
 	}
 
 	if uri.Scheme == "amqps" && config.TLSClientConfig == nil {
@@ -605,7 +592,6 @@ func (me *Connection) openStart(config Config) error {
 }
 
 func (me *Connection) openTune(config Config, auth Authentication) error {
-
 	if len(config.Properties) == 0 {
 		config.Properties = Table{
 			"product": defaultProduct,
