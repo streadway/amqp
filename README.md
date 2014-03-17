@@ -67,13 +67,7 @@ To run the integration tests, make sure you have RabbitMQ running on any host,
 export the environment variable `AMQP_URL=amqp://host/` and run `go test -tags
 integration`.  TravisCI will also run the integration tests.
 
-# Credits
-
- * [Sean Treadway](https://github.com/streadway)
- * [Peter Bourgon](https://github.com/peterbourgon)
- * [Michael Klishin](https://github.com/michaelklishin)
- * [Richard Musiol](https://github.com/neelance)
- * [Dan Markham](https://github.com/dmarkham)
+Thanks to the [community of contributors](https://github.com/streadway/amqp/graphs/contributors).
 
 # License
 
