@@ -188,6 +188,10 @@ func TestDefaultClientProperties(t *testing.T) {
 			serverErr = fmt.Errorf("expected product %s got: %s", defaultProduct, s.ClientProperties["product"])
 		}
 
+		if s.ClientProperties["version"] != defaultVersion {
+			serverErr = fmt.Errorf("expected version %s got: %s", defaultVersion, s.ClientProperties["version"])
+		}
+
 		srv.connectionTune()
 		srv.recv(0, &connectionOpen{})
 		srv.send(0, &connectionOpenOk{})
@@ -196,6 +200,48 @@ func TestDefaultClientProperties(t *testing.T) {
 	}()
 
 	if c, err := Open(rwc, defaultConfig()); err != nil {
+		t.Fatalf("could not create connection: %s (%s)", c, err)
+	}
+
+	if serverErr != nil {
+		t.Fatalf("%s", serverErr)
+	}
+}
+
+func TestCustomClientProperties(t *testing.T) {
+	var serverErr error
+	rwc, srv := newSession(t)
+
+	product := "foo"
+	version := "1.0"
+
+	go func() {
+		srv.expectAMQP()
+		srv.sendStartOnly()
+
+		s := connectionStartOk{}
+		srv.recv(0, &s)
+
+		if s.ClientProperties["product"] != product {
+			serverErr = fmt.Errorf("expected product %s got: %s", product, s.ClientProperties["product"])
+		}
+
+		if s.ClientProperties["version"] != version {
+			serverErr = fmt.Errorf("expected version %s got: %s", version, s.ClientProperties["version"])
+		}
+
+		srv.connectionTune()
+		srv.recv(0, &connectionOpen{})
+		srv.send(0, &connectionOpenOk{})
+
+		rwc.Close()
+	}()
+
+	config := defaultConfig()
+	config.Product = product
+	config.Version = version
+
+	if c, err := Open(rwc, config); err != nil {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
 
