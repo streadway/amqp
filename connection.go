@@ -48,15 +48,10 @@ type Config struct {
 	// for the AMQP connection handshake.
 	ConnectionTimeout time.Duration
 
-	// Product is an application name that the client advertises to the server.
+	// Properties is table of properties that the client advertises to the server.
 	// This is an optional setting - if the application does not set this,
-	// the underlying library will use a generic product name.
-	Product string
-
-	// Version is the application version that the client advertises to the server.
-	// This is an optional setting - if the application does not set this,
-	// the underlying library will use a generic product version.
-	Version string
+	// the underlying library will use a generic set of client properties.
+	Properties Table
 }
 
 // Connection manages the serialization and deserialization of frames from IO
@@ -590,25 +585,22 @@ func (me *Connection) openStart(config Config) error {
 
 func (me *Connection) openTune(config Config, auth Authentication) error {
 
-	if config.Product == "" {
-		config.Product = defaultProduct
+	if len(config.Properties) == 0 {
+		config.Properties = Table{
+			"product": defaultProduct,
+			"version": defaultVersion,
+		}
 	}
 
-	if config.Version == "" {
-		config.Version = defaultVersion
+	config.Properties["capabilities"] = Table{
+		"connection.blocked":     true,
+		"consumer_cancel_notify": true,
 	}
 
 	ok := &connectionStartOk{
-		Mechanism: auth.Mechanism(),
-		Response:  auth.Response(),
-		ClientProperties: Table{ // Open an issue if you wish these refined/parameterizable
-			"product": config.Product,
-			"version": config.Version,
-			"capabilities": Table{
-				"connection.blocked":     true,
-				"consumer_cancel_notify": true,
-			},
-		},
+		Mechanism:        auth.Mechanism(),
+		Response:         auth.Response(),
+		ClientProperties: config.Properties,
 	}
 	tune := &connectionTune{}
 

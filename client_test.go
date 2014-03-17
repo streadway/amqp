@@ -198,8 +198,10 @@ func TestCustomClientProperties(t *testing.T) {
 	rwc, srv := newSession(t)
 
 	config := defaultConfig()
-	config.Product = "foo"
-	config.Version = "1.0"
+	config.Properties = Table{
+		"product": "foo",
+		"version": "1.0",
+	}
 
 	go func() {
 		srv.connectionOpen()
@@ -210,11 +212,11 @@ func TestCustomClientProperties(t *testing.T) {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
 
-	if want, got := config.Product, srv.start.ClientProperties["product"]; want != got {
+	if want, got := config.Properties["product"], srv.start.ClientProperties["product"]; want != got {
 		t.Errorf("expected product %s got: %s", want, got)
 	}
 
-	if want, got := config.Version, srv.start.ClientProperties["version"]; want != got {
+	if want, got := config.Properties["version"], srv.start.ClientProperties["version"]; want != got {
 		t.Errorf("expected version %s got: %s", want, got)
 	}
 }
