@@ -7,7 +7,6 @@ package amqp
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"reflect"
 	"testing"
@@ -20,6 +19,10 @@ type server struct {
 	w writer             // framer -> client
 	S io.ReadWriteCloser // Server IO
 	C io.ReadWriteCloser // Client IO
+
+	// captured client frames
+	start connectionStartOk
+	tune  connectionTuneOk
 }
 
 func defaultConfig() Config {
@@ -130,18 +133,15 @@ func (t *server) expectAMQP() {
 	t.expectBytes([]byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1})
 }
 
-func (t *server) sendStartOnly() {
+func (t *server) connectionStart() {
 	t.send(0, &connectionStart{
 		VersionMajor: 0,
 		VersionMinor: 9,
 		Mechanisms:   "PLAIN",
 		Locales:      "en-us",
 	})
-}
 
-func (t *server) connectionStart() {
-	t.sendStartOnly()
-	t.recv(0, &connectionStartOk{})
+	t.recv(0, &t.start)
 }
 
 func (t *server) connectionTune() {
@@ -151,7 +151,7 @@ func (t *server) connectionTune() {
 		Heartbeat:  10,
 	})
 
-	t.recv(0, &connectionTuneOk{})
+	t.recv(0, &t.tune)
 }
 
 func (t *server) connectionOpen() {
@@ -174,28 +174,10 @@ func (t *server) channelOpen(id int) {
 }
 
 func TestDefaultClientProperties(t *testing.T) {
-	var serverErr error
 	rwc, srv := newSession(t)
 
 	go func() {
-		srv.expectAMQP()
-		srv.sendStartOnly()
-
-		s := connectionStartOk{}
-		srv.recv(0, &s)
-
-		if s.ClientProperties["product"] != defaultProduct {
-			serverErr = fmt.Errorf("expected product %s got: %s", defaultProduct, s.ClientProperties["product"])
-		}
-
-		if s.ClientProperties["version"] != defaultVersion {
-			serverErr = fmt.Errorf("expected version %s got: %s", defaultVersion, s.ClientProperties["version"])
-		}
-
-		srv.connectionTune()
-		srv.recv(0, &connectionOpen{})
-		srv.send(0, &connectionOpenOk{})
-
+		srv.connectionOpen()
 		rwc.Close()
 	}()
 
@@ -203,50 +185,37 @@ func TestDefaultClientProperties(t *testing.T) {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
 
-	if serverErr != nil {
-		t.Fatalf("%s", serverErr)
+	if want, got := defaultProduct, srv.start.ClientProperties["product"]; want != got {
+		t.Errorf("expected product %s got: %s", want, got)
+	}
+
+	if want, got := defaultVersion, srv.start.ClientProperties["version"]; want != got {
+		t.Errorf("expected version %s got: %s", want, got)
 	}
 }
 
 func TestCustomClientProperties(t *testing.T) {
-	var serverErr error
 	rwc, srv := newSession(t)
 
-	product := "foo"
-	version := "1.0"
+	config := defaultConfig()
+	config.Product = "foo"
+	config.Version = "1.0"
 
 	go func() {
-		srv.expectAMQP()
-		srv.sendStartOnly()
-
-		s := connectionStartOk{}
-		srv.recv(0, &s)
-
-		if s.ClientProperties["product"] != product {
-			serverErr = fmt.Errorf("expected product %s got: %s", product, s.ClientProperties["product"])
-		}
-
-		if s.ClientProperties["version"] != version {
-			serverErr = fmt.Errorf("expected version %s got: %s", version, s.ClientProperties["version"])
-		}
-
-		srv.connectionTune()
-		srv.recv(0, &connectionOpen{})
-		srv.send(0, &connectionOpenOk{})
-
+		srv.connectionOpen()
 		rwc.Close()
 	}()
-
-	config := defaultConfig()
-	config.Product = product
-	config.Version = version
 
 	if c, err := Open(rwc, config); err != nil {
 		t.Fatalf("could not create connection: %s (%s)", c, err)
 	}
 
-	if serverErr != nil {
-		t.Fatalf("%s", serverErr)
+	if want, got := config.Product, srv.start.ClientProperties["product"]; want != got {
+		t.Errorf("expected product %s got: %s", want, got)
+	}
+
+	if want, got := config.Version, srv.start.ClientProperties["version"]; want != got {
+		t.Errorf("expected version %s got: %s", want, got)
 	}
 }
 
