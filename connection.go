@@ -48,15 +48,15 @@ type Config struct {
 	// for the AMQP connection handshake.
 	ConnectionTimeout time.Duration
 
-	// The product name that the client advertises to the server.
+	// Product is an application name that the client advertises to the server.
 	// This is an optional setting - if the application does not set this,
 	// the underlying library will use a generic product name.
-	ClientProduct string
+	Product string
 
-	// The product version that the client advertises to the server.
+	// Version is the application version that the client advertises to the server.
 	// This is an optional setting - if the application does not set this,
 	// the underlying library will use a generic product version.
-	ClientVersion string
+	Version string
 }
 
 // Connection manages the serialization and deserialization of frames from IO
@@ -590,20 +590,20 @@ func (me *Connection) openStart(config Config) error {
 
 func (me *Connection) openTune(config Config, auth Authentication) error {
 
-	if config.ClientProduct == "" {
-		config.ClientProduct = defaultProduct
+	if config.Product == "" {
+		config.Product = defaultProduct
 	}
 
-	if config.ClientVersion == "" {
-		config.ClientVersion = defaultVersion
+	if config.Version == "" {
+		config.Version = defaultVersion
 	}
 
 	ok := &connectionStartOk{
 		Mechanism: auth.Mechanism(),
 		Response:  auth.Response(),
 		ClientProperties: Table{ // Open an issue if you wish these refined/parameterizable
-			"product": config.ClientProduct,
-			"version": config.ClientVersion,
+			"product": config.Product,
+			"version": config.Version,
 			"capabilities": Table{
 				"connection.blocked":     true,
 				"consumer_cancel_notify": true,
