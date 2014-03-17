@@ -19,6 +19,10 @@ type server struct {
 	w writer             // framer -> client
 	S io.ReadWriteCloser // Server IO
 	C io.ReadWriteCloser // Client IO
+
+	// captured client frames
+	start connectionStartOk
+	tune  connectionTuneOk
 }
 
 func defaultConfig() Config {
@@ -137,7 +141,7 @@ func (t *server) connectionStart() {
 		Locales:      "en-us",
 	})
 
-	t.recv(0, &connectionStartOk{})
+	t.recv(0, &t.start)
 }
 
 func (t *server) connectionTune() {
@@ -147,7 +151,7 @@ func (t *server) connectionTune() {
 		Heartbeat:  10,
 	})
 
-	t.recv(0, &connectionTuneOk{})
+	t.recv(0, &t.tune)
 }
 
 func (t *server) connectionOpen() {
@@ -167,6 +171,54 @@ func (t *server) connectionClose() {
 func (t *server) channelOpen(id int) {
 	t.recv(id, &channelOpen{})
 	t.send(id, &channelOpenOk{})
+}
+
+func TestDefaultClientProperties(t *testing.T) {
+	rwc, srv := newSession(t)
+
+	go func() {
+		srv.connectionOpen()
+		rwc.Close()
+	}()
+
+	if c, err := Open(rwc, defaultConfig()); err != nil {
+		t.Fatalf("could not create connection: %s (%s)", c, err)
+	}
+
+	if want, got := defaultProduct, srv.start.ClientProperties["product"]; want != got {
+		t.Errorf("expected product %s got: %s", want, got)
+	}
+
+	if want, got := defaultVersion, srv.start.ClientProperties["version"]; want != got {
+		t.Errorf("expected version %s got: %s", want, got)
+	}
+}
+
+func TestCustomClientProperties(t *testing.T) {
+	rwc, srv := newSession(t)
+
+	config := defaultConfig()
+	config.Properties = Table{
+		"product": "foo",
+		"version": "1.0",
+	}
+
+	go func() {
+		srv.connectionOpen()
+		rwc.Close()
+	}()
+
+	if c, err := Open(rwc, config); err != nil {
+		t.Fatalf("could not create connection: %s (%s)", c, err)
+	}
+
+	if want, got := config.Properties["product"], srv.start.ClientProperties["product"]; want != got {
+		t.Errorf("expected product %s got: %s", want, got)
+	}
+
+	if want, got := config.Properties["version"], srv.start.ClientProperties["version"]; want != got {
+		t.Errorf("expected version %s got: %s", want, got)
+	}
 }
 
 func TestOpen(t *testing.T) {

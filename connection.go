@@ -19,6 +19,8 @@ import (
 
 const defaultHeartbeat = 10 * time.Second
 const defaultConnectionTimeout = 30 * time.Second
+const defaultProduct = "https://github.com/streadway/amqp"
+const defaultVersion = "β"
 
 // Config is used in DialConfig and Open to specify the desired tuning
 // parameters used during a connection open handshake.  The negotiated tuning
@@ -42,6 +44,11 @@ type Config struct {
 	// If the URL uses an amqps scheme, then an empty tls.Config with the
 	// ServerName from the URL is used.
 	TLSClientConfig *tls.Config
+
+	// Properties is table of properties that the client advertises to the server.
+	// This is an optional setting - if the application does not set this,
+	// the underlying library will use a generic set of client properties.
+	Properties Table
 
 	// Dial returns a net.Conn prepared for a TLS handshake with TSLClientConfig,
 	// then an AMQP connection handshake.
@@ -585,17 +592,22 @@ func (me *Connection) openStart(config Config) error {
 }
 
 func (me *Connection) openTune(config Config, auth Authentication) error {
+	if len(config.Properties) == 0 {
+		config.Properties = Table{
+			"product": defaultProduct,
+			"version": defaultVersion,
+		}
+	}
+
+	config.Properties["capabilities"] = Table{
+		"connection.blocked":     true,
+		"consumer_cancel_notify": true,
+	}
+
 	ok := &connectionStartOk{
-		Mechanism: auth.Mechanism(),
-		Response:  auth.Response(),
-		ClientProperties: Table{ // Open an issue if you wish these refined/parameterizable
-			"product": "https://github.com/streadway/amqp",
-			"version": "β",
-			"capabilities": Table{
-				"connection.blocked":     true,
-				"consumer_cancel_notify": true,
-			},
-		},
+		Mechanism:        auth.Mechanism(),
+		Response:         auth.Response(),
+		ClientProperties: config.Properties,
 	}
 	tune := &connectionTune{}
 
