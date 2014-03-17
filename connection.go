@@ -142,14 +142,6 @@ func DialConfig(url string, config Config) (*Connection, error) {
 		config.Vhost = uri.Vhost
 	}
 
-	if config.ClientProduct == "" {
-		config.ClientProduct = defaultProduct
-	}
-
-	if config.ClientVersion == "" {
-		config.ClientVersion = defaultVersion
-	}
-
 	if config.ConnectionTimeout == 0 {
 		config.ConnectionTimeout = defaultConnectionTimeout
 	}
@@ -597,6 +589,15 @@ func (me *Connection) openStart(config Config) error {
 }
 
 func (me *Connection) openTune(config Config, auth Authentication) error {
+
+	if config.ClientProduct == "" {
+		config.ClientProduct = defaultProduct
+	}
+
+	if config.ClientVersion == "" {
+		config.ClientVersion = defaultVersion
+	}
+
 	ok := &connectionStartOk{
 		Mechanism: auth.Mechanism(),
 		Response:  auth.Response(),

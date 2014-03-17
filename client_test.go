@@ -7,6 +7,7 @@ package amqp
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"reflect"
 	"testing"
@@ -129,14 +130,17 @@ func (t *server) expectAMQP() {
 	t.expectBytes([]byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1})
 }
 
-func (t *server) connectionStart() {
+func (t *server) sendStartOnly() {
 	t.send(0, &connectionStart{
 		VersionMajor: 0,
 		VersionMinor: 9,
 		Mechanisms:   "PLAIN",
 		Locales:      "en-us",
 	})
+}
 
+func (t *server) connectionStart() {
+	t.sendStartOnly()
 	t.recv(0, &connectionStartOk{})
 }
 
@@ -167,6 +171,37 @@ func (t *server) connectionClose() {
 func (t *server) channelOpen(id int) {
 	t.recv(id, &channelOpen{})
 	t.send(id, &channelOpenOk{})
+}
+
+func TestDefaultClientProperties(t *testing.T) {
+	var serverErr error
+	rwc, srv := newSession(t)
+
+	go func() {
+		srv.expectAMQP()
+		srv.sendStartOnly()
+
+		s := connectionStartOk{}
+		srv.recv(0, &s)
+
+		if s.ClientProperties["product"] != defaultProduct {
+			serverErr = fmt.Errorf("expected product %s got: %s", defaultProduct, s.ClientProperties["product"])
+		}
+
+		srv.connectionTune()
+		srv.recv(0, &connectionOpen{})
+		srv.send(0, &connectionOpenOk{})
+
+		rwc.Close()
+	}()
+
+	if c, err := Open(rwc, defaultConfig()); err != nil {
+		t.Fatalf("could not create connection: %s (%s)", c, err)
+	}
+
+	if serverErr != nil {
+		t.Fatalf("%s", serverErr)
+	}
 }
 
 func TestOpen(t *testing.T) {
