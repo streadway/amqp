@@ -6,9 +6,23 @@ import (
 	"github.com/streadway/amqp"
 	"io/ioutil"
 	"log"
+	"net"
 	"runtime"
 	"time"
 )
+
+func ExampleConfig_timeout() {
+	// Provide your own anonymous Dial function that delgates to net.DialTimout
+	// for custom timeouts
+
+	conn, err := amqp.DialConfig("amqp:///", amqp.Config{
+		Dial: func(network, addr string) (net.Conn, error) {
+			return net.DialTimeout(network, addr, 2*time.Second)
+		},
+	})
+
+	log.Printf("conn: %v, err: %v", conn, err)
+}
 
 func ExampleDialTLS() {
 	// To get started with SSL/TLS follow the instructions for adding SSL/TLS
