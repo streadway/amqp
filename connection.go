@@ -69,6 +69,8 @@ type Connection struct {
 
 	conn io.ReadWriteCloser
 
+	LocalAddr net.Addr // local TCP peer address
+
 	rpc       chan message
 	writer    *writer
 	sends     chan time.Time     // timestamps of each frame sent
@@ -188,7 +190,14 @@ func DialConfig(url string, config Config) (*Connection, error) {
 		conn = client
 	}
 
-	return Open(conn, config)
+	c, err := Open(conn, config)
+	if err != nil {
+		return nil, err
+	}
+
+	c.LocalAddr = conn.LocalAddr()
+
+	return c, err
 }
 
 /*
