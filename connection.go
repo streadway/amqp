@@ -69,8 +69,6 @@ type Connection struct {
 
 	conn io.ReadWriteCloser
 
-	LocalAddr net.Addr // local TCP peer address
-
 	rpc       chan message
 	writer    *writer
 	sends     chan time.Time     // timestamps of each frame sent
@@ -190,14 +188,7 @@ func DialConfig(url string, config Config) (*Connection, error) {
 		conn = client
 	}
 
-	c, err := Open(conn, config)
-	if err != nil {
-		return nil, err
-	}
-
-	c.LocalAddr = conn.LocalAddr()
-
-	return c, err
+	return Open(conn, config)
 }
 
 /*
@@ -218,6 +209,19 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	}
 	go me.reader(conn)
 	return me, me.open(config)
+}
+
+/*
+LocalAddr returns the local TCP peer address, or ":0" (the zero value of net.TCPAddr)
+as a fallback default value if the underlying transport does not support LocalAddr().
+*/
+func (me *Connection) LocalAddr() net.Addr {
+	c, ok := me.conn.(net.Conn)
+	if !ok {
+		return &net.TCPAddr{}
+	} else {
+		return c.LocalAddr()
+	}
 }
 
 /*
