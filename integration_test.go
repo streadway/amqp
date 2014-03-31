@@ -18,6 +18,8 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"testing/quick"
 	"time"
@@ -75,6 +77,27 @@ func TestIntegrationOpenConfigWithNetDial(t *testing.T) {
 	if err := c.Close(); err != nil {
 		t.Fatalf("connection close: %s", err)
 	}
+}
+
+func TestIntegrationLocalAddr(t *testing.T) {
+	config := Config{}
+
+	c, err := DialConfig(integrationURLFromEnv(), config)
+	if err != nil {
+		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
+	}
+
+	a := c.LocalAddr()
+	parts := strings.Split(a.String(), ":")
+	if len(parts) != 2 {
+		t.Errorf("expected to get a local network address with config %+v integration server: %s", config, a.String())
+	}
+
+	port, err := strconv.Atoi(parts[1])
+	if err != nil {
+		t.Errorf("expected to get a TCP port number with config %+v integration server: %s", config, err)
+	}
+	t.Logf("Connected to port %d", port)
 }
 
 // https://github.com/streadway/amqp/issues/94
