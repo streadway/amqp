@@ -19,7 +19,6 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 	"testing/quick"
 	"time"
@@ -88,16 +87,16 @@ func TestIntegrationLocalAddr(t *testing.T) {
 	}
 
 	a := c.LocalAddr()
-	parts := strings.Split(a.String(), ":")
-	if len(parts) != 2 {
+	_, portString, err := net.SplitHostPort(a.String())
+	if err != nil {
 		t.Errorf("expected to get a local network address with config %+v integration server: %s", config, a.String())
 	}
 
-	port, err := strconv.Atoi(parts[1])
+	port, err := strconv.Atoi(portString)
 	if err != nil {
 		t.Errorf("expected to get a TCP port number with config %+v integration server: %s", config, err)
 	}
-	t.Logf("Connected to port %d", port)
+	t.Logf("Connected to port %d\n", port)
 }
 
 // https://github.com/streadway/amqp/issues/94
