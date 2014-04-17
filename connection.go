@@ -212,6 +212,17 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 }
 
 /*
+LocalAddr returns the local TCP peer address, or ":0" (the zero value of net.TCPAddr)
+as a fallback default value if the underlying transport does not support LocalAddr().
+*/
+func (me *Connection) LocalAddr() net.Addr {
+	if c, ok := me.conn.(net.Conn); ok {
+		return c.LocalAddr()
+	}
+	return &net.TCPAddr{}
+}
+
+/*
 NotifyClose registers a listener for close events either initiated by an error
 accompaning a connection.close method or by a normal shutdown.
 
