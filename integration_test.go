@@ -82,6 +82,7 @@ func TestIntegrationLocalAddr(t *testing.T) {
 	config := Config{}
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
+	defer c.Close()
 	if err != nil {
 		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
 	}
