@@ -216,12 +216,10 @@ LocalAddr returns the local TCP peer address, or ":0" (the zero value of net.TCP
 as a fallback default value if the underlying transport does not support LocalAddr().
 */
 func (me *Connection) LocalAddr() net.Addr {
-	c, ok := me.conn.(net.Conn)
-	if !ok {
-		return &net.TCPAddr{}
-	} else {
+	if c, ok := me.conn.(net.Conn); ok {
 		return c.LocalAddr()
 	}
+	return &net.TCPAddr{}
 }
 
 /*
