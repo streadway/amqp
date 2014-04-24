@@ -93,6 +93,10 @@ type readDeadliner interface {
 	SetReadDeadline(time.Time) error
 }
 
+type localNetAddr interface {
+	LocalAddr() net.Addr
+}
+
 // defaultDial establishes a connection when config.Dial is not provided
 func defaultDial(network, addr string) (net.Conn, error) {
 	conn, err := net.DialTimeout(network, addr, defaultConnectionTimeout)
@@ -216,7 +220,7 @@ LocalAddr returns the local TCP peer address, or ":0" (the zero value of net.TCP
 as a fallback default value if the underlying transport does not support LocalAddr().
 */
 func (me *Connection) LocalAddr() net.Addr {
-	if c, ok := me.conn.(net.Conn); ok {
+	if c, ok := me.conn.(localNetAddr); ok {
 		return c.LocalAddr()
 	}
 	return &net.TCPAddr{}
