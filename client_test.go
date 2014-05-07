@@ -182,7 +182,7 @@ func TestDefaultClientProperties(t *testing.T) {
 	}()
 
 	if c, err := Open(rwc, defaultConfig()); err != nil {
-		t.Fatalf("could not create connection: %s (%s)", c, err)
+		t.Fatalf("could not create connection: %v (%s)", c, err)
 	}
 
 	if want, got := defaultProduct, srv.start.ClientProperties["product"]; want != got {
@@ -209,7 +209,7 @@ func TestCustomClientProperties(t *testing.T) {
 	}()
 
 	if c, err := Open(rwc, config); err != nil {
-		t.Fatalf("could not create connection: %s (%s)", c, err)
+		t.Fatalf("could not create connection: %v (%s)", c, err)
 	}
 
 	if want, got := config.Properties["product"], srv.start.ClientProperties["product"]; want != got {
@@ -229,7 +229,7 @@ func TestOpen(t *testing.T) {
 	}()
 
 	if c, err := Open(rwc, defaultConfig()); err != nil {
-		t.Fatalf("could not create connection: %s (%s)", c, err)
+		t.Fatalf("could not create connection: %v (%s)", c, err)
 	}
 }
 
@@ -245,12 +245,12 @@ func TestChannelOpen(t *testing.T) {
 
 	c, err := Open(rwc, defaultConfig())
 	if err != nil {
-		t.Fatalf("could not create connection: %s (%s)", c, err)
+		t.Fatalf("could not create connection: %v (%s)", c, err)
 	}
 
 	ch, err := c.Channel()
 	if err != nil {
-		t.Fatalf("could not open channel: %s (%s)", ch, err)
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
 	}
 }
 
@@ -343,12 +343,12 @@ func TestConfirmMultipleOrdersDeliveryTags(t *testing.T) {
 
 	c, err := Open(rwc, defaultConfig())
 	if err != nil {
-		t.Fatalf("could not create connection: %s (%s)", c, err)
+		t.Fatalf("could not create connection: %v (%s)", c, err)
 	}
 
 	ch, err := c.Channel()
 	if err != nil {
-		t.Fatalf("could not open channel: %s (%s)", ch, err)
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
 	}
 
 	acks, _ := ch.NotifyConfirm(make(chan uint64), make(chan uint64))
@@ -395,12 +395,12 @@ func TestNotifyClosesReusedPublisherConfirmChan(t *testing.T) {
 
 	c, err := Open(rwc, defaultConfig())
 	if err != nil {
-		t.Fatalf("could not create connection: %s (%s)", c, err)
+		t.Fatalf("could not create connection: %v (%s)", c, err)
 	}
 
 	ch, err := c.Channel()
 	if err != nil {
-		t.Fatalf("could not open channel: %s (%s)", ch, err)
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
 	}
 
 	ackAndNack := make(chan uint64)
@@ -411,7 +411,7 @@ func TestNotifyClosesReusedPublisherConfirmChan(t *testing.T) {
 	}
 
 	if err := c.Close(); err != nil {
-		t.Fatalf("could not close connection: %s (%s)", c, err)
+		t.Fatalf("could not close connection: %v (%s)", c, err)
 	}
 }
 
@@ -428,16 +428,16 @@ func TestNotifyClosesAllChansAfterConnectionClose(t *testing.T) {
 
 	c, err := Open(rwc, defaultConfig())
 	if err != nil {
-		t.Fatalf("could not create connection: %s (%s)", c, err)
+		t.Fatalf("could not create connection: %v (%s)", c, err)
 	}
 
 	ch, err := c.Channel()
 	if err != nil {
-		t.Fatalf("could not open channel: %s (%s)", ch, err)
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
 	}
 
 	if err := c.Close(); err != nil {
-		t.Fatalf("could not close connection: %s (%s)", c, err)
+		t.Fatalf("could not close connection: %v (%s)", c, err)
 	}
 
 	select {
@@ -512,12 +512,12 @@ func TestPublishBodySliceIssue74(t *testing.T) {
 
 	c, err := Open(rwc, cfg)
 	if err != nil {
-		t.Fatalf("could not create connection: %s (%s)", c, err)
+		t.Fatalf("could not create connection: %v (%s)", c, err)
 	}
 
 	ch, err := c.Channel()
 	if err != nil {
-		t.Fatalf("could not open channel: %s (%s)", ch, err)
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
 	}
 
 	for i := 0; i < publishings; i++ {
@@ -541,12 +541,12 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 
 	c, err := Open(rwc, defaultConfig())
 	if err != nil {
-		t.Fatalf("couldn't create connection: %s (%s)", c, err)
+		t.Fatalf("couldn't create connection: %v (%s)", c, err)
 	}
 
 	ch, err := c.Channel()
 	if err != nil {
-		t.Fatalf("couldn't open channel: %s (%s)", ch, err)
+		t.Fatalf("couldn't open channel: %v (%s)", ch, err)
 	}
 
 	defer time.AfterFunc(500*time.Millisecond, func() { panic("Publish deadlock") }).Stop()
