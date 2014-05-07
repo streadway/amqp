@@ -27,8 +27,8 @@ type consumers struct {
 	chans consumerBuffers
 }
 
-func makeConsumers() consumers {
-	return consumers{chans: make(consumerBuffers)}
+func makeConsumers() *consumers {
+	return &consumers{chans: make(consumerBuffers)}
 }
 
 func bufferDeliveries(in chan *Delivery, out chan Delivery) {
