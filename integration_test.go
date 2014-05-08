@@ -1675,19 +1675,18 @@ func integrationRabbitMQ(t *testing.T, name string) *Connection {
 	return nil
 }
 
-func assertConsumeBody(t *testing.T, messages <-chan Delivery, body []byte) *Delivery {
+func assertConsumeBody(t *testing.T, messages <-chan Delivery, want []byte) (msg *Delivery) {
 	select {
-	case msg := <-messages:
-		if bytes.Compare(msg.Body, body) != 0 {
-			t.Fatalf("Message body does not match have: %v expect %v", msg.Body, body)
-			return &msg
+	case got := <-messages:
+		if bytes.Compare(want, got.Body) != 0 {
+			t.Fatalf("Message body does not match want: %v, got: %v, for: %+v", want, got.Body, got)
 		}
-		return &msg
+		msg = &got
 	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("Timeout waiting for %s", body)
-		return nil
+		t.Fatalf("Timeout waiting for %v", want)
 	}
-	panic("unreachable")
+
+	return msg
 }
 
 // Pulls out the CRC and verifies the remaining content against the CRC
