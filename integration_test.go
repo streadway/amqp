@@ -592,7 +592,9 @@ func TestIntegrationConsumeFlow(t *testing.T) {
 
 		msg := assertConsumeBody(t, messages, []byte("pub 1"))
 
-		sub.Flow(false)
+		if err := sub.Flow(false); err.(*Error).Code == NotImplemented {
+			t.Skip("flow control is not supported on this version of rabbitmq")
+		}
 
 		msg.Ack(false)
 
