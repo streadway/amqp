@@ -32,7 +32,7 @@ type Channel struct {
 	connection *Connection
 
 	rpc       chan message
-	consumers consumers
+	consumers *consumers
 
 	id uint16
 
