@@ -108,7 +108,7 @@ type Queue struct {
 
 // Publishing captures the client message sent to the server.  The fields
 // outside of the Headers table included in this struct mirror the underlying
-// fields in the content frame.  They use native types for convienence and
+// fields in the content frame.  They use native types for convenience and
 // efficiency.
 type Publishing struct {
 	// Application or exchange specific fields,
