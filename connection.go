@@ -512,7 +512,7 @@ func (me *Connection) heartbeater(interval time.Duration, done chan *Error) {
 	}
 }
 
-// Convienence method to inspect the Connection.Properties["capabilities"]
+// Convenience method to inspect the Connection.Properties["capabilities"]
 // Table for server identified capabilities like "basic.ack" or
 // "confirm.select".
 func (me *Connection) isCapable(featureName string) bool {
