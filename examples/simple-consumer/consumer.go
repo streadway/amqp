@@ -162,6 +162,7 @@ func handle(deliveries <-chan amqp.Delivery, done chan error) {
 			d.DeliveryTag,
 			d.Body,
 		)
+		d.Ack(true)
 	}
 	log.Printf("handle: deliveries channel closed")
 	done <- nil
