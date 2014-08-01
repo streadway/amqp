@@ -17,6 +17,7 @@ import (
 	"time"
 )
 
+const defaultChannelMax = 65535
 const defaultHeartbeat = 10 * time.Second
 const defaultConnectionTimeout = 30 * time.Second
 const defaultProduct = "https://github.com/streadway/amqp"
@@ -120,7 +121,8 @@ func defaultDial(network, addr string) (net.Conn, error) {
 // scheme.  It is equivalent to calling DialTLS(amqp, nil).
 func Dial(url string) (*Connection, error) {
 	return DialConfig(url, Config{
-		Heartbeat: defaultHeartbeat,
+		Heartbeat:  defaultHeartbeat,
+		ChannelMax: defaultChannelMax,
 	})
 }
 
@@ -132,6 +134,7 @@ func Dial(url string) (*Connection, error) {
 func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 	return DialConfig(url, Config{
 		Heartbeat:       defaultHeartbeat,
+		ChannelMax:      defaultChannelMax,
 		TLSClientConfig: amqps,
 	})
 }
