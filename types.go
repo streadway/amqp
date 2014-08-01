@@ -13,6 +13,7 @@ import (
 
 var (
 	// Errors that this library could return/emit from a channel or connection
+	ErrChannelMax      = &Error{Code: ChannelError, Reason: "no more channel ids available"}
 	ErrClosed          = &Error{Code: ChannelError, Reason: "channel/connection is not open"}
 	ErrSASL            = &Error{Code: AccessRefused, Reason: "SASL could not negotiate a shared mechanism"}
 	ErrCredentials     = &Error{Code: AccessRefused, Reason: "username or password not allowed"}

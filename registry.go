@@ -9,6 +9,7 @@ type channelRegistry struct {
 	sync.RWMutex
 	channels map[uint16]*Channel
 	sequence uint16
+	max      uint16
 }
 
 // Overwrites the channel at the given id
@@ -34,12 +35,17 @@ func (m *channelRegistry) remove(id uint16) {
 }
 
 // Returns the next sequence to be used for a channel id, starting at 1.
-// Collisions with existing keys are not considered.
-func (m *channelRegistry) next() uint16 {
+func (m *channelRegistry) next() (uint16, error) {
 	m.Lock()
 	defer m.Unlock()
-	m.sequence++
-	return m.sequence
+	id := (m.sequence + 1) % m.max
+	for ; m.channels[id] != nil; id = (id + 1) % m.max {
+		if id == m.sequence { // when wrapped around
+			return 0, ErrChannelMax
+		}
+	}
+	m.sequence = id
+	return m.sequence, nil
 }
 
 // Removes all channels, returning the channels removed
