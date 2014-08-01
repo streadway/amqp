@@ -647,6 +647,7 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 	// by MaxUint16.  If you hit a wrap around bug, throw a small party then
 	// make an github issue.
 	me.Config.ChannelMax = pick(config.ChannelMax, int(tune.ChannelMax))
+	me.channels.max = uint16(me.Config.ChannelMax)
 
 	// Frame size includes headers and end byte (len(payload)+8), even if
 	// this is less than FrameMinSize, use what the server sends because the
