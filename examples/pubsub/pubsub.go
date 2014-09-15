@@ -218,12 +218,12 @@ func main() {
 	ctx, done := context.WithCancel(context.Background())
 
 	go func() {
-		pub(redial(ctx, *url), read(os.Stdin))
+		publish(redial(ctx, *url), read(os.Stdin))
 		done()
 	}()
 
 	go func() {
-		sub(redial(ctx, *url), write(os.Stdout))
+		subscribe(redial(ctx, *url), write(os.Stdout))
 		done()
 	}()
 
