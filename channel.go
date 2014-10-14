@@ -1013,7 +1013,7 @@ range over the chan to ensure all deliveries are received.  Unreceived
 deliveries will block all methods on the same connection.
 
 All deliveries in AMQP must be acknowledged.  It is expected of the consumer to
-call Delivery.Ack after it has succesfully processed the delivery.  If the
+call Delivery.Ack after it has successfully processed the delivery.  If the
 consumer is cancelled or the channel or connection is closed any unacknowledged
 deliveries will be requeued at the end of the same queue.
 
