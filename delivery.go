@@ -6,8 +6,11 @@
 package amqp
 
 import (
+	"errors"
 	"time"
 )
+
+var errDeliveryNotInitialized = errors.New("delivery not initialized")
 
 // Acknowledger notifies the server of successful or failed consumption of
 // delivieries via identifier found in the Delivery.DeliveryTag field.
@@ -118,6 +121,9 @@ Either Delivery.Ack, Delivery.Reject or Delivery.Nack must be called for every
 delivery that is not automatically acknowledged.
 */
 func (me Delivery) Ack(multiple bool) error {
+	if me.Acknowledger == nil {
+		return errDeliveryNotInitialized
+	}
 	return me.Acknowledger.Ack(me.DeliveryTag, multiple)
 }
 
@@ -135,6 +141,9 @@ Either Delivery.Ack, Delivery.Reject or Delivery.Nack must be called for every
 delivery that is not automatically acknowledged.
 */
 func (me Delivery) Reject(requeue bool) error {
+	if me.Acknowledger == nil {
+		return errDeliveryNotInitialized
+	}
 	return me.Acknowledger.Reject(me.DeliveryTag, requeue)
 }
 
@@ -157,5 +166,8 @@ Either Delivery.Ack, Delivery.Reject or Delivery.Nack must be called for every
 delivery that is not automatically acknowledged.
 */
 func (me Delivery) Nack(multiple, requeue bool) error {
+	if me.Acknowledger == nil {
+		return errDeliveryNotInitialized
+	}
 	return me.Acknowledger.Nack(me.DeliveryTag, multiple, requeue)
 }
