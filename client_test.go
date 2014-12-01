@@ -58,19 +58,40 @@ func (t *server) expectBytes(b []byte) {
 	}
 }
 
-func (t *server) send(channel int, m message) {
+func (t *server) send(channel uint16, m message) {
 	defer time.AfterFunc(time.Second, func() { panic("send deadlock") }).Stop()
 
 	if err := t.w.WriteFrame(&methodFrame{
-		ChannelId: uint16(channel),
+		ChannelId: channel,
 		Method:    m,
 	}); err != nil {
 		t.Fatalf("frame err, write: %s", err)
 	}
+
+	if content, ok := m.(messageWithContent); ok {
+		class, _ := content.id()
+		props, body := content.getContent()
+
+		if err := t.w.WriteFrame(&headerFrame{
+			ChannelId:  channel,
+			ClassId:    class,
+			Size:       uint64(len(body)),
+			Properties: props,
+		}); err != nil {
+			t.Fatalf("frame err, write: %s", err)
+		}
+
+		if err := t.w.WriteFrame(&bodyFrame{
+			ChannelId: channel,
+			Body:      body,
+		}); err != nil {
+			return
+		}
+	}
 }
 
 // drops all but method frames expected on the given channel
-func (t *server) recv(channel int, m message) message {
+func (t *server) recv(channel uint16, m message) message {
 	defer time.AfterFunc(time.Second, func() { panic("recv deadlock") }).Stop()
 
 	var remaining int
@@ -168,7 +189,7 @@ func (t *server) connectionClose() {
 	t.send(0, &connectionCloseOk{})
 }
 
-func (t *server) channelOpen(id int) {
+func (t *server) channelOpen(id uint16) {
 	t.recv(id, &channelOpen{})
 	t.send(id, &channelOpenOk{})
 }
@@ -556,4 +577,56 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 			return
 		}
 	}
+}
+
+func TestAckNackRejectRace119(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+
+	done := make(chan bool)
+
+	const count = 100
+	const tag = "ConsumerTag"
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(1, &basicConsume{})
+		srv.send(1, &basicConsumeOk{ConsumerTag: tag})
+
+		for i := 0; i < count; i++ {
+			srv.send(1, &basicDeliver{ConsumerTag: tag, DeliveryTag: uint64(i), Body: []byte("body")})
+		}
+
+		for i := 0; i < count; i++ {
+			srv.recv(1, &basicAck{})
+		}
+
+		srv.send(1, &channelClose{})
+		srv.recv(1, &channelCloseOk{})
+
+		close(done)
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("couldn't create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("couldn't open channel: %v (%s)", ch, err)
+	}
+
+	msgs, err := ch.Consume("queue-ignored", "ConsumerTag", false, false, false, false, nil)
+	if err != nil {
+		t.Fatalf("couldn't consume: %v (%s)", ch, err)
+	}
+
+	for msg := range msgs {
+		go msg.Ack(false)
+	}
+
+	<-done
 }
