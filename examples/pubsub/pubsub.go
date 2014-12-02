@@ -15,8 +15,8 @@ import (
 	"log"
 	"os"
 
-	"code.google.com/p/go.net/context"
 	"github.com/streadway/amqp"
+	"golang.org/x/net/context"
 )
 
 var url = flag.String("url", "amqp:///", "AMQP url for both the publisher and subscriber")
