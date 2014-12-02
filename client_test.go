@@ -599,12 +599,11 @@ func TestAckNackRejectRace119(t *testing.T) {
 			srv.send(1, &basicDeliver{ConsumerTag: tag, DeliveryTag: uint64(i), Body: []byte("body")})
 		}
 
-		for i := 0; i < count; i++ {
+		for i := 0; i < count/2; i++ {
 			srv.recv(1, &basicAck{})
 		}
 
 		srv.send(1, &channelClose{})
-		srv.recv(1, &channelCloseOk{})
 
 		close(done)
 	}()
