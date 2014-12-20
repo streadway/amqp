@@ -35,7 +35,7 @@ Things not intended to be supported.
   * AMQP Protocol negotiation for forward or backward compatibility.
     * 0.9.1 is stable and widely deployed.  Versions 0.10 and 1.0 are divergent
       specifications that change the semantics and wire format of the protocol.
-      We will accpet patches for other protocol support but have no plans for
+      We will accept patches for other protocol support but have no plans for
       implementation ourselves.
   * Anything other than PLAIN and EXTERNAL authentication mechanisms.
     * Keeping the mechanisms interface modular makes it possible to extend
