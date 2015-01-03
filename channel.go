@@ -93,6 +93,8 @@ func newChannel(c *Connection, id uint16) *Channel {
 	}
 }
 
+// shutdown is called by Connection after the channel has been removed from the
+// connection registry.
 func (me *Channel) shutdown(e *Error) {
 	me.destructor.Do(func() {
 		me.m.Lock()
@@ -149,12 +151,10 @@ func (me *Channel) shutdown(e *Error) {
 		}
 
 		me.noNotify = true
-
-		me.connection.channels.remove(me.id)
 	})
 }
 
-func (me *Channel) open() (err error) {
+func (me *Channel) open() error {
 	return me.call(&channelOpen{}, &channelOpenOk{})
 }
 
@@ -262,7 +262,7 @@ func (me *Channel) sendOpen(msg message) (err error) {
 func (me *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
-		me.shutdown(newError(m.ReplyCode, m.ReplyText))
+		me.connection.closeChannel(me, newError(m.ReplyCode, m.ReplyText))
 		me.send(me, &channelCloseOk{})
 
 	case *channelFlow:
@@ -406,7 +406,7 @@ It is safe to call this method multiple times.
 
 */
 func (me *Channel) Close() error {
-	defer me.shutdown(nil)
+	defer me.connection.closeChannel(me, nil)
 	return me.call(
 		&channelClose{ReplyCode: replySuccess},
 		&channelCloseOk{},
