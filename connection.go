@@ -38,9 +38,9 @@ type Config struct {
 	// bindings on the server.  Dial sets this to the path parsed from the URL.
 	Vhost string
 
-	Channels  int           // 0 max channels means unlimited
-	FrameSize int           // 0 max bytes means unlimited
-	Heartbeat time.Duration // less than 1s uses the server's interval
+	ChannelMax int           // 0 max channels means 2^16 - 1
+	FrameSize  int           // 0 max bytes means unlimited
+	Heartbeat  time.Duration // less than 1s uses the server's interval
 
 	// TLSClientConfig specifies the client configuration of the TLS connection
 	// when establishing a tls transport.
@@ -688,9 +688,9 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 
 	// When the server and client both use default 0, then the max channel is
 	// only limited by uint16.
-	me.Config.Channels = pick(config.Channels, int(tune.ChannelMax))
-	if me.Config.Channels == 0 {
-		me.Config.Channels = defaultChannelMax
+	me.Config.ChannelMax = pick(config.ChannelMax, int(tune.ChannelMax))
+	if me.Config.ChannelMax == 0 {
+		me.Config.ChannelMax = defaultChannelMax
 	}
 
 	// Frame size includes headers and end byte (len(payload)+8), even if
@@ -710,7 +710,7 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 	if err := me.send(&methodFrame{
 		ChannelId: 0,
 		Method: &connectionTuneOk{
-			ChannelMax: uint16(me.Config.Channels),
+			ChannelMax: uint16(me.Config.ChannelMax),
 			FrameMax:   uint32(me.Config.FrameSize),
 			Heartbeat:  uint16(me.Config.Heartbeat / time.Second),
 		},
@@ -738,7 +738,7 @@ func (me *Connection) openVhost(config Config) error {
 // openComplete performs any final Connection initialization dependent on the
 // connection handshake.
 func (me *Connection) openComplete() error {
-	me.allocator = newAllocator(1, me.Config.Channels)
+	me.allocator = newAllocator(1, me.Config.ChannelMax)
 	return nil
 }
 

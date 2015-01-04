@@ -378,7 +378,7 @@ func TestIntegrationBasicQueueOperations(t *testing.T) {
 }
 
 func TestIntegrationConnectionNegotiatesMaxChannels(t *testing.T) {
-	config := Config{Channels: 0}
+	config := Config{ChannelMax: 0}
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
 	if err != nil {
@@ -386,13 +386,13 @@ func TestIntegrationConnectionNegotiatesMaxChannels(t *testing.T) {
 	}
 	defer c.Close()
 
-	if want, got := defaultChannelMax, c.Config.Channels; want != got {
+	if want, got := defaultChannelMax, c.Config.ChannelMax; want != got {
 		t.Fatalf("expected connection to negotiate uint16 (%d) channels, got: %d", want, got)
 	}
 }
 
 func TestIntegrationConnectionNegotiatesClientMaxChannels(t *testing.T) {
-	config := Config{Channels: 16}
+	config := Config{ChannelMax: 16}
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
 	if err != nil {
@@ -400,13 +400,13 @@ func TestIntegrationConnectionNegotiatesClientMaxChannels(t *testing.T) {
 	}
 	defer c.Close()
 
-	if want, got := config.Channels, c.Config.Channels; want != got {
+	if want, got := config.ChannelMax, c.Config.ChannelMax; want != got {
 		t.Fatalf("expected client specified channel limit after handshake %d, got: %d", want, got)
 	}
 }
 
 func TestIntegrationChannelIDsExhausted(t *testing.T) {
-	config := Config{Channels: 16}
+	config := Config{ChannelMax: 16}
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
 	if err != nil {
@@ -414,7 +414,7 @@ func TestIntegrationChannelIDsExhausted(t *testing.T) {
 	}
 	defer c.Close()
 
-	for i := 1; i <= c.Config.Channels; i++ {
+	for i := 1; i <= c.Config.ChannelMax; i++ {
 		if _, err := c.Channel(); err != nil {
 			t.Fatalf("expected allocating all channel ids to succed, failed on %d with %v", i, err)
 		}
