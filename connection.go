@@ -474,7 +474,9 @@ func (me *Connection) heartbeater(interval time.Duration, done chan *Error) {
 
 	var sendTicks <-chan time.Time
 	if interval > 0 {
-		sendTicks = time.Tick(interval)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		sendTicks = ticker.C
 	}
 
 	lastSent := time.Now()
