@@ -17,6 +17,7 @@ import (
 	"time"
 )
 
+const defaultChannelMax = 65535
 const defaultHeartbeat = 10 * time.Second
 const defaultConnectionTimeout = 30 * time.Second
 const defaultProduct = "https://github.com/streadway/amqp"
@@ -35,9 +36,9 @@ type Config struct {
 	// bindings on the server.  Dial sets this to the path parsed from the URL.
 	Vhost string
 
-	Channels  int           // 0 max channels means unlimited
-	FrameSize int           // 0 max bytes means unlimited
-	Heartbeat time.Duration // less than 1s uses the server's interval
+	ChannelMax int           // 0 max channels means unlimited
+	FrameSize  int           // 0 max bytes means unlimited
+	Heartbeat  time.Duration // less than 1s uses the server's interval
 
 	// TLSClientConfig specifies the client configuration of the TLS connection
 	// when establishing a tls transport.
@@ -120,7 +121,8 @@ func defaultDial(network, addr string) (net.Conn, error) {
 // scheme.  It is equivalent to calling DialTLS(amqp, nil).
 func Dial(url string) (*Connection, error) {
 	return DialConfig(url, Config{
-		Heartbeat: defaultHeartbeat,
+		Heartbeat:  defaultHeartbeat,
+		ChannelMax: defaultChannelMax,
 	})
 }
 
@@ -132,6 +134,7 @@ func Dial(url string) (*Connection, error) {
 func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 	return DialConfig(url, Config{
 		Heartbeat:       defaultHeartbeat,
+		ChannelMax:      defaultChannelMax,
 		TLSClientConfig: amqps,
 	})
 }
@@ -203,9 +206,12 @@ to use your own custom transport.
 */
 func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	me := &Connection{
-		conn:      conn,
-		writer:    &writer{bufio.NewWriter(conn)},
-		channels:  channelRegistry{channels: make(map[uint16]*Channel)},
+		conn:   conn,
+		writer: &writer{bufio.NewWriter(conn)},
+		channels: channelRegistry{
+			channels: make(map[uint16]*Channel),
+			max:      uint16(config.ChannelMax),
+		},
 		rpc:       make(chan message),
 		sends:     make(chan time.Time),
 		errors:    make(chan *Error, 1),
@@ -530,7 +536,11 @@ invalid and a new Channel should be opened.
 
 */
 func (me *Connection) Channel() (*Channel, error) {
-	id := me.channels.next()
+	id, err := me.channels.next()
+	if err != nil {
+		return nil, err
+	}
+
 	channel := newChannel(me, id)
 	me.channels.add(id, channel)
 	return channel, channel.open()
@@ -638,7 +648,8 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 	// When this is bounded, share the bound.  We're effectively only bounded
 	// by MaxUint16.  If you hit a wrap around bug, throw a small party then
 	// make an github issue.
-	me.Config.Channels = pick(config.Channels, int(tune.ChannelMax))
+	me.Config.ChannelMax = pick(config.ChannelMax, int(tune.ChannelMax))
+	me.channels.max = uint16(me.Config.ChannelMax)
 
 	// Frame size includes headers and end byte (len(payload)+8), even if
 	// this is less than FrameMinSize, use what the server sends because the
@@ -657,7 +668,7 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 	if err := me.send(&methodFrame{
 		ChannelId: 0,
 		Method: &connectionTuneOk{
-			ChannelMax: uint16(me.Config.Channels),
+			ChannelMax: uint16(me.Config.ChannelMax),
 			FrameMax:   uint32(me.Config.FrameSize),
 			Heartbeat:  uint16(me.Config.Heartbeat / time.Second),
 		},
