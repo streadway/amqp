@@ -103,7 +103,11 @@ func (me *Channel) shutdown(e *Error) {
 		// Broadcast abnormal shutdown
 		if e != nil {
 			for _, c := range me.closes {
-				c <- e
+				
+				// Avoid sending notification to a nil channel:
+				if c != nil {
+					c <- e
+				}
 			}
 		}
 
@@ -117,7 +121,9 @@ func (me *Channel) shutdown(e *Error) {
 		me.consumers.closeAll()
 
 		for _, c := range me.closes {
-			close(c)
+			if c != nil {
+				close(c)
+			}
 		}
 
 		for _, c := range me.flows {
