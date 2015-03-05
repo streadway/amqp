@@ -638,7 +638,7 @@ To get round-robin behavior between consumers consuming from the same queue on
 different connections, set the prefetch count to 1, and the next available
 message on the server will be delivered to the next available consumer.
 
-If your consumer work time is reasonably is consistent and not much greater
+If your consumer work time is reasonably consistent and not much greater
 than two times your network round trip time, you will see significant
 throughput improvements starting with a prefetch count of 2 or slightly
 greater as described by benchmarks on RabbitMQ.
