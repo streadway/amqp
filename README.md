@@ -69,6 +69,10 @@ integration`.  TravisCI will also run the integration tests.
 
 Thanks to the [community of contributors](https://github.com/streadway/amqp/graphs/contributors).
 
+# External packages
+
+Google App Engine Dialer support: [https://github.com/soundtrackyourbrand/gaeamqp](https://github.com/soundtrackyourbrand/gaeamqp)
+
 # License
 
 BSD 2 clause - see LICENSE for more details.
