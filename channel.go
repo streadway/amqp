@@ -285,16 +285,16 @@ func (me *Channel) dispatch(msg message) {
 
 	case *basicAck:
 		if m.Multiple {
-			me.confimMultiple(m.DeliveryTag, me.acks)
+			me.confirmMultiple(m.DeliveryTag, me.acks)
 		} else {
-			me.confimOne(m.DeliveryTag, me.acks)
+			me.confirmOne(m.DeliveryTag, me.acks)
 		}
 
 	case *basicNack:
 		if m.Multiple {
-			me.confimMultiple(m.DeliveryTag, me.nacks)
+			me.confirmMultiple(m.DeliveryTag, me.nacks)
 		} else {
-			me.confimOne(m.DeliveryTag, me.nacks)
+			me.confirmOne(m.DeliveryTag, me.nacks)
 		}
 
 	case *basicDeliver:
@@ -565,7 +565,7 @@ func (me *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint6
 
 // Since the acknowledgments may come out of order, scan the heap
 // until found.  In most cases, only the head will be found.
-func (me *Channel) confimOne(tag uint64, ch []chan uint64) {
+func (me *Channel) confirmOne(tag uint64, ch []chan uint64) {
 	me.m.Lock()
 	defer me.m.Unlock()
 
@@ -594,7 +594,7 @@ func (me *Channel) confimOne(tag uint64, ch []chan uint64) {
 
 // Instead of pushing the pending acknowledgments, deliver them as we should ack
 // all up until this tag.
-func (me *Channel) confimMultiple(tag uint64, ch []chan uint64) {
+func (me *Channel) confirmMultiple(tag uint64, ch []chan uint64) {
 	me.m.Lock()
 	defer me.m.Unlock()
 
