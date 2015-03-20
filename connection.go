@@ -18,11 +18,13 @@ import (
 )
 
 const (
+	maxChannelMax = (2 << 15) - 1
+
 	defaultHeartbeat         = 10 * time.Second
 	defaultConnectionTimeout = 30 * time.Second
 	defaultProduct           = "https://github.com/streadway/amqp"
 	defaultVersion           = "β"
-	defaultChannelMax        = (2 << 16) - 1
+	defaultChannelMax        = maxChannelMax
 )
 
 // Config is used in DialConfig and Open to specify the desired tuning
@@ -694,6 +696,7 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 	if me.Config.ChannelMax == 0 {
 		me.Config.ChannelMax = defaultChannelMax
 	}
+	me.Config.ChannelMax = min(me.Config.ChannelMax, maxChannelMax)
 
 	// Frame size includes headers and end byte (len(payload)+8), even if
 	// this is less than FrameMinSize, use what the server sends because the
@@ -744,21 +747,23 @@ func (me *Connection) openComplete() error {
 	return nil
 }
 
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func pick(client, server int) int {
 	if client == 0 || server == 0 {
-		// max
-		if client > server {
-			return client
-		} else {
-			return server
-		}
-	} else {
-		// min
-		if client > server {
-			return server
-		} else {
-			return client
-		}
+		return max(client, server)
 	}
-	panic("unreachable")
+	return min(client, server)
 }

@@ -19,6 +19,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"sync"
 	"testing"
 	"testing/quick"
 	"time"
@@ -49,7 +50,7 @@ func TestIntegrationOpenConfig(t *testing.T) {
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
 	if err != nil {
-		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
+		t.Fatalf("expected to dial with config %+v integration server: %s", config, err)
 	}
 
 	if _, err := c.Channel(); err != nil {
@@ -1530,6 +1531,32 @@ func TestCorruptedMessageIssue7(t *testing.T) {
 				t.Fatalf("Timeout on recv")
 			}
 		}
+	}
+}
+
+// https://github.com/streadway/amqp/issues/136
+func TestChannelCounterShouldNotPanicIssue136(t *testing.T) {
+	if c := integrationConnection(t, "issue136"); c != nil {
+		defer c.Close()
+		var wg sync.WaitGroup
+
+		// exceeds 65535 channels
+		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func(i int) {
+				for j := 0; j < 10000; j++ {
+					ch, err := c.Channel()
+					if err != nil {
+						t.Fatalf("failed to create channel %d:%d, got: %v", i, j, err)
+					}
+					if err := ch.Close(); err != nil {
+						t.Fatalf("failed to close channel %d:%d, got: %v", i, j, err)
+					}
+				}
+				wg.Done()
+			}(i)
+		}
+		wg.Wait()
 	}
 }
 
