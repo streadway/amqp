@@ -351,7 +351,7 @@ func TestConfirmMultipleOrdersDeliveryTags(t *testing.T) {
 		t.Fatalf("could not open channel: %v (%s)", ch, err)
 	}
 
-	acks, _ := ch.NotifyConfirm(make(chan uint64), make(chan uint64))
+	confirm := ch.NotifyPublish(make(chan Confirmation))
 
 	ch.Confirm(false)
 
@@ -360,9 +360,10 @@ func TestConfirmMultipleOrdersDeliveryTags(t *testing.T) {
 	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 3")})
 	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 4")})
 
-	for i, tag := range []uint64{2, 1, 3, 4} {
-		if ack := <-acks; tag != ack {
-			t.Fatalf("failed ack, expected ack#%d to be %d, got %d", i, tag, ack)
+	// received out of order, consumed in order
+	for i, tag := range []uint64{1, 2, 3, 4} {
+		if ack := <-confirm; tag != ack.DeliveryTag {
+			t.Fatalf("failed ack, expected ack#%d to be %d, got %d", i, tag, ack.DeliveryTag)
 		}
 	}
 
@@ -371,9 +372,9 @@ func TestConfirmMultipleOrdersDeliveryTags(t *testing.T) {
 	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 7")})
 	ch.Publish("", "q", false, false, Publishing{Body: []byte("pub 8")})
 
-	for i, tag := range []uint64{5, 6, 8, 7} {
-		if ack := <-acks; tag != ack {
-			t.Fatalf("failed ack, expected ack#%d to be %d, got %d", i, tag, ack)
+	for i, tag := range []uint64{5, 6, 7, 8} {
+		if ack := <-confirm; tag != ack.DeliveryTag {
+			t.Fatalf("failed ack, expected ack#%d to be %d, got %d", i, tag, ack.DeliveryTag)
 		}
 	}
 
@@ -470,18 +471,12 @@ func TestNotifyClosesAllChansAfterConnectionClose(t *testing.T) {
 		t.Errorf("expected to close Channel.NotifyReturn chan after Connection.Close")
 	}
 
-	ack, nack := ch.NotifyConfirm(make(chan uint64), make(chan uint64))
+	confirms := ch.NotifyPublish(make(chan Confirmation))
 
 	select {
-	case <-ack:
+	case <-confirms:
 	case <-time.After(time.Millisecond):
-		t.Errorf("expected to close acks on Channel.NotifyConfirm chan after Connection.Close")
-	}
-
-	select {
-	case <-nack:
-	case <-time.After(time.Millisecond):
-		t.Errorf("expected to close nacks Channel.NotifyConfirm chan after Connection.Close")
+		t.Errorf("expected to close confirms on Channel.NotifyPublish chan after Connection.Close")
 	}
 }
 

@@ -143,6 +143,14 @@ type Blocking struct {
 	Reason string // Server reason for activation
 }
 
+// Confirmation notifies the acknowledgment or negative acknowledgement of a
+// publishing identified by its delivery tag.  Use NotifyPublish on the Channel
+// to put consume these events.
+type Confirmation struct {
+	DeliveryTag uint64 // A 1 based counter of publishings from when the channel was put in Confirm mode
+	Ack         bool   // True when the server succesfully received the publishing
+}
+
 // Decimal matches the AMQP decimal type.  Scale is the number of decimal
 // digits Scale == 2, Value == 12345, Decimal == 123.45
 type Decimal struct {

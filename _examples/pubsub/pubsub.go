@@ -88,10 +88,10 @@ func redial(ctx context.Context, url string) chan chan session {
 // It receives from the application specific source of messages.
 func publish(sessions chan chan session, messages <-chan message) {
 	var (
-		running   bool
-		reading   = messages
-		pending   = make(chan message, 1)
-		ack, nack = make(chan uint64), make(chan uint64)
+		running bool
+		reading = messages
+		pending = make(chan message, 1)
+		confirm = make(amqp.Confirmation, 1)
 	)
 
 	for session := range sessions {
@@ -100,9 +100,9 @@ func publish(sessions chan chan session, messages <-chan message) {
 		// publisher confirms for this channel/connection
 		if err := pub.Confirm(false); err != nil {
 			log.Printf("publisher confirms not supported")
-			close(ack) // confirms not supported, simulate by always acking
+			close(confirm) // confirms not supported, simulate by always nacking
 		} else {
-			pub.NotifyConfirm(ack, nack)
+			pub.NotifyPublish(confirm)
 		}
 
 		log.Printf("publishing...")
@@ -110,11 +110,10 @@ func publish(sessions chan chan session, messages <-chan message) {
 		for {
 			var body message
 			select {
-			case <-ack:
-				reading = messages
-
-			case id := <-nack:
-				log.Printf("nack message %d, body: %q", id, string(body))
+			case confirmed := <-confirm:
+				if !confirmed.Ack {
+					log.Printf("nack message %d, body: %q", confirmed.DeliveryTag, string(body))
+				}
 				reading = messages
 
 			case body = <-pending:

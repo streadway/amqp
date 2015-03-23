@@ -1148,9 +1148,7 @@ func TestIntegrationConfirm(t *testing.T) {
 	if c, ch := integrationQueue(t, "confirm"); c != nil {
 		defer c.Close()
 
-		ack, nack := make(chan uint64, 1), make(chan uint64, 1)
-
-		ch.NotifyConfirm(ack, nack)
+		confirms := ch.NotifyPublish(make(chan Confirmation, 1))
 
 		if err := ch.Confirm(false); err != nil {
 			t.Fatalf("could not confirm")
@@ -1159,8 +1157,8 @@ func TestIntegrationConfirm(t *testing.T) {
 		ch.Publish("", "confirm", false, false, Publishing{Body: []byte("confirm")})
 
 		select {
-		case tag := <-ack:
-			if tag != 1 {
+		case confirmed := <-confirms:
+			if confirmed.DeliveryTag != 1 {
 				t.Fatalf("expected ack starting with delivery tag of 1")
 			}
 		case <-time.After(200 * time.Millisecond):
@@ -1368,17 +1366,16 @@ func TestDeadlockConsumerIssue48(t *testing.T) {
 			t.Fatalf("got error on confirm: %v", err)
 		}
 
-		ack, nack := make(chan uint64, 2), make(chan uint64, 2)
-		ch.NotifyConfirm(ack, nack)
+		confirms := ch.NotifyPublish(make(chan Confirmation, 2))
 
-		for i := 0; i < cap(ack); i++ {
+		for i := 0; i < cap(confirms); i++ {
 			// Fill the queue with some new or remaining publishings
 			ch.Publish("", queue, false, false, Publishing{Body: []byte("")})
 		}
 
-		for i := 0; i < cap(ack); i++ {
+		for i := 0; i < cap(confirms); i++ {
 			// Wait for them to land on the queue so they'll be delivered on consume
-			<-ack
+			<-confirms
 		}
 
 		// Consuming should send them all on the wire
