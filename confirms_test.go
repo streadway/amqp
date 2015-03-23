@@ -1,6 +1,9 @@
 package amqp
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestConfirmOneResequences(t *testing.T) {
 	var (
@@ -13,16 +16,16 @@ func TestConfirmOneResequences(t *testing.T) {
 		l = make(chan Confirmation, len(fixtures))
 	)
 
-	c.listen(l)
+	c.Listen(l)
 
 	for i, _ := range fixtures {
-		if want, got := uint64(i+1), c.publish(); want != got {
+		if want, got := uint64(i+1), c.Publish(); want != got {
 			t.Fatalf("expected publish to return the 1 based delivery tag published, want: %d, got: %d", want, got)
 		}
 	}
 
-	c.one(fixtures[1])
-	c.one(fixtures[2])
+	c.One(fixtures[1])
+	c.One(fixtures[2])
 
 	select {
 	case confirm := <-l:
@@ -30,7 +33,7 @@ func TestConfirmOneResequences(t *testing.T) {
 	default:
 	}
 
-	c.one(fixtures[0])
+	c.One(fixtures[0])
 
 	for i, fix := range fixtures {
 		if want, got := fix, <-l; want != got {
@@ -50,13 +53,13 @@ func TestConfirmMultipleResequences(t *testing.T) {
 		c = newConfirms()
 		l = make(chan Confirmation, len(fixtures))
 	)
-	c.listen(l)
+	c.Listen(l)
 
 	for _, _ = range fixtures {
-		c.publish()
+		c.Publish()
 	}
 
-	c.multiple(fixtures[len(fixtures)-1])
+	c.Multiple(fixtures[len(fixtures)-1])
 
 	for i, fix := range fixtures {
 		if want, got := fix, <-l; want != got {
@@ -71,12 +74,46 @@ func BenchmarkSequentialBufferedConfirms(t *testing.B) {
 		l = make(chan Confirmation, 10)
 	)
 
-	c.listen(l)
+	c.Listen(l)
 
 	for i := 0; i < t.N; i++ {
 		if i > cap(l)-1 {
 			<-l
 		}
-		c.one(Confirmation{c.publish(), true})
+		c.One(Confirmation{c.Publish(), true})
+	}
+}
+
+func TestConfirmsIsThreadSafe(t *testing.T) {
+	const count = 1000
+	const timeout = 5 * time.Second
+	var (
+		c    = newConfirms()
+		l    = make(chan Confirmation)
+		pub  = make(chan Confirmation)
+		done = make(chan Confirmation)
+		late = time.After(timeout)
+	)
+
+	c.Listen(l)
+
+	for i := 0; i < count; i++ {
+		go func() { pub <- Confirmation{c.Publish(), true} }()
+	}
+
+	for i := 0; i < count; i++ {
+		go func() { c.One(<-pub) }()
+	}
+
+	for i := 0; i < count; i++ {
+		go func() { done <- <-l }()
+	}
+
+	for i := 0; i < count; i++ {
+		select {
+		case <-done:
+		case <-late:
+			t.Fatalf("expected all publish/confirms to finish after %s", timeout)
+		}
 	}
 }

@@ -1,7 +1,10 @@
 package amqp
 
+import "sync"
+
 // confirms resequences and notifies one or multiple publisher confirmation listeners
 type confirms struct {
+	m         sync.Mutex
 	listeners []chan Confirmation
 	sequencer map[uint64]Confirmation
 	published uint64
@@ -17,12 +20,18 @@ func newConfirms() *confirms {
 	}
 }
 
-func (c *confirms) listen(l chan Confirmation) {
+func (c *confirms) Listen(l chan Confirmation) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	c.listeners = append(c.listeners, l)
 }
 
 // publish increments the publishing counter
-func (c *confirms) publish() uint64 {
+func (c *confirms) Publish() uint64 {
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	c.published++
 	return c.published
 }
@@ -49,7 +58,10 @@ func (c *confirms) resequence() {
 }
 
 // one confirms one publishing and all following in the publishing sequence
-func (c *confirms) one(confirmed Confirmation) {
+func (c *confirms) One(confirmed Confirmation) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	if c.expecting == confirmed.DeliveryTag {
 		c.confirm(confirmed)
 	} else {
@@ -59,7 +71,10 @@ func (c *confirms) one(confirmed Confirmation) {
 }
 
 // multiple confirms all publishings up until the delivery tag
-func (c *confirms) multiple(confirmed Confirmation) {
+func (c *confirms) Multiple(confirmed Confirmation) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	for c.expecting <= confirmed.DeliveryTag {
 		c.confirm(Confirmation{c.expecting, confirmed.Ack})
 	}
@@ -67,6 +82,9 @@ func (c *confirms) multiple(confirmed Confirmation) {
 
 // Close closes all listeners, discarding any out of sequence confirmations
 func (c *confirms) Close() error {
+	c.m.Lock()
+	defer c.m.Unlock()
+
 	for _, l := range c.listeners {
 		close(l)
 	}

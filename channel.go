@@ -266,18 +266,18 @@ func (me *Channel) dispatch(msg message) {
 	case *basicAck:
 		if me.confirming {
 			if m.Multiple {
-				me.confirms.multiple(Confirmation{m.DeliveryTag, true})
+				me.confirms.Multiple(Confirmation{m.DeliveryTag, true})
 			} else {
-				me.confirms.one(Confirmation{m.DeliveryTag, true})
+				me.confirms.One(Confirmation{m.DeliveryTag, true})
 			}
 		}
 
 	case *basicNack:
 		if me.confirming {
 			if m.Multiple {
-				me.confirms.multiple(Confirmation{m.DeliveryTag, false})
+				me.confirms.Multiple(Confirmation{m.DeliveryTag, false})
 			} else {
-				me.confirms.one(Confirmation{m.DeliveryTag, false})
+				me.confirms.One(Confirmation{m.DeliveryTag, false})
 			}
 		}
 
@@ -566,7 +566,7 @@ func (me *Channel) NotifyPublish(confirm chan Confirmation) chan Confirmation {
 	if me.noNotify {
 		close(confirm)
 	} else {
-		me.confirms.listen(confirm)
+		me.confirms.Listen(confirm)
 	}
 
 	return confirm
@@ -1320,7 +1320,7 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 	}
 
 	if me.confirming {
-		me.confirms.publish()
+		me.confirms.Publish()
 	}
 
 	return nil
