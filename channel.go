@@ -7,6 +7,7 @@ package amqp
 
 import (
 	"container/heap"
+	"fmt"
 	"reflect"
 	"sync"
 )
@@ -752,6 +753,10 @@ declared with these parameters and the channel will be closed.
 func (me *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
 	if err := args.Validate(); err != nil {
 		return Queue{}, err
+	}
+
+	if exclusive && durable {
+		return Queue{}, fmt.Errorf("Invalid settings, can not be exclusive and durable")
 	}
 
 	req := &queueDeclare{
