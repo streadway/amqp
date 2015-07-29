@@ -8,6 +8,7 @@ package amqp
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"time"
 )
@@ -431,13 +432,15 @@ func (me *reader) parseBodyFrame(channel uint16, size uint32) (frame frame, err 
 	return bf, nil
 }
 
+var errHeartbeatPayload = errors.New("Heartbeats should not have a payload")
+
 func (me *reader) parseHeartbeatFrame(channel uint16, size uint32) (frame frame, err error) {
 	hf := &heartbeatFrame{
 		ChannelId: channel,
 	}
 
 	if size > 0 {
-		panic("Heartbeats should not have a payload")
+		return nil, errHeartbeatPayload
 	}
 
 	return hf, nil
