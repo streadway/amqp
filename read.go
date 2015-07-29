@@ -67,7 +67,7 @@ func (me *reader) ReadFrame() (frame frame, err error) {
 
 	case frameBody:
 		if frame, err = me.parseBodyFrame(channel, size); err != nil {
-			return
+			return nil, err
 		}
 
 	case frameHeartbeat:
@@ -80,7 +80,7 @@ func (me *reader) ReadFrame() (frame frame, err error) {
 	}
 
 	if _, err = io.ReadFull(me.r, scratch[:1]); err != nil {
-		return
+		return nil, err
 	}
 
 	if scratch[0] != frameEnd {
@@ -426,7 +426,7 @@ func (me *reader) parseBodyFrame(channel uint16, size uint32) (frame frame, err 
 	}
 
 	if _, err = io.ReadFull(me.r, bf.Body); err != nil {
-		return
+		return nil, err
 	}
 
 	return bf, nil
