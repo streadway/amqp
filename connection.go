@@ -708,9 +708,20 @@ func (me *Connection) openTune(config Config, auth Authentication) error {
 		int(config.Heartbeat/time.Second),
 		int(tune.Heartbeat)))
 
+	// If we send our heartbeats at the same interval as the server
+	// is watching for them, any network or scheduling delays can
+	// easily cause the server to time the connection out.
+	//
+	// Thusly, to be safe, we tell the server the normal heartbeat rate
+	// but we actually send our heartbeats out at 75% of that rate, so
+	// that we have a much better chance of getting them to the server
+	// before the deadline arrives.
+
+	localHeartbeat := (me.Config.Heartbeat / 2) + (me.Config.Heartbeat / 4)
+
 	// "The client should start sending heartbeats after receiving a
 	// Connection.Tune method"
-	go me.heartbeater(me.Config.Heartbeat, me.NotifyClose(make(chan *Error, 1)))
+	go me.heartbeater(localHeartbeat, me.NotifyClose(make(chan *Error, 1)))
 
 	if err := me.send(&methodFrame{
 		ChannelId: 0,
