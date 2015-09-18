@@ -91,7 +91,7 @@ func publish(sessions chan chan session, messages <-chan message) {
 		running bool
 		reading = messages
 		pending = make(chan message, 1)
-		confirm = make(amqp.Confirmation, 1)
+		confirm = make(chan amqp.Confirmation, 1)
 	)
 
 	for session := range sessions {
