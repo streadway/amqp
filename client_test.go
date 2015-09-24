@@ -527,6 +527,50 @@ func TestPublishBodySliceIssue74(t *testing.T) {
 	<-done
 }
 
+// Should not panic when server and client have frame_size of 0
+func TestPublishZeroFrameSizeIssue161(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+
+	const frameSize = 0
+	const publishings = 1
+	done := make(chan bool)
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		for i := 0; i < publishings; i++ {
+			srv.recv(1, &basicPublish{})
+		}
+
+		done <- true
+	}()
+
+	cfg := defaultConfig()
+	cfg.FrameSize = frameSize
+
+	c, err := Open(rwc, cfg)
+
+	// override the tuned framesize with a hard 0, as would happen when rabbit is configured with 0
+	c.Config.FrameSize = frameSize
+
+	if err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
+	}
+
+	for i := 0; i < publishings; i++ {
+		go ch.Publish("", "q", false, false, Publishing{Body: []byte("anything")})
+	}
+
+	<-done
+}
+
 func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 	rwc, srv := newSession(t)
 	defer rwc.Close()
