@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -93,6 +94,8 @@ type Connection struct {
 	Major      int   // Server's major version
 	Minor      int   // Server's minor version
 	Properties Table // Server properties
+
+	closed int32 // Will be 1 if the connection is closed, 0 otherwise. Should only be accessed as atomic
 }
 
 type readDeadliner interface {
@@ -315,6 +318,10 @@ func (me *Connection) closeWith(err *Error) error {
 }
 
 func (me *Connection) send(f frame) error {
+	if atomic.LoadInt32(&me.closed) == 1 {
+		return ErrClosed
+	}
+
 	me.sendM.Lock()
 	err := me.writer.WriteFrame(f)
 	me.sendM.Unlock()
@@ -339,6 +346,8 @@ func (me *Connection) send(f frame) error {
 }
 
 func (me *Connection) shutdown(err *Error) {
+	atomic.StoreInt32(&me.closed, 1)
+
 	me.destructor.Do(func() {
 		if err != nil {
 			for _, c := range me.closes {
