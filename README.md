@@ -6,7 +6,8 @@ AMQP 0.9.1 client with RabbitMQ extensions in Go.
 
 *Beta*
 
-[![Build Status](https://secure.travis-ci.org/streadway/amqp.png)](http://travis-ci.org/streadway/amqp)
+[![Build Status](https://secure.travis-ci.org/streadway/amqp.png)](http://travis-ci.org/streadway/amqp)[![codebeat](https://codebeat.co/badges/5d33e2ae-db96-4368-9f19-f6df24919874)](https://codebeat.co/projects/github-com-streadway-amqp)
+
 
 API changes unlikely and will be discussed on [Github
 issues](https://github.com/streadway/amqp/issues) along with any bugs or
