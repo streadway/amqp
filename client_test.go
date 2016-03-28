@@ -601,3 +601,30 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 		}
 	}
 }
+
+func TestChannelCloseRace(t *testing.T) {
+	rwc, srv := newSession(t)
+
+	done := make(chan bool)
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		rwc.Close()
+		done <- true
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
+	}
+	<-done
+	ch.Close()
+	c.Close()
+}

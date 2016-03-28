@@ -354,17 +354,17 @@ func (me *Connection) shutdown(err *Error) {
 
 	me.destructor.Do(func() {
 		me.m.Lock()
-		closes := make([]chan *Error, len(me.closes))
-		copy(closes, me.closes)
-		me.m.Unlock()
+		defer me.m.Unlock()
+
 		if err != nil {
-			for _, c := range closes {
+			for _, c := range me.closes {
 				c <- err
 			}
 		}
 
 		for _, ch := range me.channels {
-			me.closeChannel(ch, err)
+			ch.shutdown(err)
+			me.releaseChannel(ch.id)
 		}
 
 		if err != nil {
@@ -373,7 +373,7 @@ func (me *Connection) shutdown(err *Error) {
 
 		me.conn.Close()
 
-		for _, c := range closes {
+		for _, c := range me.closes {
 			close(c)
 		}
 
@@ -381,9 +381,7 @@ func (me *Connection) shutdown(err *Error) {
 			close(c)
 		}
 
-		me.m.Lock()
 		me.noNotify = true
-		me.m.Unlock()
 	})
 }
 
@@ -570,9 +568,6 @@ func (me *Connection) allocateChannel() (*Channel, error) {
 // releaseChannel removes a channel from the registry as the final part of the
 // channel lifecycle
 func (me *Connection) releaseChannel(id uint16) {
-	me.m.Lock()
-	defer me.m.Unlock()
-
 	delete(me.channels, id)
 	me.allocator.release(int(id))
 }
@@ -595,7 +590,9 @@ func (me *Connection) openChannel() (*Channel, error) {
 // this connection.
 func (me *Connection) closeChannel(ch *Channel, e *Error) {
 	ch.shutdown(e)
+	me.m.Lock()
 	me.releaseChannel(ch.id)
+	me.m.Unlock()
 }
 
 /*
