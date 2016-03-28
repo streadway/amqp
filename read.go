@@ -6,6 +6,7 @@
 package amqp
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -90,15 +91,35 @@ func (me *reader) ReadFrame() (frame frame, err error) {
 	return
 }
 
-func readShortstr(r io.Reader) (v string, err error) {
-	var length uint8
-	if err = binary.Read(r, binary.BigEndian, &length); err != nil {
-		return
+func readN(r io.Reader, n int64) ([]byte, error) {
+	if n <= 1024*1024 {
+		if n < 0 {
+			return nil, bufio.ErrNegativeCount
+		}
+		b := make([]byte, n)
+		if _, err := io.ReadFull(r, b); err != nil {
+			return nil, err
+		}
+		return b, nil
 	}
 
-	bytes := make([]byte, length)
-	if _, err = io.ReadFull(r, bytes); err != nil {
-		return
+	buf := bytes.NewBuffer(nil)
+	br := bufio.NewReaderSize(r, 64*1024)
+	if _, err := io.CopyN(buf, br, n); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func readShortstr(r io.Reader) (string, error) {
+	var length uint8
+	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+		return "", err
+	}
+
+	bytes, err := readN(r, int64(length))
+	if err != nil {
+		return "", err
 	}
 	return string(bytes), nil
 }
@@ -109,9 +130,9 @@ func readLongstr(r io.Reader) (v string, err error) {
 		return
 	}
 
-	bytes := make([]byte, length)
-	if _, err = io.ReadFull(r, bytes); err != nil {
-		return
+	bytes, err := readN(r, int64(length))
+	if err != nil {
+		return "", err
 	}
 	return string(bytes), nil
 }
@@ -241,8 +262,8 @@ func readField(r io.Reader) (v interface{}, err error) {
 			return nil, err
 		}
 
-		value := make([]byte, len)
-		if _, err = io.ReadFull(r, value); err != nil {
+		value, err := readN(r, int64(len))
+		if err != nil {
 			return nil, err
 		}
 		return value, err
@@ -420,15 +441,14 @@ func (me *reader) parseHeaderFrame(channel uint16, size uint32) (frame frame, er
 }
 
 func (me *reader) parseBodyFrame(channel uint16, size uint32) (frame frame, err error) {
-	bf := &bodyFrame{
-		ChannelId: channel,
-		Body:      make([]byte, size),
-	}
-
-	if _, err = io.ReadFull(me.r, bf.Body); err != nil {
+	body, err := readN(me.r, int64(size))
+	if err != nil {
 		return nil, err
 	}
-
+	bf := &bodyFrame{
+		ChannelId: channel,
+		Body:      body,
+	}
 	return bf, nil
 }
 
