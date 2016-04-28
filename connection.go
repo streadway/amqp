@@ -340,6 +340,10 @@ func (me *Connection) send(f frame) error {
 
 func (me *Connection) shutdown(err *Error) {
 	me.destructor.Do(func() {
+		me.m.Lock()
+		me.noNotify = true
+		me.m.Unlock()
+
 		if err != nil {
 			for _, c := range me.closes {
 				c <- err
@@ -363,10 +367,6 @@ func (me *Connection) shutdown(err *Error) {
 		for _, c := range me.blocks {
 			close(c)
 		}
-
-		me.m.Lock()
-		me.noNotify = true
-		me.m.Unlock()
 	})
 }
 
