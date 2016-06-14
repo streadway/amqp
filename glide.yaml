@@ -1,0 +1,6 @@
+package: github.com/CrowdSurge/amqp
+import:
+- package: github.com/streadway/amqp
+- package: golang.org/x/net
+  subpackages:
+  - context

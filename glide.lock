@@ -1,0 +1,10 @@
+hash: 0804df389bab1dde3022dfa0ea8d4b10cac84f299aa2fd341f6967a2808e280b
+updated: 2016-06-14T12:52:59.574162529+01:00
+imports:
+- name: github.com/streadway/amqp
+  version: 2e25825abdbd7752ff08b270d313b93519a0a232
+- name: golang.org/x/net
+  version: 3f122ce3dbbe488b7e6a8bdb26f41edec852a40b
+  subpackages:
+  - context
+devImports: []
