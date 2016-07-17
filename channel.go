@@ -1342,7 +1342,7 @@ preferred.
 
 If there was a delivery waiting on the queue and that delivery was received the
 second return value will be true.  If there was no delivery waiting or an error
-occured, the ok bool will be false.
+occurred, the ok bool will be false.
 
 All deliveries must be acknowledged including those from Channel.Get.  Call
 Delivery.Ack on the returned delivery when you have fully processed this

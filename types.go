@@ -31,7 +31,7 @@ type Error struct {
 	Code    int    // constant code from the specification
 	Reason  string // description of the error
 	Server  bool   // true when initiated from the server, false when from this library
-	Recover bool   // true when this error can be recovered by retrying later or with differnet parameters
+	Recover bool   // true when this error can be recovered by retrying later or with different parameters
 }
 
 func newError(code uint16, text string) *Error {
@@ -52,7 +52,7 @@ type properties struct {
 	ContentType     string    // MIME content type
 	ContentEncoding string    // MIME content encoding
 	Headers         Table     // Application or header exchange table
-	DeliveryMode    uint8     // queue implemention use - Transient (1) or Persistent (2)
+	DeliveryMode    uint8     // queue implementation use - Transient (1) or Persistent (2)
 	Priority        uint8     // queue implementation use - 0 to 9
 	CorrelationId   string    // application use - correlation identifier
 	ReplyTo         string    // application use - address to to reply to (ex: RPC)
@@ -148,7 +148,7 @@ type Blocking struct {
 // to consume these events.
 type Confirmation struct {
 	DeliveryTag uint64 // A 1 based counter of publishings from when the channel was put in Confirm mode
-	Ack         bool   // True when the server succesfully received the publishing
+	Ack         bool   // True when the server successfully received the publishing
 }
 
 // Decimal matches the AMQP decimal type.  Scale is the number of decimal
@@ -181,7 +181,7 @@ type Decimal struct {
 // The caller must be specific in which precision of integer it wishes to
 // encode.
 //
-// Use a type assertion when reading values from a table for type converstion.
+// Use a type assertion when reading values from a table for type conversion.
 //
 // RabbitMQ expects int32 for integer values.
 //

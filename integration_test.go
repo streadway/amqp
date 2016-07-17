@@ -1713,8 +1713,8 @@ func loggedConnection(t *testing.T, conn *Connection, name string) *Connection {
 	return conn
 }
 
-// Returns a conneciton to the AMQP if the AMQP_URL environment
-// variable is set and a connnection can be established.
+// Returns a connection to the AMQP if the AMQP_URL environment
+// variable is set and a connection can be established.
 func integrationConnection(t *testing.T, name string) *Connection {
 	conn, err := Dial(integrationURLFromEnv())
 	if err != nil {

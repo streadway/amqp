@@ -485,7 +485,7 @@ func TestNotifyClosesAllChansAfterConnectionClose(t *testing.T) {
 	}
 }
 
-// Should not panic when sending bodies split at differnet boundaries
+// Should not panic when sending bodies split at different boundaries
 func TestPublishBodySliceIssue74(t *testing.T) {
 	rwc, srv := newSession(t)
 	defer rwc.Close()

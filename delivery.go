@@ -33,7 +33,7 @@ type Delivery struct {
 	// Properties
 	ContentType     string    // MIME content type
 	ContentEncoding string    // MIME content encoding
-	DeliveryMode    uint8     // queue implemention use - non-persistent (1) or persistent (2)
+	DeliveryMode    uint8     // queue implementation use - non-persistent (1) or persistent (2)
 	Priority        uint8     // queue implementation use - 0 to 9
 	CorrelationId   string    // application use - correlation identifier
 	ReplyTo         string    // application use - address to to reply to (ex: RPC)
