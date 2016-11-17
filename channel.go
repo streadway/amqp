@@ -550,8 +550,8 @@ NotifyPublish registers a listener for reliable publishing. Receives from this
 chan for every publish after Channel.Confirm will be in order starting with
 DeliveryTag 1.
 
-There will be one and only one Confimration Publishing starting with the
-delviery tag of 1 and progressing sequentially until the total number of
+There will be one and only one Confirmation Publishing starting with the
+delivery tag of 1 and progressing sequentially until the total number of
 Publishings have been seen by the server.
 
 Acknowledgments will be received in the order of delivery from the
