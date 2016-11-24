@@ -340,8 +340,12 @@ func (me *Connection) send(f frame) error {
 
 func (me *Connection) shutdown(err *Error) {
 	me.destructor.Do(func() {
+		me.m.Lock()
+		closes := make([]chan *Error, len(me.closes))
+		copy(closes, me.closes)
+		me.m.Unlock()
 		if err != nil {
-			for _, c := range me.closes {
+			for _, c := range closes {
 				c <- err
 			}
 		}
@@ -356,7 +360,7 @@ func (me *Connection) shutdown(err *Error) {
 
 		me.conn.Close()
 
-		for _, c := range me.closes {
+		for _, c := range closes {
 			close(c)
 		}
 
