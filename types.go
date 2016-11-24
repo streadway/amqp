@@ -11,6 +11,14 @@ import (
 	"time"
 )
 
+// Constants for standard AMQP 0-9-1 exchange types.
+const (
+	ExchangeDirect  = "direct"
+	ExchangeFanout  = "fanout"
+	ExchangeTopic   = "topic"
+	ExchangeHeaders = "headers"
+)
+
 var (
 	// Errors that this library could return/emit from a channel or connection
 	ErrClosed          = &Error{Code: ChannelError, Reason: "channel/connection is not open"}
