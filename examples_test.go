@@ -81,7 +81,7 @@ func ExampleDialTLS() {
 	// Server names are validated by the crypto/tls package, so the server
 	// certificate must be made for the hostname in the URL.  Find the commonName
 	// (CN) and make sure the hostname in the URL matches this common name.  Per
-	// the RabbitMQ instructions for a self-signed cert, this defautls to the
+	// the RabbitMQ instructions for a self-signed cert, this defaults to the
 	// current hostname.
 	//
 	//   openssl x509 -noout -in server/cert.pem -subject
