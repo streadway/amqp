@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// Constants for common AMQP exchange types.
+// Constants for standard AMQP 0-9-1 exchange types.
 const (
 	ExchangeDirect  = "direct"
 	ExchangeFanout  = "fanout"
