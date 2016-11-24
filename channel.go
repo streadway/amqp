@@ -452,7 +452,7 @@ messages.
 basic.flow-ok methods will always be returned to the server regardless of
 the number of listeners there are.
 
-To control the flow of deliveries from the server.  Use the Channel.Flow()
+To control the flow of deliveries from the server, use the Channel.Flow()
 method instead.
 
 Note: RabbitMQ will rather use TCP pushback on the network connection instead
@@ -501,7 +501,7 @@ func (me *Channel) NotifyReturn(c chan Return) chan Return {
 /*
 NotifyCancel registers a listener for basic.cancel methods.  These can be sent
 from the server when a queue is deleted or when consuming from a mirrored queue
-where the master has just failed (and was moved to another node)
+where the master has just failed (and was moved to another node).
 
 The subscription tag is returned to the listener.
 
@@ -520,7 +520,7 @@ func (me *Channel) NotifyCancel(c chan string) chan string {
 }
 
 /*
-NotifyConfirm calls NotifyPublish and starts a goroutines sending
+NotifyConfirm calls NotifyPublish and starts a goroutine sending
 ordered Ack and Nack DeliveryTag to the respective channels.
 
 For strict ordering, use NotifyPublish instead.
@@ -638,9 +638,9 @@ Continue consuming from the chan Delivery provided by Channel.Consume until the
 chan closes.
 
 When noWait is true, do not wait for the server to acknowledge the cancel.
-Only use this when you are certain there are no deliveries requiring
-acknowledgment are in-flight otherwise they will arrive and be dropped in the
-client without an ack and will not be redelivered to other consumers.
+Only use this when you are certain there are no deliveries in flight that
+require an acknowledgment, otherwise they will arrive and be dropped in the
+client without an ack, and will not be redelivered to other consumers.
 
 */
 func (me *Channel) Cancel(consumer string, noWait bool) error {
@@ -681,7 +681,7 @@ this queue by publishing to "" with the routing key of the queue name.
   -----------------------------------------------
   key: alerts -> ""     -> alerts -> alerts
 
-The queue name may be empty, in which the server will generate a unique name
+The queue name may be empty, in which case the server will generate a unique name
 which will be returned in the Name field of Queue struct.
 
 Durable and Non-Auto-Deleted queues will survive server restarts and remain
@@ -701,20 +701,20 @@ for temporary topologies that may have long delays between consumer activity.
 These queues can only be bound to non-durable exchanges.
 
 Durable and Auto-Deleted queues will be restored on server restart, but without
-active consumers, will not survive and be removed.  This Lifetime is unlikely
+active consumers will not survive and be removed.  This Lifetime is unlikely
 to be useful.
 
 Exclusive queues are only accessible by the connection that declares them and
 will be deleted when the connection closes.  Channels on other connections
-will receive an error when attempting declare, bind, consume, purge or delete a
-queue with the same name.
+will receive an error when attempting  to declare, bind, consume, purge or
+delete a queue with the same name.
 
 When noWait is true, the queue will assume to be declared on the server.  A
 channel exception will arrive if the conditions are met for existing queues
 or attempting to modify an existing queue from a different connection.
 
 When the error return value is not nil, you can assume the queue could not be
-declared with these parameters and the channel will be closed.
+declared with these parameters, and the channel will be closed.
 
 */
 func (me *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
@@ -798,10 +798,10 @@ func (me *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusi
 
 /*
 QueueInspect passively declares a queue by name to inspect the current message
-count, consumer count.
+count and consumer count.
 
-Use this method to check how many unacknowledged messages reside in the queue
-and how many consumers are receiving deliveries and whether a queue by this
+Use this method to check how many unacknowledged messages reside in the queue,
+how many consumers are receiving deliveries, and whether a queue by this
 name already exists.
 
 If the queue by this name exists, use Channel.QueueDeclare check if it is
@@ -987,7 +987,7 @@ deliveries will be requeued at the end of the same queue.
 
 The consumer is identified by a string that is unique and scoped for all
 consumers on this channel.  If you wish to eventually cancel the consumer, use
-the same non-empty idenfitier in Channel.Cancel.  An empty string will cause
+the same non-empty identifier in Channel.Cancel.  An empty string will cause
 the library to generate a unique identity.  The consumer identity will be
 included in every Delivery in the ConsumerTag field
 
@@ -1067,7 +1067,7 @@ Errors returned from this method will close the channel.
 Exchange names starting with "amq." are reserved for pre-declared and
 standardized exchanges. The client MAY declare an exchange starting with
 "amq." if the passive option is set, or the exchange already exists.  Names can
-consists of a non-empty sequence of letters, digits, hyphen, underscore,
+consist of a non-empty sequence of letters, digits, hyphen, underscore,
 period, or colon.
 
 Each exchange belongs to one of a set of exchange kinds/types implemented by
@@ -1099,7 +1099,7 @@ durable, so queues that bind to these pre-declared exchanges must also be
 durable.
 
 Exchanges declared as `internal` do not accept accept publishings. Internal
-exchanges are useful for when you wish to implement inter-exchange topologies
+exchanges are useful when you wish to implement inter-exchange topologies
 that should not be exposed to users of the broker.
 
 When noWait is true, declare without waiting for a confirmation from the server.
@@ -1283,7 +1283,7 @@ error or lack of an error does not indicate whether the server has received this
 publishing.
 
 It is possible for publishing to not reach the broker if the underlying socket
-is shutdown without pending publishing packets being flushed from the kernel
+is shut down without pending publishing packets being flushed from the kernel
 buffers.  The easy way of making it probable that all publishings reach the
 server is to always call Connection.Close before terminating your publishing
 application.  The way to ensure that all publishings reach the server is to add
@@ -1292,7 +1292,7 @@ Channel.Confirm.  Publishing delivery tags and their corresponding
 confirmations start at 1.  Exit when all publishings are confirmed.
 
 When Publish does not return an error and the channel is in confirm mode, the
-internal counter for DeliveryTags with the first confirmation starting at 1.
+internal counter for DeliveryTags with the first confirmation starts at 1.
 
 */
 func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) error {
@@ -1340,7 +1340,7 @@ Get synchronously receives a single Delivery from the head of a queue from the
 server to the client.  In almost all cases, using Channel.Consume will be
 preferred.
 
-If there was a delivery waiting on the queue and that delivery was received the
+If there was a delivery waiting on the queue and that delivery was received, the
 second return value will be true.  If there was no delivery waiting or an error
 occurred, the ok bool will be false.
 
@@ -1454,7 +1454,7 @@ func (me *Channel) Flow(active bool) error {
 Confirm puts this channel into confirm mode so that the client can ensure all
 publishings have successfully been received by the server.  After entering this
 mode, the server will send a basic.ack or basic.nack message with the deliver
-tag set to a 1 based incrementing index corresponding to every publishing
+tag set to a 1 based incremental index corresponding to every publishing
 received after the this method returns.
 
 Add a listener to Channel.NotifyPublish to respond to the Confirmations. If
@@ -1468,7 +1468,7 @@ Ack and Nack confirmations will arrive at some point in the future.
 Unroutable mandatory or immediate messages are acknowledged immediately after
 any Channel.NotifyReturn listeners have been notified.  Other messages are
 acknowledged when all queues that should have the message routed to them have
-either have received acknowledgment of delivery or have enqueued the message,
+either received acknowledgment of delivery or have enqueued the message,
 persisting the message if necessary.
 
 When noWait is true, the client will not wait for a response.  A channel
