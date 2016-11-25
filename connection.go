@@ -317,8 +317,12 @@ func (me *Connection) closeWith(err *Error) error {
 	)
 }
 
+func (me *Connection) IsClosed() bool {
+	return (atomic.LoadInt32(&me.closed) == 1)
+}
+
 func (me *Connection) send(f frame) error {
-	if atomic.LoadInt32(&me.closed) == 1 {
+	if me.IsClosed() {
 		return ErrClosed
 	}
 
