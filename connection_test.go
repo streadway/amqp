@@ -14,7 +14,7 @@ func TestChannelOpenOnAClosedConnectionFails(t *testing.T) {
 	}
 	
 	_, err = conn.Channel()
-	if err == nil {
+	if err != ErrClosed {
 		log.Fatalf("channel.open on a closed connection %s is expected to fail", conn)
 	}
 }
@@ -30,7 +30,7 @@ func TestQueueDeclareOnAClosedConnectionFails(t *testing.T) {
 	}
 	
 	_, err = ch.QueueDeclare("an example", false, false, false, false, nil)
-	if err == nil {
+	if err != ErrClosed {
 		log.Fatalf("queue.declare on a closed connection %s is expected to fail", conn)
 	}
 }
