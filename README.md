@@ -81,8 +81,8 @@ Thanks to the [community of contributors](https://github.com/streadway/amqp/grap
 
 ## External packages
 
-  * [Google App Engine Dialer support](https://github.com/soundtrackyourbrand/gaeamqp](https://github.com/soundtrackyourbrand/gaeamqp)
-  * [RabbitMQ examples in Go](https://github.com/rabbitmq/rabbitmq-tutorials/tree/master/go](https://github.com/rabbitmq/rabbitmq-tutorials/tree/master/go)
+  * [Google App Engine Dialer support](https://github.com/soundtrackyourbrand/gaeamqp)
+  * [RabbitMQ examples in Go](https://github.com/rabbitmq/rabbitmq-tutorials/tree/master/go)
 
 ## License
 
