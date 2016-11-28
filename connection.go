@@ -619,7 +619,10 @@ func (me *Connection) call(req message, res ...message) error {
 	}
 
 	select {
-	case err := <-me.errors:
+	case err, ok := <-me.errors:
+		if !ok {
+			return ErrClosed
+		}
 		return err
 
 	case msg := <-me.rpc:
