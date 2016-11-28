@@ -46,7 +46,7 @@ func TestConcurrentClose(t *testing.T) {
 			t.Parallel()
 			err := conn.Close()
 			if err != nil && err != ErrClosed {
-				log.Fatalf("Expected nil or ErrClosed - got %s", err)
+				log.Fatalf("Expected nil or ErrClosed - got %#v, type is %T", err, err)
 			}
 		})
 	}
