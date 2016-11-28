@@ -2,6 +2,7 @@ package amqp
 
 import (
 	"log"
+	"sync"
 	"testing"
 )
 
@@ -41,13 +42,16 @@ func TestConcurrentClose(t *testing.T) {
 		log.Fatalf("Could't connect to amqp server, err = %s", err)
 	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(5)
 	for i := 0; i < 5; i++ {
-		t.Run("ConcurrentClose", func(t *testing.T) {
-			t.Parallel()
+		go func() {
 			err := conn.Close()
 			if err != nil && err != ErrClosed {
 				log.Fatalf("Expected nil or ErrClosed - got %#v, type is %T", err, err)
 			}
-		})
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 }
