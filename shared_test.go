@@ -16,15 +16,15 @@ type pipe struct {
 	w *io.PipeWriter
 }
 
-func (p pipe) Read(b []byte) (int, error) {
+func (p *pipe) Read(b []byte) (int, error) {
 	return p.r.Read(b)
 }
 
-func (p pipe) Write(b []byte) (int, error) {
+func (p *pipe) Write(b []byte) (int, error) {
 	return p.w.Write(b)
 }
 
-func (p pipe) Close() error {
+func (p *pipe) Close() error {
 	p.r.Close()
 	p.w.Close()
 	return nil
@@ -65,7 +65,7 @@ func (me *logIO) Close() (err error) {
 	if err != nil {
 		me.t.Logf("%s close : %v\n", me.prefix, err)
 	} else {
-		me.t.Logf("%s close\n", me.prefix, err)
+		me.t.Logf("%s close\n", me.prefix)
 	}
 	return
 }

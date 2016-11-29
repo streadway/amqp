@@ -141,7 +141,11 @@ func (me *Channel) open() error {
 // Performs a request/response call for when the message is not NoWait and is
 // specified as Synchronous.
 func (me *Channel) call(req message, res ...message) error {
-	if err := me.send(me, req); err != nil {
+	me.m.Lock()
+	send := me.send
+	me.m.Unlock()
+
+	if err := send(me, req); err != nil {
 		return err
 	}
 
@@ -273,6 +277,7 @@ func (me *Channel) dispatch(msg message) {
 		}
 
 	case *basicAck:
+		me.m.Lock()
 		if me.confirming {
 			if m.Multiple {
 				me.confirms.Multiple(Confirmation{m.DeliveryTag, true})
@@ -280,8 +285,10 @@ func (me *Channel) dispatch(msg message) {
 				me.confirms.One(Confirmation{m.DeliveryTag, true})
 			}
 		}
+		me.m.Unlock()
 
 	case *basicNack:
+		me.m.Lock()
 		if me.confirming {
 			if m.Multiple {
 				me.confirms.Multiple(Confirmation{m.DeliveryTag, false})
@@ -289,6 +296,7 @@ func (me *Channel) dispatch(msg message) {
 				me.confirms.One(Confirmation{m.DeliveryTag, false})
 			}
 		}
+		me.m.Unlock()
 
 	case *basicDeliver:
 		me.consumers.send(m.ConsumerTag, newDelivery(me, m))
@@ -1476,9 +1484,6 @@ exception could occur if the server does not support this method.
 
 */
 func (me *Channel) Confirm(noWait bool) error {
-	me.m.Lock()
-	defer me.m.Unlock()
-
 	if err := me.call(
 		&confirmSelect{Nowait: noWait},
 		&confirmSelectOk{},
@@ -1486,7 +1491,9 @@ func (me *Channel) Confirm(noWait bool) error {
 		return err
 	}
 
+	me.m.Lock()
 	me.confirming = true
+	me.m.Unlock()
 
 	return nil
 }
