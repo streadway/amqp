@@ -76,6 +76,7 @@ type Connection struct {
 	conn io.ReadWriteCloser
 
 	rpc       chan message
+	readDone  chan struct{}
 	writer    *writer
 	sends     chan time.Time     // timestamps of each frame sent
 	deadlines chan readDeadliner // heartbeater updates read deadlines
@@ -213,6 +214,7 @@ to use your own custom transport.
 func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	me := &Connection{
 		conn:      conn,
+		readDone:  make(chan struct{}),
 		writer:    &writer{bufio.NewWriter(conn)},
 		channels:  make(map[uint16]*Channel),
 		rpc:       make(chan message),
@@ -220,7 +222,7 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 		errors:    make(chan *Error, 1),
 		deadlines: make(chan readDeadliner, 1),
 	}
-	go me.reader(conn)
+	go me.reader(conn, me.NotifyClose(make(chan *Error, 1)))
 	return me, me.open(config)
 }
 
@@ -296,6 +298,9 @@ including the underlying io, Channels, Notify listeners and Channel consumers
 will also be closed.
 */
 func (me *Connection) Close() error {
+	defer func() {
+		<-me.readDone
+	}()
 	defer me.shutdown(nil)
 	return me.call(
 		&connectionClose{
@@ -353,49 +358,55 @@ func (me *Connection) shutdown(err *Error) {
 	atomic.StoreInt32(&me.closed, 1)
 
 	me.destructor.Do(func() {
-		me.m.Lock()
-		defer me.m.Unlock()
-
-		if err != nil {
-			for _, c := range me.closes {
-				c <- err
-			}
-		}
-
-		for _, ch := range me.channels {
-			ch.shutdown(err)
-			me.releaseChannel(ch.id)
-		}
-
-		if err != nil {
-			me.errors <- err
-		}
-
-		me.conn.Close()
-
-		for _, c := range me.closes {
-			close(c)
-		}
-
-		for _, c := range me.blocks {
-			close(c)
-		}
-
-		me.noNotify = true
+		me.destruct(err)
 	})
+}
+
+func (me *Connection) destruct(err *Error) {
+	me.m.Lock()
+	defer me.m.Unlock()
+
+	if err != nil {
+		for _, c := range me.closes {
+			c <- err
+		}
+	}
+
+	for _, ch := range me.channels {
+		ch.shutdown(err)
+		me.releaseChannel(ch.id)
+	}
+
+	if err != nil {
+		me.errors <- err
+	}
+
+	me.conn.Close()
+
+	for _, c := range me.closes {
+		close(c)
+	}
+	me.closes = nil
+
+	for _, c := range me.blocks {
+		close(c)
+	}
+	me.blocks = nil
+
+	me.noNotify = true
 }
 
 // All methods sent to the connection channel should be synchronous so we
 // can handle them directly without a framing component
-func (me *Connection) demux(f frame) {
+func (me *Connection) demux(f frame, done chan *Error) {
 	if f.channel() == 0 {
-		me.dispatch0(f)
+		me.dispatch0(f, done)
 	} else {
 		me.dispatchN(f)
 	}
 }
 
-func (me *Connection) dispatch0(f frame) {
+func (me *Connection) dispatch0(f frame, done chan *Error) {
 	switch mf := f.(type) {
 	case *methodFrame:
 		switch m := mf.Method.(type) {
@@ -408,15 +419,18 @@ func (me *Connection) dispatch0(f frame) {
 
 			me.shutdown(newError(m.ReplyCode, m.ReplyText))
 		case *connectionBlocked:
-			for _, c := range me.blocks {
+			for _, c := range me.blocksCopy() {
 				c <- Blocking{Active: true, Reason: m.Reason}
 			}
 		case *connectionUnblocked:
-			for _, c := range me.blocks {
+			for _, c := range me.blocksCopy() {
 				c <- Blocking{Active: false}
 			}
 		default:
-			me.rpc <- m
+			select {
+			case me.rpc <- m:
+			case <-done:
+			}
 		}
 	case *heartbeatFrame:
 		// kthx - all reads reset our deadline.  so we can drop this
@@ -467,10 +481,18 @@ func (me *Connection) dispatchClosed(f frame) {
 	}
 }
 
+func (me *Connection) blocksCopy() []chan Blocking {
+	me.m.Lock()
+	blocks := append(([]chan Blocking)(nil), me.blocks...)
+	me.m.Unlock()
+	return blocks
+}
+
 // Reads each frame off the IO and hand off to the connection object that
 // will demux the streams and dispatch to one of the opened channels or
 // handle on channel 0 (the connection channel).
-func (me *Connection) reader(r io.Reader) {
+func (me *Connection) reader(r io.Reader, done chan *Error) {
+	defer close(me.readDone)
 	buf := bufio.NewReader(r)
 	frames := &reader{buf}
 	conn, haveDeadliner := r.(readDeadliner)
@@ -483,10 +505,13 @@ func (me *Connection) reader(r io.Reader) {
 			return
 		}
 
-		me.demux(frame)
+		me.demux(frame, done)
 
 		if haveDeadliner {
-			me.deadlines <- conn
+			select {
+			case me.deadlines <- conn:
+			case <-done:
+			}
 		}
 	}
 }

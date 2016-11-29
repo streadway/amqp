@@ -27,6 +27,7 @@ import (
 
 func TestIntegrationOpenClose(t *testing.T) {
 	if c := integrationConnection(t, "open-close"); c != nil {
+		defer c.Close()
 		t.Logf("have connection, calling connection close")
 		if err := c.Close(); err != nil {
 			t.Fatalf("connection close: %s", err)
@@ -1402,6 +1403,7 @@ func TestDeadlockConsumerIssue48(t *testing.T) {
 // https://github.com/streadway/amqp/issues/46
 func TestRepeatedChannelExceptionWithPublishAndMaxProcsIssue46(t *testing.T) {
 	conn := integrationConnection(t, "issue46")
+	defer conn.Close()
 	if conn != nil {
 		for i := 0; i < 100; i++ {
 			ch, err := conn.Channel()
@@ -1425,6 +1427,7 @@ func TestRepeatedChannelExceptionWithPublishAndMaxProcsIssue46(t *testing.T) {
 func TestChannelExceptionWithCloseIssue43(t *testing.T) {
 	conn := integrationConnection(t, "issue43")
 	if conn != nil {
+		defer conn.Close()
 		go func() {
 			for err := range conn.NotifyClose(make(chan *Error)) {
 				t.Log(err.Error())
@@ -1708,7 +1711,7 @@ func integrationURLFromEnv() string {
 
 func loggedConnection(t *testing.T, conn *Connection, name string) *Connection {
 	if name != "" {
-		conn.conn = &logIO{t, name, conn.conn}
+		conn.conn = &logIO{t: t, prefix: name, proxy: conn.conn}
 	}
 	return conn
 }
@@ -1732,6 +1735,7 @@ func integrationQueue(t *testing.T, name string) (*Connection, *Channel) {
 				return conn, channel
 			}
 		}
+		defer conn.Close()
 	}
 	return nil, nil
 }
@@ -1743,6 +1747,7 @@ func integrationRabbitMQ(t *testing.T, name string) *Connection {
 		if server, ok := conn.Properties["product"]; ok && server == "RabbitMQ" {
 			return conn
 		}
+		defer conn.Close()
 	}
 
 	return nil
