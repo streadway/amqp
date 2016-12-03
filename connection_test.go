@@ -8,7 +8,7 @@ import (
 func TestChannelOpenOnAClosedConnectionFails(t *testing.T) {
 	conn, err := Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
-		log.Fatalf("Could't connect to amqp server, err = %s", err)
+		log.Fatalf("Could't connect to RabbitMQ at localhost:5672, err = %s", err)
 	}
 	conn.Close()
 
@@ -25,7 +25,7 @@ func TestChannelOpenOnAClosedConnectionFails(t *testing.T) {
 func TestQueueDeclareOnAClosedConnectionFails(t *testing.T) {
 	conn, err := Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
-		log.Fatalf("Could't connect to amqp server, err = %s", err)
+		log.Fatalf("Could't connect to RabbitMQ at localhost:5672, err = %s", err)
 	}
 	ch, _ := conn.Channel()
 
