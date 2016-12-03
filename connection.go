@@ -306,6 +306,10 @@ including the underlying io, Channels, Notify listeners and Channel consumers
 will also be closed.
 */
 func (me *Connection) Close() error {
+	if me.IsClosed() {
+		return ErrClosed
+	}
+
 	defer me.shutdown(nil)
 	return me.call(
 		&connectionClose{
@@ -317,6 +321,10 @@ func (me *Connection) Close() error {
 }
 
 func (me *Connection) closeWith(err *Error) error {
+	if me.IsClosed() {
+		return ErrClosed
+	}
+
 	defer me.shutdown(err)
 	return me.call(
 		&connectionClose{
@@ -380,6 +388,8 @@ func (me *Connection) shutdown(err *Error) {
 		if err != nil {
 			me.errors <- err
 		}
+		// Shutdown handler goroutine can still receive the result.
+		close(me.errors)
 
 		me.conn.Close()
 
@@ -628,7 +638,10 @@ func (me *Connection) call(req message, res ...message) error {
 	}
 
 	select {
-	case err := <-me.errors:
+	case err, ok := <-me.errors:
+		if !ok {
+			return ErrClosed
+		}
 		return err
 
 	case msg := <-me.rpc:
