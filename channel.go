@@ -27,6 +27,7 @@ type Channel struct {
 	destructor sync.Once
 	sendM      sync.Mutex // sequence channel frames
 	m          sync.Mutex // struct field mutex
+	confirmM   sync.Mutex // publisher confirms state mutex
 
 	connection *Connection
 
@@ -1483,9 +1484,9 @@ func (me *Channel) Confirm(noWait bool) error {
 		return err
 	}
 
-	me.m.Lock()
+	me.confirmM.Lock()
 	me.confirming = true
-	me.m.Unlock()
+	me.confirmM.Unlock()
 
 	return nil
 }
