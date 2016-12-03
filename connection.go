@@ -370,7 +370,8 @@ func (me *Connection) shutdown(err *Error) {
 		if err != nil {
 			me.errors <- err
 		}
-		close(me.errors) // Since the channel is buffered, the waiting goroutine will recieve the result.
+		// Shutdown handler goroutine can still receive the result.
+		close(me.errors)
 
 		me.conn.Close()
 
