@@ -235,6 +235,16 @@ func (me *Connection) LocalAddr() net.Addr {
 	return &net.TCPAddr{}
 }
 
+// TLSConnectionState returns basic TLS details of the underlying transport.
+func (me *Connection) TLSConnectionState() tls.ConnectionState {
+	if c, ok := me.conn.(interface {
+		ConnectionState() tls.ConnectionState
+	}); ok {
+		return c.ConnectionState()
+	}
+	return tls.ConnectionState{}
+}
+
 /*
 NotifyClose registers a listener for close events either initiated by an error
 accompaning a connection.close method or by a normal shutdown.
