@@ -296,6 +296,10 @@ including the underlying io, Channels, Notify listeners and Channel consumers
 will also be closed.
 */
 func (me *Connection) Close() error {
+	if me.IsClosed() {
+		return ErrClosed
+	}
+
 	defer me.shutdown(nil)
 	return me.call(
 		&connectionClose{
@@ -307,6 +311,10 @@ func (me *Connection) Close() error {
 }
 
 func (me *Connection) closeWith(err *Error) error {
+	if me.IsClosed() {
+		return ErrClosed
+	}
+
 	defer me.shutdown(err)
 	return me.call(
 		&connectionClose{
