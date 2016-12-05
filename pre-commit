@@ -1,0 +1,3 @@
+#!/bin/sh
+gofmt -l . | egrep . && echo "^^^ go fmt" && exit 1
+[ ! -z $NOTEST ] || exec env AMQP_URL= go test
