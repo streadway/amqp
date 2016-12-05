@@ -296,7 +296,7 @@ including the underlying io, Channels, Notify listeners and Channel consumers
 will also be closed.
 */
 func (me *Connection) Close() error {
-	if me.IsClosed() {
+	if me.isClosed() {
 		return ErrClosed
 	}
 
@@ -311,7 +311,7 @@ func (me *Connection) Close() error {
 }
 
 func (me *Connection) closeWith(err *Error) error {
-	if me.IsClosed() {
+	if me.isClosed() {
 		return ErrClosed
 	}
 
@@ -325,12 +325,12 @@ func (me *Connection) closeWith(err *Error) error {
 	)
 }
 
-func (me *Connection) IsClosed() bool {
+func (me *Connection) isClosed() bool {
 	return (atomic.LoadInt32(&me.closed) == 1)
 }
 
 func (me *Connection) send(f frame) error {
-	if me.IsClosed() {
+	if me.isClosed() {
 		return ErrClosed
 	}
 
