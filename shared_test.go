@@ -36,36 +36,36 @@ type logIO struct {
 	proxy  io.ReadWriteCloser
 }
 
-func (me *logIO) Read(p []byte) (n int, err error) {
-	me.t.Logf("%s reading %d\n", me.prefix, len(p))
-	n, err = me.proxy.Read(p)
+func (log *logIO) Read(p []byte) (n int, err error) {
+	log.t.Logf("%s reading %d\n", log.prefix, len(p))
+	n, err = log.proxy.Read(p)
 	if err != nil {
-		me.t.Logf("%s read %x: %v\n", me.prefix, p[0:n], err)
+		log.t.Logf("%s read %x: %v\n", log.prefix, p[0:n], err)
 	} else {
-		me.t.Logf("%s read:\n%s\n", me.prefix, hex.Dump(p[0:n]))
-		//fmt.Printf("%s read:\n%s\n", me.prefix, hex.Dump(p[0:n]))
+		log.t.Logf("%s read:\n%s\n", log.prefix, hex.Dump(p[0:n]))
+		//fmt.Printf("%s read:\n%s\n", log.prefix, hex.Dump(p[0:n]))
 	}
 	return
 }
 
-func (me *logIO) Write(p []byte) (n int, err error) {
-	me.t.Logf("%s writing %d\n", me.prefix, len(p))
-	n, err = me.proxy.Write(p)
+func (log *logIO) Write(p []byte) (n int, err error) {
+	log.t.Logf("%s writing %d\n", log.prefix, len(p))
+	n, err = log.proxy.Write(p)
 	if err != nil {
-		me.t.Logf("%s write %d, %x: %v\n", me.prefix, len(p), p[0:n], err)
+		log.t.Logf("%s write %d, %x: %v\n", log.prefix, len(p), p[0:n], err)
 	} else {
-		me.t.Logf("%s write %d:\n%s", me.prefix, len(p), hex.Dump(p[0:n]))
-		//fmt.Printf("%s write %d:\n%s", me.prefix, len(p), hex.Dump(p[0:n]))
+		log.t.Logf("%s write %d:\n%s", log.prefix, len(p), hex.Dump(p[0:n]))
+		//fmt.Printf("%s write %d:\n%s", log.prefix, len(p), hex.Dump(p[0:n]))
 	}
 	return
 }
 
-func (me *logIO) Close() (err error) {
-	err = me.proxy.Close()
+func (log *logIO) Close() (err error) {
+	err = log.proxy.Close()
 	if err != nil {
-		me.t.Logf("%s close : %v\n", me.prefix, err)
+		log.t.Logf("%s close : %v\n", log.prefix, err)
 	} else {
-		me.t.Logf("%s close\n", me.prefix, err)
+		log.t.Logf("%s close\n", log.prefix, err)
 	}
 	return
 }

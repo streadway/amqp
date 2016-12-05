@@ -18,7 +18,7 @@ func TestConfirmOneResequences(t *testing.T) {
 
 	c.Listen(l)
 
-	for i, _ := range fixtures {
+	for i := range fixtures {
 		if want, got := uint64(i+1), c.Publish(); want != got {
 			t.Fatalf("expected publish to return the 1 based delivery tag published, want: %d, got: %d", want, got)
 		}
@@ -55,7 +55,7 @@ func TestConfirmMultipleResequences(t *testing.T) {
 	)
 	c.Listen(l)
 
-	for _, _ = range fixtures {
+	for _ = range fixtures {
 		c.Publish()
 	}
 

@@ -90,68 +90,68 @@ func newChannel(c *Connection, id uint16) *Channel {
 
 // shutdown is called by Connection after the channel has been removed from the
 // connection registry.
-func (me *Channel) shutdown(e *Error) {
-	me.destructor.Do(func() {
-		me.m.Lock()
-		defer me.m.Unlock()
+func (ch *Channel) shutdown(e *Error) {
+	ch.destructor.Do(func() {
+		ch.m.Lock()
+		defer ch.m.Unlock()
 
 		// Broadcast abnormal shutdown
 		if e != nil {
-			for _, c := range me.closes {
+			for _, c := range ch.closes {
 				c <- e
 			}
 		}
 
-		me.send = (*Channel).sendClosed
+		ch.send = (*Channel).sendClosed
 
 		// Notify RPC if we're selecting
 		if e != nil {
-			me.errors <- e
+			ch.errors <- e
 		}
 
-		me.consumers.closeAll()
+		ch.consumers.closeAll()
 
-		for _, c := range me.closes {
+		for _, c := range ch.closes {
 			close(c)
 		}
 
-		for _, c := range me.flows {
+		for _, c := range ch.flows {
 			close(c)
 		}
 
-		for _, c := range me.returns {
+		for _, c := range ch.returns {
 			close(c)
 		}
 
-		for _, c := range me.cancels {
+		for _, c := range ch.cancels {
 			close(c)
 		}
 
-		if me.confirms != nil {
-			me.confirms.Close()
+		if ch.confirms != nil {
+			ch.confirms.Close()
 		}
 
-		me.noNotify = true
+		ch.noNotify = true
 	})
 }
 
-func (me *Channel) open() error {
-	return me.call(&channelOpen{}, &channelOpenOk{})
+func (ch *Channel) open() error {
+	return ch.call(&channelOpen{}, &channelOpenOk{})
 }
 
 // Performs a request/response call for when the message is not NoWait and is
 // specified as Synchronous.
-func (me *Channel) call(req message, res ...message) error {
-	if err := me.send(me, req); err != nil {
+func (ch *Channel) call(req message, res ...message) error {
+	if err := ch.send(ch, req); err != nil {
 		return err
 	}
 
 	if req.wait() {
 		select {
-		case e := <-me.errors:
+		case e := <-ch.errors:
 			return e
 
-		case msg := <-me.rpc:
+		case msg := <-ch.rpc:
 			if msg != nil {
 				for _, try := range res {
 					if reflect.TypeOf(msg) == reflect.TypeOf(try) {
@@ -163,27 +163,26 @@ func (me *Channel) call(req message, res ...message) error {
 					}
 				}
 				return ErrCommandInvalid
-			} else {
-				// RPC channel has been closed without an error, likely due to a hard
-				// error on the Connection.  This indicates we have already been
-				// shutdown and if were waiting, will have returned from the errors chan.
-				return ErrClosed
 			}
+			// RPC channel has been closed without an error, likely due to a hard
+			// error on the Connection.  This indicates we have already been
+			// shutdown and if were waiting, will have returned from the errors chan.
+			return ErrClosed
 		}
 	}
 
 	return nil
 }
 
-func (me *Channel) sendClosed(msg message) (err error) {
-	me.sendM.Lock()
-	defer me.sendM.Unlock()
+func (ch *Channel) sendClosed(msg message) (err error) {
+	ch.sendM.Lock()
+	defer ch.sendM.Unlock()
 
 	// After a 'channel.close' is sent or received the only valid response is
 	// channel.close-ok
 	if _, ok := msg.(*channelCloseOk); ok {
-		return me.connection.send(&methodFrame{
-			ChannelId: me.id,
+		return ch.connection.send(&methodFrame{
+			ChannelId: ch.id,
 			Method:    msg,
 		})
 	}
@@ -191,9 +190,9 @@ func (me *Channel) sendClosed(msg message) (err error) {
 	return ErrClosed
 }
 
-func (me *Channel) sendOpen(msg message) (err error) {
-	me.sendM.Lock()
-	defer me.sendM.Unlock()
+func (ch *Channel) sendOpen(msg message) (err error) {
+	ch.sendM.Lock()
+	defer ch.sendM.Unlock()
 
 	if content, ok := msg.(messageWithContent); ok {
 		props, body := content.getContent()
@@ -202,21 +201,21 @@ func (me *Channel) sendOpen(msg message) (err error) {
 		// catch client max frame size==0 and server max frame size==0
 		// set size to length of what we're trying to publish
 		var size int
-		if me.connection.Config.FrameSize > 0 {
-			size = me.connection.Config.FrameSize - frameHeaderSize
+		if ch.connection.Config.FrameSize > 0 {
+			size = ch.connection.Config.FrameSize - frameHeaderSize
 		} else {
 			size = len(body)
 		}
 
-		if err = me.connection.send(&methodFrame{
-			ChannelId: me.id,
+		if err = ch.connection.send(&methodFrame{
+			ChannelId: ch.id,
 			Method:    content,
 		}); err != nil {
 			return
 		}
 
-		if err = me.connection.send(&headerFrame{
-			ChannelId:  me.id,
+		if err = ch.connection.send(&headerFrame{
+			ChannelId:  ch.id,
 			ClassId:    class,
 			Size:       uint64(len(body)),
 			Properties: props,
@@ -230,16 +229,16 @@ func (me *Channel) sendOpen(msg message) (err error) {
 				j = len(body)
 			}
 
-			if err = me.connection.send(&bodyFrame{
-				ChannelId: me.id,
+			if err = ch.connection.send(&bodyFrame{
+				ChannelId: ch.id,
 				Body:      body[i:j],
 			}); err != nil {
 				return
 			}
 		}
 	} else {
-		err = me.connection.send(&methodFrame{
-			ChannelId: me.id,
+		err = ch.connection.send(&methodFrame{
+			ChannelId: ch.id,
 			Method:    msg,
 		})
 	}
@@ -249,82 +248,82 @@ func (me *Channel) sendOpen(msg message) (err error) {
 
 // Eventually called via the state machine from the connection's reader
 // goroutine, so assumes serialized access.
-func (me *Channel) dispatch(msg message) {
+func (ch *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
-		me.connection.closeChannel(me, newError(m.ReplyCode, m.ReplyText))
-		me.send(me, &channelCloseOk{})
+		ch.connection.closeChannel(ch, newError(m.ReplyCode, m.ReplyText))
+		ch.send(ch, &channelCloseOk{})
 
 	case *channelFlow:
-		for _, c := range me.flows {
+		for _, c := range ch.flows {
 			c <- m.Active
 		}
-		me.send(me, &channelFlowOk{Active: m.Active})
+		ch.send(ch, &channelFlowOk{Active: m.Active})
 
 	case *basicCancel:
-		for _, c := range me.cancels {
+		for _, c := range ch.cancels {
 			c <- m.ConsumerTag
 		}
-		me.send(me, &basicCancelOk{ConsumerTag: m.ConsumerTag})
+		ch.send(ch, &basicCancelOk{ConsumerTag: m.ConsumerTag})
 
 	case *basicReturn:
 		ret := newReturn(*m)
-		for _, c := range me.returns {
+		for _, c := range ch.returns {
 			c <- *ret
 		}
 
 	case *basicAck:
-		if me.confirming {
+		if ch.confirming {
 			if m.Multiple {
-				me.confirms.Multiple(Confirmation{m.DeliveryTag, true})
+				ch.confirms.Multiple(Confirmation{m.DeliveryTag, true})
 			} else {
-				me.confirms.One(Confirmation{m.DeliveryTag, true})
+				ch.confirms.One(Confirmation{m.DeliveryTag, true})
 			}
 		}
 
 	case *basicNack:
-		if me.confirming {
+		if ch.confirming {
 			if m.Multiple {
-				me.confirms.Multiple(Confirmation{m.DeliveryTag, false})
+				ch.confirms.Multiple(Confirmation{m.DeliveryTag, false})
 			} else {
-				me.confirms.One(Confirmation{m.DeliveryTag, false})
+				ch.confirms.One(Confirmation{m.DeliveryTag, false})
 			}
 		}
 
 	case *basicDeliver:
-		me.consumers.send(m.ConsumerTag, newDelivery(me, m))
+		ch.consumers.send(m.ConsumerTag, newDelivery(ch, m))
 		// TODO log failed consumer and close channel, this can happen when
 		// deliveries are in flight and a no-wait cancel has happened
 
 	default:
-		me.rpc <- msg
+		ch.rpc <- msg
 	}
 }
 
-func (me *Channel) transition(f func(*Channel, frame) error) error {
-	me.recv = f
+func (ch *Channel) transition(f func(*Channel, frame) error) error {
+	ch.recv = f
 	return nil
 }
 
-func (me *Channel) recvMethod(f frame) error {
+func (ch *Channel) recvMethod(f frame) error {
 	switch frame := f.(type) {
 	case *methodFrame:
 		if msg, ok := frame.Method.(messageWithContent); ok {
-			me.body = make([]byte, 0)
-			me.message = msg
-			return me.transition((*Channel).recvHeader)
+			ch.body = make([]byte, 0)
+			ch.message = msg
+			return ch.transition((*Channel).recvHeader)
 		}
 
-		me.dispatch(frame.Method) // termination state
-		return me.transition((*Channel).recvMethod)
+		ch.dispatch(frame.Method) // termination state
+		return ch.transition((*Channel).recvMethod)
 
 	case *headerFrame:
 		// drop
-		return me.transition((*Channel).recvMethod)
+		return ch.transition((*Channel).recvMethod)
 
 	case *bodyFrame:
 		// drop
-		return me.transition((*Channel).recvMethod)
+		return ch.transition((*Channel).recvMethod)
 
 	default:
 		panic("unexpected frame type")
@@ -333,27 +332,26 @@ func (me *Channel) recvMethod(f frame) error {
 	panic("unreachable")
 }
 
-func (me *Channel) recvHeader(f frame) error {
+func (ch *Channel) recvHeader(f frame) error {
 	switch frame := f.(type) {
 	case *methodFrame:
 		// interrupt content and handle method
-		return me.recvMethod(f)
+		return ch.recvMethod(f)
 
 	case *headerFrame:
 		// start collecting if we expect body frames
-		me.header = frame
+		ch.header = frame
 
 		if frame.Size == 0 {
-			me.message.setContent(me.header.Properties, me.body)
-			me.dispatch(me.message) // termination state
-			return me.transition((*Channel).recvMethod)
-		} else {
-			return me.transition((*Channel).recvContent)
+			ch.message.setContent(ch.header.Properties, ch.body)
+			ch.dispatch(ch.message) // termination state
+			return ch.transition((*Channel).recvMethod)
 		}
+		return ch.transition((*Channel).recvContent)
 
 	case *bodyFrame:
 		// drop and reset
-		return me.transition((*Channel).recvMethod)
+		return ch.transition((*Channel).recvMethod)
 
 	default:
 		panic("unexpected frame type")
@@ -364,26 +362,26 @@ func (me *Channel) recvHeader(f frame) error {
 
 // state after method + header and before the length
 // defined by the header has been reached
-func (me *Channel) recvContent(f frame) error {
+func (ch *Channel) recvContent(f frame) error {
 	switch frame := f.(type) {
 	case *methodFrame:
 		// interrupt content and handle method
-		return me.recvMethod(f)
+		return ch.recvMethod(f)
 
 	case *headerFrame:
 		// drop and reset
-		return me.transition((*Channel).recvMethod)
+		return ch.transition((*Channel).recvMethod)
 
 	case *bodyFrame:
-		me.body = append(me.body, frame.Body...)
+		ch.body = append(ch.body, frame.Body...)
 
-		if uint64(len(me.body)) >= me.header.Size {
-			me.message.setContent(me.header.Properties, me.body)
-			me.dispatch(me.message) // termination state
-			return me.transition((*Channel).recvMethod)
+		if uint64(len(ch.body)) >= ch.header.Size {
+			ch.message.setContent(ch.header.Properties, ch.body)
+			ch.dispatch(ch.message) // termination state
+			return ch.transition((*Channel).recvMethod)
 		}
 
-		return me.transition((*Channel).recvContent)
+		return ch.transition((*Channel).recvContent)
 
 	default:
 		panic("unexpected frame type")
@@ -399,9 +397,9 @@ code set to '200'.
 It is safe to call this method multiple times.
 
 */
-func (me *Channel) Close() error {
-	defer me.connection.closeChannel(me, nil)
-	return me.call(
+func (ch *Channel) Close() error {
+	defer ch.connection.closeChannel(ch, nil)
+	return ch.call(
 		&channelClose{ReplyCode: replySuccess},
 		&channelCloseOk{},
 	)
@@ -418,14 +416,14 @@ The chan provided will be closed when the Channel is closed and on a
 graceful close, no error will be sent.
 
 */
-func (me *Channel) NotifyClose(c chan *Error) chan *Error {
-	me.m.Lock()
-	defer me.m.Unlock()
+func (ch *Channel) NotifyClose(c chan *Error) chan *Error {
+	ch.m.Lock()
+	defer ch.m.Unlock()
 
-	if me.noNotify {
+	if ch.noNotify {
 		close(c)
 	} else {
-		me.closes = append(me.closes, c)
+		ch.closes = append(ch.closes, c)
 	}
 
 	return c
@@ -464,14 +462,14 @@ desire to interleave consumers and producers in the same process to avoid your
 basic.ack messages from getting rate limited with your basic.publish messages.
 
 */
-func (me *Channel) NotifyFlow(c chan bool) chan bool {
-	me.m.Lock()
-	defer me.m.Unlock()
+func (ch *Channel) NotifyFlow(c chan bool) chan bool {
+	ch.m.Lock()
+	defer ch.m.Unlock()
 
-	if me.noNotify {
+	if ch.noNotify {
 		close(c)
 	} else {
-		me.flows = append(me.flows, c)
+		ch.flows = append(ch.flows, c)
 	}
 
 	return c
@@ -486,14 +484,14 @@ A return struct has a copy of the Publishing along with some error
 information about why the publishing failed.
 
 */
-func (me *Channel) NotifyReturn(c chan Return) chan Return {
-	me.m.Lock()
-	defer me.m.Unlock()
+func (ch *Channel) NotifyReturn(c chan Return) chan Return {
+	ch.m.Lock()
+	defer ch.m.Unlock()
 
-	if me.noNotify {
+	if ch.noNotify {
 		close(c)
 	} else {
-		me.returns = append(me.returns, c)
+		ch.returns = append(ch.returns, c)
 	}
 
 	return c
@@ -507,14 +505,14 @@ where the master has just failed (and was moved to another node).
 The subscription tag is returned to the listener.
 
 */
-func (me *Channel) NotifyCancel(c chan string) chan string {
-	me.m.Lock()
-	defer me.m.Unlock()
+func (ch *Channel) NotifyCancel(c chan string) chan string {
+	ch.m.Lock()
+	defer ch.m.Unlock()
 
-	if me.noNotify {
+	if ch.noNotify {
 		close(c)
 	} else {
-		me.cancels = append(me.cancels, c)
+		ch.cancels = append(ch.cancels, c)
 	}
 
 	return c
@@ -526,8 +524,8 @@ ordered Ack and Nack DeliveryTag to the respective channels.
 
 For strict ordering, use NotifyPublish instead.
 */
-func (me *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64) {
-	confirms := me.NotifyPublish(make(chan Confirmation, len(ack)+len(nack)))
+func (ch *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64) {
+	confirms := ch.NotifyPublish(make(chan Confirmation, len(ack)+len(nack)))
 
 	go func() {
 		for c := range confirms {
@@ -569,14 +567,14 @@ It's advisable to wait for all Confirmations to arrive before calling
 Channel.Close() or Connection.Close().
 
 */
-func (me *Channel) NotifyPublish(confirm chan Confirmation) chan Confirmation {
-	me.m.Lock()
-	defer me.m.Unlock()
+func (ch *Channel) NotifyPublish(confirm chan Confirmation) chan Confirmation {
+	ch.m.Lock()
+	defer ch.m.Unlock()
 
-	if me.noNotify {
+	if ch.noNotify {
 		close(confirm)
 	} else {
-		me.confirms.Listen(confirm)
+		ch.confirms.Listen(confirm)
 	}
 
 	return confirm
@@ -614,8 +612,8 @@ greater as described by benchmarks on RabbitMQ.
 
 http://www.rabbitmq.com/blog/2012/04/25/rabbitmq-performance-measurements-part-2/
 */
-func (me *Channel) Qos(prefetchCount, prefetchSize int, global bool) error {
-	return me.call(
+func (ch *Channel) Qos(prefetchCount, prefetchSize int, global bool) error {
+	return ch.call(
 		&basicQos{
 			PrefetchCount: uint16(prefetchCount),
 			PrefetchSize:  uint32(prefetchSize),
@@ -644,22 +642,22 @@ require an acknowledgment, otherwise they will arrive and be dropped in the
 client without an ack, and will not be redelivered to other consumers.
 
 */
-func (me *Channel) Cancel(consumer string, noWait bool) error {
+func (ch *Channel) Cancel(consumer string, noWait bool) error {
 	req := &basicCancel{
 		ConsumerTag: consumer,
 		NoWait:      noWait,
 	}
 	res := &basicCancelOk{}
 
-	if err := me.call(req, res); err != nil {
+	if err := ch.call(req, res); err != nil {
 		return err
 	}
 
 	if req.wait() {
-		me.consumers.close(res.ConsumerTag)
+		ch.consumers.close(res.ConsumerTag)
 	} else {
 		// Potentially could drop deliveries in flight
-		me.consumers.close(consumer)
+		ch.consumers.close(consumer)
 	}
 
 	return nil
@@ -718,7 +716,7 @@ When the error return value is not nil, you can assume the queue could not be
 declared with these parameters, and the channel will be closed.
 
 */
-func (me *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
+func (ch *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
 	if err := args.Validate(); err != nil {
 		return Queue{}, err
 	}
@@ -734,7 +732,7 @@ func (me *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noW
 	}
 	res := &queueDeclareOk{}
 
-	if err := me.call(req, res); err != nil {
+	if err := ch.call(req, res); err != nil {
 		return Queue{}, err
 	}
 
@@ -762,7 +760,7 @@ non-existent queue will cause RabbitMQ to throw an exception. This function
 can be used to test for the existence of a queue.
 
 */
-func (me *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
+func (ch *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
 	if err := args.Validate(); err != nil {
 		return Queue{}, err
 	}
@@ -778,7 +776,7 @@ func (me *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusi
 	}
 	res := &queueDeclareOk{}
 
-	if err := me.call(req, res); err != nil {
+	if err := ch.call(req, res); err != nil {
 		return Queue{}, err
 	}
 
@@ -812,14 +810,14 @@ If a queue by this name does not exist, an error will be returned and the
 channel will be closed.
 
 */
-func (me *Channel) QueueInspect(name string) (Queue, error) {
+func (ch *Channel) QueueInspect(name string) (Queue, error) {
 	req := &queueDeclare{
 		Queue:   name,
 		Passive: true,
 	}
 	res := &queueDeclareOk{}
 
-	err := me.call(req, res)
+	err := ch.call(req, res)
 
 	state := Queue{
 		Name:      name,
@@ -874,12 +872,12 @@ When noWait is true and the queue could not be bound, the channel will be
 closed with an error.
 
 */
-func (me *Channel) QueueBind(name, key, exchange string, noWait bool, args Table) error {
+func (ch *Channel) QueueBind(name, key, exchange string, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
-	return me.call(
+	return ch.call(
 		&queueBind{
 			Queue:      name,
 			Exchange:   exchange,
@@ -899,12 +897,12 @@ It is possible to send and empty string for the exchange name which means to
 unbind the queue from the default exchange.
 
 */
-func (me *Channel) QueueUnbind(name, key, exchange string, args Table) error {
+func (ch *Channel) QueueUnbind(name, key, exchange string, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
-	return me.call(
+	return ch.call(
 		&queueUnbind{
 			Queue:      name,
 			Exchange:   exchange,
@@ -925,14 +923,14 @@ When successful, returns the number of messages purged.
 If noWait is true, do not wait for the server response and the number of
 messages purged will not be meaningful.
 */
-func (me *Channel) QueuePurge(name string, noWait bool) (int, error) {
+func (ch *Channel) QueuePurge(name string, noWait bool) (int, error) {
 	req := &queuePurge{
 		Queue:  name,
 		NoWait: noWait,
 	}
 	res := &queuePurgeOk{}
 
-	err := me.call(req, res)
+	err := ch.call(req, res)
 
 	return int(res.MessageCount), err
 }
@@ -956,7 +954,7 @@ could not be deleted, a channel exception will be raised and the channel will
 be closed.
 
 */
-func (me *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int, error) {
+func (ch *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int, error) {
 	req := &queueDelete{
 		Queue:    name,
 		IfUnused: ifUnused,
@@ -965,7 +963,7 @@ func (me *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int
 	}
 	res := &queueDeleteOk{}
 
-	err := me.call(req, res)
+	err := ch.call(req, res)
 
 	return int(res.MessageCount), err
 }
@@ -1022,8 +1020,8 @@ of this buffer, use the Channel.Qos method to limit the amount of
 unacknowledged/buffered deliveries the server will deliver on this Channel.
 
 */
-func (me *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args Table) (<-chan Delivery, error) {
-	// When we return from me.call, there may be a delivery already for the
+func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args Table) (<-chan Delivery, error) {
+	// When we return from ch.call, there may be a delivery already for the
 	// consumer that hasn't been added to the consumer hash yet.  Because of
 	// this, we never rely on the server picking a consumer tag for us.
 
@@ -1048,10 +1046,10 @@ func (me *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 
 	deliveries := make(chan Delivery)
 
-	me.consumers.add(consumer, deliveries)
+	ch.consumers.add(consumer, deliveries)
 
-	if err := me.call(req, res); err != nil {
-		me.consumers.close(consumer)
+	if err := ch.call(req, res); err != nil {
+		ch.consumers.close(consumer)
 		return nil, err
 	}
 
@@ -1110,12 +1108,12 @@ to respond to any exceptions.
 Optional amqp.Table of arguments that are specific to the server's implementation of
 the exchange can be sent for exchange types that require extra parameters.
 */
-func (me *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
+func (ch *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
-	return me.call(
+	return ch.call(
 		&exchangeDeclare{
 			Exchange:   name,
 			Type:       kind,
@@ -1139,12 +1137,12 @@ non-existent exchange will cause RabbitMQ to throw an exception. This function
 can be used to detect the existence of an exchange.
 
 */
-func (me *Channel) ExchangeDeclarePassive(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
+func (ch *Channel) ExchangeDeclarePassive(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
-	return me.call(
+	return ch.call(
 		&exchangeDeclare{
 			Exchange:   name,
 			Type:       kind,
@@ -1173,8 +1171,8 @@ When noWait is true, do not wait for a server confirmation that the exchange has
 been deleted.  Failing to delete the channel could close the channel.  Add a
 NotifyClose listener to respond to these channel exceptions.
 */
-func (me *Channel) ExchangeDelete(name string, ifUnused, noWait bool) error {
-	return me.call(
+func (ch *Channel) ExchangeDelete(name string, ifUnused, noWait bool) error {
+	return ch.call(
 		&exchangeDelete{
 			Exchange: name,
 			IfUnused: ifUnused,
@@ -1215,12 +1213,12 @@ handle these errors.
 
 Optional arguments specific to the exchanges bound can also be specified.
 */
-func (me *Channel) ExchangeBind(destination, key, source string, noWait bool, args Table) error {
+func (ch *Channel) ExchangeBind(destination, key, source string, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
-	return me.call(
+	return ch.call(
 		&exchangeBind{
 			Destination: destination,
 			Source:      source,
@@ -1246,12 +1244,12 @@ Optional arguments that are specific to the type of exchanges bound can also be
 provided.  These must match the same arguments specified in ExchangeBind to
 identify the binding.
 */
-func (me *Channel) ExchangeUnbind(destination, key, source string, noWait bool, args Table) error {
+func (ch *Channel) ExchangeUnbind(destination, key, source string, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
-	return me.call(
+	return ch.call(
 		&exchangeUnbind{
 			Destination: destination,
 			Source:      source,
@@ -1296,15 +1294,15 @@ When Publish does not return an error and the channel is in confirm mode, the
 internal counter for DeliveryTags with the first confirmation starts at 1.
 
 */
-func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) error {
+func (ch *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) error {
 	if err := msg.Headers.Validate(); err != nil {
 		return err
 	}
 
-	me.m.Lock()
-	defer me.m.Unlock()
+	ch.m.Lock()
+	defer ch.m.Unlock()
 
-	if err := me.send(me, &basicPublish{
+	if err := ch.send(ch, &basicPublish{
 		Exchange:   exchange,
 		RoutingKey: key,
 		Mandatory:  mandatory,
@@ -1329,8 +1327,8 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 		return err
 	}
 
-	if me.confirming {
-		me.confirms.Publish()
+	if ch.confirming {
+		ch.confirms.Publish()
 	}
 
 	return nil
@@ -1354,17 +1352,17 @@ you don't have to.  But if you are unable to fully process this message before
 the channel or connection is closed, the message will not get requeued.
 
 */
-func (me *Channel) Get(queue string, autoAck bool) (msg Delivery, ok bool, err error) {
+func (ch *Channel) Get(queue string, autoAck bool) (msg Delivery, ok bool, err error) {
 	req := &basicGet{Queue: queue, NoAck: autoAck}
 	res := &basicGetOk{}
 	empty := &basicGetEmpty{}
 
-	if err := me.call(req, res, empty); err != nil {
+	if err := ch.call(req, res, empty); err != nil {
 		return Delivery{}, false, err
 	}
 
 	if res.DeliveryTag > 0 {
-		return *(newDelivery(me, res)), true, nil
+		return *(newDelivery(ch, res)), true, nil
 	}
 
 	return Delivery{}, false, nil
@@ -1386,8 +1384,8 @@ Once a channel has been put into transaction mode, it cannot be taken out of
 transaction mode.  Use a different channel for non-transactional semantics.
 
 */
-func (me *Channel) Tx() error {
-	return me.call(
+func (ch *Channel) Tx() error {
+	return ch.call(
 		&txSelect{},
 		&txSelectOk{},
 	)
@@ -1400,8 +1398,8 @@ queue and immediately start a new transaction.
 Calling this method without having called Channel.Tx is an error.
 
 */
-func (me *Channel) TxCommit() error {
-	return me.call(
+func (ch *Channel) TxCommit() error {
+	return ch.call(
 		&txCommit{},
 		&txCommitOk{},
 	)
@@ -1414,8 +1412,8 @@ single queue and immediately start a new transaction.
 Calling this method without having called Channel.Tx is an error.
 
 */
-func (me *Channel) TxRollback() error {
-	return me.call(
+func (ch *Channel) TxRollback() error {
+	return ch.call(
 		&txRollback{},
 		&txRollbackOk{},
 	)
@@ -1444,8 +1442,8 @@ a connection, so under high volume scenarios, it's wise to open separate
 Connections for publishings and deliveries.
 
 */
-func (me *Channel) Flow(active bool) error {
-	return me.call(
+func (ch *Channel) Flow(active bool) error {
+	return ch.call(
 		&channelFlow{Active: active},
 		&channelFlowOk{},
 	)
@@ -1476,17 +1474,17 @@ When noWait is true, the client will not wait for a response.  A channel
 exception could occur if the server does not support this method.
 
 */
-func (me *Channel) Confirm(noWait bool) error {
-	if err := me.call(
+func (ch *Channel) Confirm(noWait bool) error {
+	if err := ch.call(
 		&confirmSelect{Nowait: noWait},
 		&confirmSelectOk{},
 	); err != nil {
 		return err
 	}
 
-	me.confirmM.Lock()
-	me.confirming = true
-	me.confirmM.Unlock()
+	ch.confirmM.Lock()
+	ch.confirming = true
+	ch.confirmM.Unlock()
 
 	return nil
 }
@@ -1504,8 +1502,8 @@ will be closed.
 
 Note: this method is not implemented on RabbitMQ, use Delivery.Nack instead
 */
-func (me *Channel) Recover(requeue bool) error {
-	return me.call(
+func (ch *Channel) Recover(requeue bool) error {
+	return ch.call(
 		&basicRecover{Requeue: requeue},
 		&basicRecoverOk{},
 	)
@@ -1520,8 +1518,8 @@ is true.
 
 See also Delivery.Ack
 */
-func (me *Channel) Ack(tag uint64, multiple bool) error {
-	return me.send(me, &basicAck{
+func (ch *Channel) Ack(tag uint64, multiple bool) error {
+	return ch.send(ch, &basicAck{
 		DeliveryTag: tag,
 		Multiple:    multiple,
 	})
@@ -1534,8 +1532,8 @@ it must be redelivered or dropped.
 
 See also Delivery.Nack
 */
-func (me *Channel) Nack(tag uint64, multiple bool, requeue bool) error {
-	return me.send(me, &basicNack{
+func (ch *Channel) Nack(tag uint64, multiple bool, requeue bool) error {
+	return ch.send(ch, &basicNack{
 		DeliveryTag: tag,
 		Multiple:    multiple,
 		Requeue:     requeue,
@@ -1549,8 +1547,8 @@ multiple messages, reducing the amount of protocol messages to exchange.
 
 See also Delivery.Reject
 */
-func (me *Channel) Reject(tag uint64, requeue bool) error {
-	return me.send(me, &basicReject{
+func (ch *Channel) Reject(tag uint64, requeue bool) error {
+	return ch.send(ch, &basicReject{
 		DeliveryTag: tag,
 		Requeue:     requeue,
 	})
