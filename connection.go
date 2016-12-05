@@ -182,6 +182,8 @@ func DialConfig(url string, config Config) (*Connection, error) {
 		// Use the URI's host for hostname validation unless otherwise set. Make a
 		// copy so not to modify the caller's reference when the caller reuses a
 		// tls.Config for a different URL.
+		//
+		// TODO(st) mutate the tls.Config provided with amqp.Config to satisfy go vet
 		if config.TLSClientConfig.ServerName == "" {
 			c := *config.TLSClientConfig
 			c.ServerName = uri.Host

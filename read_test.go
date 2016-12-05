@@ -6,6 +6,10 @@ import (
 )
 
 func TestGoFuzzCrashers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("excessive allocation")
+	}
+
 	testData := []string{
 		"\b000000",
 		"\x02\x16\x10�[��\t\xbdui�" + "\x10\x01\x00\xff\xbf\xef\xbfｻn\x99\x00\x10r",
