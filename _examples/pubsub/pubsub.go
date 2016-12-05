@@ -107,7 +107,7 @@ func publish(sessions chan chan session, messages <-chan message) {
 
 		log.Printf("publishing...")
 
-PUBLISH:
+	Publish:
 		for {
 			var body message
 			select {
@@ -126,7 +126,7 @@ PUBLISH:
 				if err != nil {
 					pending <- body
 					pub.Close()
-					break PUBLISH
+					break Publish
 				}
 
 			case body, running = <-reading:
