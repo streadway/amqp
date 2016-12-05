@@ -186,7 +186,7 @@ func ExampleChannel_Confirm_bridge() {
 
 		if err != nil {
 			msg.Nack(false, false)
-			log.Fatalf("basic.publish destination: %s", msg)
+			log.Fatalf("basic.publish destination: %+v", msg)
 		}
 
 		// only ack the source delivery when the destination acks the publishing

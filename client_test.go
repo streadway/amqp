@@ -125,8 +125,6 @@ func (t *server) recv(channel int, m message) message {
 			t.Fatalf("unexpected frame: %+v", f)
 		}
 	}
-
-	panic("unreachable")
 }
 
 func (t *server) expectAMQP() {

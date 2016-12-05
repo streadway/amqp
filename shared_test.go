@@ -65,7 +65,7 @@ func (log *logIO) Close() (err error) {
 	if err != nil {
 		log.t.Logf("%s close : %v\n", log.prefix, err)
 	} else {
-		log.t.Logf("%s close\n", log.prefix, err)
+		log.t.Logf("%s close\n", log.prefix)
 	}
 	return
 }

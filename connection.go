@@ -657,8 +657,7 @@ func (c *Connection) call(req message, res ...message) error {
 		}
 		return ErrCommandInvalid
 	}
-
-	panic("unreachable")
+	// unreachable
 }
 
 //    Connection          = open-Connection *use-Connection close-Connection

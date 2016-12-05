@@ -324,12 +324,9 @@ func (ch *Channel) recvMethod(f frame) error {
 	case *bodyFrame:
 		// drop
 		return ch.transition((*Channel).recvMethod)
-
-	default:
-		panic("unexpected frame type")
 	}
 
-	panic("unreachable")
+	panic("unexpected frame type")
 }
 
 func (ch *Channel) recvHeader(f frame) error {
@@ -352,12 +349,9 @@ func (ch *Channel) recvHeader(f frame) error {
 	case *bodyFrame:
 		// drop and reset
 		return ch.transition((*Channel).recvMethod)
-
-	default:
-		panic("unexpected frame type")
 	}
 
-	panic("unreachable")
+	panic("unexpected frame type")
 }
 
 // state after method + header and before the length
@@ -382,12 +376,9 @@ func (ch *Channel) recvContent(f frame) error {
 		}
 
 		return ch.transition((*Channel).recvContent)
-
-	default:
-		panic("unexpected frame type")
 	}
 
-	panic("unreachable")
+	panic("unexpected frame type")
 }
 
 /*
@@ -744,11 +735,7 @@ func (ch *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noW
 		}, nil
 	}
 
-	return Queue{
-		Name: name,
-	}, nil
-
-	panic("unreachable")
+	return Queue{Name: name}, nil
 }
 
 /*
@@ -788,11 +775,7 @@ func (ch *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusi
 		}, nil
 	}
 
-	return Queue{
-		Name: name,
-	}, nil
-
-	panic("unreachable")
+	return Queue{Name: name}, nil
 }
 
 /*
