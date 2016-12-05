@@ -1296,9 +1296,9 @@ When Publish does not return an error and the channel is in confirm mode, the
 internal counter for DeliveryTags with the first confirmation starts at 1.
 
 */
-func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) error {
+func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) (uint64, error) {
 	if err := msg.Headers.Validate(); err != nil {
-		return err
+		return 0, err
 	}
 
 	me.m.Lock()
@@ -1326,14 +1326,14 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 			AppId:           msg.AppId,
 		},
 	}); err != nil {
-		return err
+		return 0, err
 	}
 
 	if me.confirming {
-		me.confirms.Publish()
+		return me.confirms.Publish(), nil
 	}
 
-	return nil
+	return 0, nil
 }
 
 /*
