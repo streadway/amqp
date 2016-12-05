@@ -235,8 +235,10 @@ func (me *Connection) LocalAddr() net.Addr {
 	return &net.TCPAddr{}
 }
 
-// TLSConnectionState returns basic TLS details of the underlying transport.
-func (me *Connection) TLSConnectionState() tls.ConnectionState {
+// ConnectionState returns basic TLS details of the underlying transport.
+// Returns a zero value when the underlying connection does not implement
+// ConnectionState() tls.ConnectionState.
+func (me *Connection) ConnectionState() tls.ConnectionState {
 	if c, ok := me.conn.(interface {
 		ConnectionState() tls.ConnectionState
 	}); ok {

@@ -4,11 +4,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/streadway/amqp"
 	"io"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 type tlsServer struct {
@@ -94,8 +95,7 @@ func TestTLSHandshake(t *testing.T) {
 		}
 	}
 
-	st := c.TLSConnectionState()
-	if !st.HandshakeComplete {
+	if st := c.ConnectionState(); !st.HandshakeComplete {
 		t.Errorf("TLS handshake failed, TLS connection state: %+v", st)
 	}
 }
