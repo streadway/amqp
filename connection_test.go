@@ -19,7 +19,7 @@ func TestChannelOpenOnAClosedConnectionFails(t *testing.T) {
 	conn.Close()
 
 	if _, err := conn.Channel(); err != ErrClosed {
-		t.Fatalf("channel.open on a closed connection %s is expected to fail", conn)
+		t.Fatalf("channel.open on a closed connection %#v is expected to fail", conn)
 	}
 }
 
@@ -30,7 +30,7 @@ func TestQueueDeclareOnAClosedConnectionFails(t *testing.T) {
 	conn.Close()
 
 	if _, err := ch.QueueDeclare("an example", false, false, false, false, nil); err != ErrClosed {
-		t.Fatalf("queue.declare on a closed connection %s is expected to return ErrClosed, returned: %#v", conn, err)
+		t.Fatalf("queue.declare on a closed connection %#v is expected to return ErrClosed, returned: %#v", conn, err)
 	}
 }
 
@@ -63,7 +63,7 @@ func TestConcurrentClose(t *testing.T) {
 			// network connection and handshake state. It should be a package error
 			// returned.
 			if _, neterr := err.(*net.OpError); neterr {
-				t.Log("unknown net.OpError during close, ignoring: %+v", err)
+				t.Logf("unknown net.OpError during close, ignoring: %+v", err)
 				return
 			}
 
