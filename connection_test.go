@@ -67,7 +67,7 @@ func TestConcurrentClose(t *testing.T) {
 				return
 			}
 
-			// A different/protocol error occured indicating a race or missed condition
+			// A different/protocol error occurred indicating a race or missed condition
 			if _, other := err.(*Error); other {
 				t.Fatalf("Expected no error, or ErrClosed, or a net.OpError from conn.Close(), got %#v (%s) of type %T", err, err, err)
 			}
