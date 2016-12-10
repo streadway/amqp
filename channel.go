@@ -264,7 +264,7 @@ func (ch *Channel) dispatch(msg message) {
 		for _, c := range ch.cancels {
 			c <- m.ConsumerTag
 		}
-		ch.send(ch, &basicCancelOk{ConsumerTag: m.ConsumerTag})
+		ch.consumers.close(m.ConsumerTag)
 
 	case *basicReturn:
 		ret := newReturn(*m)

@@ -1694,6 +1694,44 @@ func TestRabbitMQQueueNackMultipleRequeue(t *testing.T) {
 	}
 }
 
+func TestConsumerCancelNotification(t *testing.T) {
+	c := integrationConnection(t, "consumer cancel notification")
+	if c != nil {
+		defer c.Close()
+		ch, err := c.Channel()
+		if err != nil {
+			t.Fatalf("got error on channel.open: %v", err)
+		}
+
+		queue := "test-consumer-cancel-notification"
+
+		if _, err := ch.QueueDeclare(queue, false, true, false, false, nil); err != nil {
+			t.Fatalf("expected to declare a queue: %v", err)
+		}
+
+		if _, err := ch.Consume(queue, "", false, false, false, false, nil); err != nil {
+			t.Fatalf("basic.consume failed")
+		}
+		// consumer cancel notification channel
+		ccnChan := make(chan string, 1)
+		ch.NotifyCancel(ccnChan)
+
+		if _, err := ch.QueueDelete(queue, false, false, true); err != nil {
+			t.Fatalf("queue.delete failed: %s", err)
+		}
+
+		select {
+		case <-ccnChan:
+			// do nothing
+		case <-time.After(time.Second * 10):
+			t.Errorf("basic.cancel wasn't received")
+			t.Fail()
+		}
+		// we don't close ccnChan because channel shutdown
+		// does it
+	}
+}
+
 /*
  * Support for integration tests
  */
