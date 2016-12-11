@@ -191,6 +191,7 @@ func DialConfig(url string, config Config) (*Connection, error) {
 		}
 
 		client := tls.Client(conn, config.TLSClientConfig)
+		client.SetDeadline(defaultConnectionTimeout)
 		if err := client.Handshake(); err != nil {
 			conn.Close()
 			return nil, err
