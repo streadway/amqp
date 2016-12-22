@@ -31,6 +31,10 @@ func ExampleDialTLS() {
 	//
 	// http://www.rabbitmq.com/ssl.html
 	//
+	// The easiest way to re-create the CA, certificates and keys in the above
+	// tutorial is by using tls-gen:
+	// https://github.com/michaelklishin/tls-gen
+	//
 	// Then in your rabbitmq.config, disable the plain AMQP port, verify clients
 	// and fail if no certificate is presented with the following:
 	//
