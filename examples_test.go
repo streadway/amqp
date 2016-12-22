@@ -12,65 +12,6 @@ import (
 	"github.com/streadway/amqp"
 )
 
-//
-// TLS setup instructions.
-//
-// These examples assume you have a RabbitMQ node running on localhost
-// with TLS enabled. We explain how to generate the CA, certificates,
-// keys and what node configuration you'd need below.
-//
-//
-// The easiest way to re-create the CA, certificates and keys in these
-// examples is by using tls-gen:
-// https://github.com/michaelklishin/tls-gen.
-//
-// RabbitMQ TLS guide can be found at http://www.rabbitmq.com/ssl.html.
-//
-// Then in your rabbitmq.config, disable the plain AMQP port, verify clients
-// and fail if no certificate is presented with the following:
-//
-//   [
-//   {rabbit, [
-//     {tcp_listeners, []},     % listens on 127.0.0.1:5672
-//     {ssl_listeners, [5671]}, % listens on 0.0.0.0:5671
-//     {ssl_options, [{cacertfile,"/path/to/your/testca/cacert.pem"},
-//                    {certfile,"/path/to/your/server/cert.pem"},
-//                    {keyfile,"/path/to/your/server/key.pem"},
-//                    {verify,verify_peer},
-//                    {fail_if_no_peer_cert,true}]}
-//     ]}
-//   ].
-//
-// The self-signing certificate authority's certificate must be included in
-// the RootCAs to be trusted so that the server certificate can be verified.
-//
-// Alternatively to adding it to the tls.Config you can add the CA's cert to
-// your system's root CAs.  The tls package will use the system roots
-// specific to each support OS.  Under OS X, add (drag/drop) your cacert.pem
-// file to the 'Certificates' section of KeyChain.app to add and always
-// trust.
-//
-// Or with the command line add and trust the DER encoded certificate:
-//
-//   security add-certificate testca/cacert.cer
-//   security add-trusted-cert testca/cacert.cer
-//
-// If you depend on the system root CAs, then use nil for the RootCAs field
-// so the system roots will be loaded.
-//
-// Server names are validated by the crypto/tls package, so the server
-// certificate must be made for the hostname in the URL.  Find the commonName
-// (CN) and make sure the hostname in the URL matches this common name.  Per
-// the RabbitMQ instructions (or tls-gen) for a self-signed cert, this defaults to the
-// current hostname.
-//
-//   openssl x509 -noout -in /path/to/certificate.pem -subject
-//
-// If your server name in your certificate is different than the host you are
-// connecting to, set the hostname used for verification in
-// ServerName field of the tls.Config struct.
-
-
 func ExampleConfig_timeout() {
 	// Provide your own anonymous Dial function that delgates to net.DialTimout
 	// for custom timeouts
@@ -85,7 +26,62 @@ func ExampleConfig_timeout() {
 }
 
 func ExampleDialTLS() {
-	// see at the top
+	// This example assume you have a RabbitMQ node running on localhost
+	// with TLS enabled.
+	//
+	// The easiest way to create the CA, certificates and keys required for these
+	// examples is by using tls-gen: https://github.com/michaelklishin/tls-gen
+	//
+	// A comprehensive RabbitMQ TLS guide can be found at
+	// http://www.rabbitmq.com/ssl.html
+	//
+	// Once you have the required TLS files in place, use the following
+	// rabbitmq.config example for the RabbitMQ node that you will run on
+	// localhost:
+	//
+	//   [
+	//   {rabbit, [
+	//     {tcp_listeners, []},     % listens on 127.0.0.1:5672
+	//     {ssl_listeners, [5671]}, % listens on 0.0.0.0:5671
+	//     {ssl_options, [{cacertfile,"/path/to/your/testca/cacert.pem"},
+	//                    {certfile,"/path/to/your/server/cert.pem"},
+	//                    {keyfile,"/path/to/your/server/key.pem"},
+	//                    {verify,verify_peer},
+	//                    {fail_if_no_peer_cert,true}]}
+	//     ]}
+	//   ].
+	//
+	//
+	// In the above rabbitmq.config example, we are disabling the plain AMQP port
+	// and verifying that clients and fail if no certificate is presented.
+	//
+	// The self-signing certificate authority's certificate (cacert.pem) must be
+	// included in the RootCAs to be trusted, otherwise the server certificate
+	// will fail certificate verification.
+	//
+	// Alternatively to adding it to the tls.Config. you can add the CA's cert to
+	// your system's root CAs.  The tls package will use the system roots
+	// specific to each support OS.  Under OS X, add (drag/drop) cacert.pem
+	// file to the 'Certificates' section of KeyChain.app to add and always
+	// trust.  You can also add it via the command line:
+	//
+	//   security add-certificate testca/cacert.pem
+	//   security add-trusted-cert testca/cacert.pem
+	//
+	// If you depend on the system root CAs, then use nil for the RootCAs field
+	// so the system roots will be loaded instead.
+	//
+	// Server names are validated by the crypto/tls package, so the server
+	// certificate must be made for the hostname in the URL.  Find the commonName
+	// (CN) and make sure the hostname in the URL matches this common name.  Per
+	// the RabbitMQ instructions (or tls-gen) for a self-signed cert, this defaults to the
+	// current hostname.
+	//
+	//   openssl x509 -noout -in /path/to/certificate.pem -subject
+	//
+	// If your server name in your certificate is different than the host you are
+	// connecting to, set the hostname used for verification in
+	// ServerName field of the tls.Config struct.
 	cfg := new(tls.Config)
 
 	// see at the top
