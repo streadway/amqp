@@ -58,8 +58,8 @@ type Config struct {
 
 	// Dial returns a net.Conn prepared for a TLS handshake with TSLClientConfig,
 	// then an AMQP connection handshake.
-	// If Dial is nil, net.DialTimeout with a 30s connection and 30s read
-	// deadline is used.
+	// If Dial is nil, net.DialTimeout with a 30s connection and 30s deadline is
+	// used during TLS and AMQP handshaking.
 	Dial func(network, addr string) (net.Conn, error)
 }
 
@@ -110,7 +110,9 @@ func defaultDial(network, addr string) (net.Conn, error) {
 	}
 
 	// Heartbeating hasn't started yet, don't stall forever on a dead server.
-	if err := conn.SetReadDeadline(time.Now().Add(defaultConnectionTimeout)); err != nil {
+	// A deadline is set for TLS and AMQP handshaking. After AMQP is established,
+	// the deadline is cleared in openComplete.
+	if err := conn.SetDeadline(time.Now().Add(defaultConnectionTimeout)); err != nil {
 		return nil, err
 	}
 
@@ -119,7 +121,8 @@ func defaultDial(network, addr string) (net.Conn, error) {
 
 // Dial accepts a string in the AMQP URI format and returns a new Connection
 // over TCP using PlainAuth.  Defaults to a server heartbeat interval of 10
-// seconds and sets the initial read deadline to 30 seconds.
+// seconds and sets the handshake deadline to 30 seconds. After handshake,
+// deadlines are cleared.
 //
 // Dial uses the zero value of tls.Config when it encounters an amqps://
 // scheme.  It is equivalent to calling DialTLS(amqp, nil).
@@ -191,7 +194,6 @@ func DialConfig(url string, config Config) (*Connection, error) {
 		}
 
 		client := tls.Client(conn, config.TLSClientConfig)
-		client.SetDeadline(time.Now().Add(defaultConnectionTimeout))
 		if err := client.Handshake(); err != nil {
 			conn.Close()
 			return nil, err
@@ -783,8 +785,17 @@ func (c *Connection) openVhost(config Config) error {
 }
 
 // openComplete performs any final Connection initialization dependent on the
-// connection handshake.
+// connection handshake and clears any state needed for TLS and AMQP handshaking.
 func (c *Connection) openComplete() error {
+	// We clear the deadlines and let the heartbeater reset the read deadline if requested.
+	// RabbitMQ uses TCP flow control at this point for pushback so Writes can
+	// intentionally block.
+	if deadliner, ok := c.conn.(interface {
+		SetDeadline(time.Time) error
+	}); ok {
+		_ = deadliner.SetDeadline(time.Time{})
+	}
+
 	c.allocator = newAllocator(1, c.Config.ChannelMax)
 	return nil
 }
