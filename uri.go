@@ -54,6 +54,11 @@ type URI struct {
 func ParseURI(uri string) (URI, error) {
 	builder := defaultURI
 
+	_, err := url.ParseRequestURI(uri)
+	if err != nil {
+		return builder, err
+	}
+
 	u, err := url.Parse(uri)
 	if err != nil {
 		return builder, err

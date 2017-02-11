@@ -9,6 +9,7 @@ package amqp
 
 import (
 	"net"
+	"net/url"
 	"sync"
 	"testing"
 )
@@ -74,4 +75,15 @@ func TestConcurrentClose(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestConnectionWithInvalidURIFails(t *testing.T) {
+	_, err := DialConfig(":,%not-a-valid-URI((", Config{})
+	if err == nil {
+		t.Fatalf("connection with invalid URI is expected to fail")
+	}
+
+	if _, urlerr := err.(*url.Error); !urlerr {
+		t.Fatalf("expected a url.Error, got %+v", err)
+	}
 }
