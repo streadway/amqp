@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -52,62 +53,36 @@ type URI struct {
 //   Vhost: /
 //
 func ParseURI(uri string) (URI, error) {
-	builder := defaultURI
 
-	u, err := url.Parse(uri)
-	if err != nil {
-		return builder, err
+	me := defaultURI
+	paten := `^amqp(s)?://[^:\/\/]+:[^:\/\/]+@[^:\/\/]+:[0-9]+\/[^:\/\/]*`
+	reg, _ := regexp.Compile(paten)
+	if !reg.Match([]byte(uri)) {
+		return defaultURI, errors.New("unvalid")
 	}
-
-	defaultPort, okScheme := schemePorts[u.Scheme]
-
-	if okScheme {
-		builder.Scheme = u.Scheme
+	piceInfo := strings.Split(uri, ":")
+	scheme := piceInfo[0]
+	userName := piceInfo[1][2:]
+	passwordHostNameInfo := strings.Split(piceInfo[2], "@")
+	password := passwordHostNameInfo[0]
+	hostName := passwordHostNameInfo[1]
+	portVhostInfo := strings.Split(piceInfo[3], "/")
+	port, _ := strconv.Atoi(portVhostInfo[0])
+	var vhost string
+	if portVhostInfo[1] == "" {
+		vhost = "/"
 	} else {
-		return builder, errURIScheme
+		vhost = portVhostInfo[1]
 	}
 
-	host, port := splitHostPort(u.Host)
+	me.Scheme = scheme
+	me.Host = hostName
+	me.Port = port
+	me.Username = userName
+	me.Password = password
+	me.Vhost = vhost
+	return me, nil
 
-	if host != "" {
-		builder.Host = host
-	}
-
-	if port != "" {
-		port32, err := strconv.ParseInt(port, 10, 32)
-		if err != nil {
-			return builder, err
-		}
-		builder.Port = int(port32)
-	} else {
-		builder.Port = defaultPort
-	}
-
-	if u.User != nil {
-		builder.Username = u.User.Username()
-		if password, ok := u.User.Password(); ok {
-			builder.Password = password
-		}
-	}
-
-	if u.Path != "" {
-		if strings.HasPrefix(u.Path, "/") {
-			if u.Host == "" && strings.HasPrefix(u.Path, "///") {
-				// net/url doesn't handle local context authorities and leaves that up
-				// to the scheme handler.  In our case, we translate amqp:/// into the
-				// default host and whatever the vhost should be
-				if len(u.Path) > 3 {
-					builder.Vhost = u.Path[3:]
-				}
-			} else if len(u.Path) > 1 {
-				builder.Vhost = u.Path[1:]
-			}
-		} else {
-			builder.Vhost = u.Path
-		}
-	}
-
-	return builder, nil
 }
 
 // Splits host:port, host, [ho:st]:port, or [ho:st].  Unlike net.SplitHostPort
