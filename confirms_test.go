@@ -54,7 +54,7 @@ func TestConfirmMixedResequences(t *testing.T) {
 	)
 	c.Listen(l)
 
-	for _, _ = range fixtures {
+	for _ = range fixtures {
 		c.Publish()
 	}
 
