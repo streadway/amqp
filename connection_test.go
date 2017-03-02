@@ -8,6 +8,7 @@
 package amqp
 
 import (
+	"crypto/tls"
 	"net"
 	"sync"
 	"testing"
@@ -74,4 +75,23 @@ func TestConcurrentClose(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestPlaintextDialTLS esnures amqp:// connections succeed when using DialTLS.
+func TestPlaintextDialTLS(t *testing.T) {
+	uri, err := ParseURI(integrationURLFromEnv())
+	if err != nil {
+		t.Fatalf("parse URI error: %s", err)
+	}
+
+	// We can only test when we have a plaintext listener
+	if uri.Scheme != "amqp" {
+		t.Skip("requires server listening for plaintext connections")
+	}
+
+	conn, err := DialTLS(uri.String(), &tls.Config{MinVersion: tls.VersionTLS12})
+	if err != nil {
+		t.Fatalf("unexpected dial error, got %v", err)
+	}
+	conn.Close()
 }
