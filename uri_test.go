@@ -255,6 +255,12 @@ func TestURIScheme(t *testing.T) {
 	}
 }
 
+func TestURIWhitespace(t *testing.T) {
+	if _, err := ParseURI("amqp://admin:PASSWORD@rabbitmq-service/ -http_port=8080"); err == nil {
+		t.Fatal("Expected to fail if URI contains whitespace")
+	}
+}
+
 func TestURIDefaults(t *testing.T) {
 	url := "amqp://"
 	uri, err := ParseURI(url)
