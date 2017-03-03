@@ -14,6 +14,7 @@ import (
 )
 
 var errURIScheme = errors.New("AMQP scheme must be either 'amqp://' or 'amqps://'")
+var errURIWhitespace = errors.New("URI must not contain whitespace")
 
 var schemePorts = map[string]int{
 	"amqp":  5672,
@@ -54,9 +55,8 @@ type URI struct {
 func ParseURI(uri string) (URI, error) {
 	builder := defaultURI
 
-	_, err := url.ParseRequestURI(uri)
-	if err != nil {
-		return builder, err
+	if strings.Contains(uri, " ") == true {
+		return builder, errURIWhitespace
 	}
 
 	u, err := url.Parse(uri)
