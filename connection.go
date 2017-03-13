@@ -605,6 +605,7 @@ func (c *Connection) openChannel() (*Channel, error) {
 	}
 
 	if err := ch.open(); err != nil {
+		c.releaseChannel(ch.id)
 		return nil, err
 	}
 	return ch, nil
