@@ -24,6 +24,23 @@ func TestChannelOpenOnAClosedConnectionFails(t *testing.T) {
 	}
 }
 
+// TestChannelOpenOnAClosedConnectionFails_ReleasesAllocatedChannel ensures the
+// channel allocated is released if opening the channel fails.
+func TestChannelOpenOnAClosedConnectionFails_ReleasesAllocatedChannel(t *testing.T) {
+	conn := integrationConnection(t, "releases channel allocation")
+	conn.Close()
+
+	before := len(conn.channels)
+
+	if _, err := conn.Channel(); err != ErrClosed {
+		t.Fatalf("channel.open on a closed connection %#v is expected to fail", conn)
+	}
+
+	if len(conn.channels) != before {
+		t.Fatalf("channel.open failed, but the allocated channel was not released")
+	}
+}
+
 func TestQueueDeclareOnAClosedConnectionFails(t *testing.T) {
 	conn := integrationConnection(t, "queue declare on close")
 	ch, _ := conn.Channel()
