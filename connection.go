@@ -26,6 +26,7 @@ const (
 	defaultProduct           = "https://github.com/streadway/amqp"
 	defaultVersion           = "β"
 	defaultChannelMax        = maxChannelMax
+	defaultLocale            = "en_US"
 )
 
 // Config is used in DialConfig and Open to specify the desired tuning
@@ -55,6 +56,9 @@ type Config struct {
 	// This is an optional setting - if the application does not set this,
 	// the underlying library will use a generic set of client properties.
 	Properties Table
+
+	// Locale negotiated between the client and the server
+	Locale string
 
 	// Dial returns a net.Conn prepared for a TLS handshake with TSLClientConfig,
 	// then an AMQP connection handshake.
@@ -91,9 +95,10 @@ type Connection struct {
 
 	Config Config // The negotiated Config after connection.open
 
-	Major      int   // Server's major version
-	Minor      int   // Server's minor version
-	Properties Table // Server properties
+	Major      int      // Server's major version
+	Minor      int      // Server's minor version
+	Properties Table    // Server properties
+	Locales    []string // Server locales
 
 	closed int32 // Will be 1 if the connection is closed, 0 otherwise. Should only be accessed as atomic
 }
@@ -163,6 +168,10 @@ func DialConfig(url string, config Config) (*Connection, error) {
 
 	if config.Vhost == "" {
 		config.Vhost = uri.Vhost
+	}
+
+	if config.Locale == "" {
+		config.Locale = defaultLocale
 	}
 
 	addr := net.JoinHostPort(uri.Host, strconv.FormatInt(int64(uri.Port), 10))
@@ -689,6 +698,7 @@ func (c *Connection) openStart(config Config) error {
 	c.Major = int(start.VersionMajor)
 	c.Minor = int(start.VersionMinor)
 	c.Properties = Table(start.ServerProperties)
+	c.Locales = strings.Split(start.Locales, " ")
 
 	// eventually support challenge/response here by also responding to
 	// connectionSecure.
@@ -717,9 +727,10 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 	}
 
 	ok := &connectionStartOk{
+		ClientProperties: config.Properties,
 		Mechanism:        auth.Mechanism(),
 		Response:         auth.Response(),
-		ClientProperties: config.Properties,
+		Locale:           config.Locale,
 	}
 	tune := &connectionTune{}
 
@@ -728,6 +739,11 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 		// so at this point, we know it's an auth error, but the socket
 		// was closed instead.  Return a meaningful error.
 		return ErrCredentials
+	}
+
+	// If Locale was not negotiated in the initial handshake, use the default locale
+	if c.Config.Locale == "" {
+		c.Config.Locale = defaultLocale
 	}
 
 	// When the server and client both use default 0, then the max channel is

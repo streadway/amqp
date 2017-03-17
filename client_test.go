@@ -136,7 +136,7 @@ func (t *server) connectionStart() {
 		VersionMajor: 0,
 		VersionMinor: 9,
 		Mechanisms:   "PLAIN",
-		Locales:      "en-us",
+		Locales:      "en_US",
 	})
 
 	t.recv(0, &t.start)
@@ -188,6 +188,10 @@ func TestDefaultClientProperties(t *testing.T) {
 	}
 
 	if want, got := defaultVersion, srv.start.ClientProperties["version"]; want != got {
+		t.Errorf("expected version %s got: %s", want, got)
+	}
+
+	if want, got := defaultLocale, srv.start.Locale; want != got {
 		t.Errorf("expected version %s got: %s", want, got)
 	}
 }
@@ -261,7 +265,7 @@ func TestOpenFailedSASLUnsupportedMechanisms(t *testing.T) {
 			VersionMajor: 0,
 			VersionMinor: 9,
 			Mechanisms:   "KERBEROS NTLM",
-			Locales:      "en-us",
+			Locales:      "en_US",
 		})
 	}()
 
