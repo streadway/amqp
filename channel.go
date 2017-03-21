@@ -102,7 +102,10 @@ func (ch *Channel) shutdown(e *Error) {
 			}
 		}
 
+		// Lock to avoid racing with ch.call()
+		ch.sendM.Lock()
 		ch.send = (*Channel).sendClosed
+		ch.sendM.Unlock()
 
 		// Notify RPC if we're selecting
 		if e != nil {
@@ -142,9 +145,12 @@ func (ch *Channel) open() error {
 // Performs a request/response call for when the message is not NoWait and is
 // specified as Synchronous.
 func (ch *Channel) call(req message, res ...message) error {
+	ch.sendM.Lock()
 	if err := ch.send(ch, req); err != nil {
+		ch.sendM.Unlock()
 		return err
 	}
+	ch.sendM.Unlock()
 
 	if req.wait() {
 		select {
@@ -175,9 +181,6 @@ func (ch *Channel) call(req message, res ...message) error {
 }
 
 func (ch *Channel) sendClosed(msg message) (err error) {
-	ch.sendM.Lock()
-	defer ch.sendM.Unlock()
-
 	// After a 'channel.close' is sent or received the only valid response is
 	// channel.close-ok
 	if _, ok := msg.(*channelCloseOk); ok {
@@ -191,9 +194,6 @@ func (ch *Channel) sendClosed(msg message) (err error) {
 }
 
 func (ch *Channel) sendOpen(msg message) (err error) {
-	ch.sendM.Lock()
-	defer ch.sendM.Unlock()
-
 	if content, ok := msg.(messageWithContent); ok {
 		props, body := content.getContent()
 		class, _ := content.id()
