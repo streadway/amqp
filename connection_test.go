@@ -41,6 +41,25 @@ func TestChannelOpenOnAClosedConnectionFails_ReleasesAllocatedChannel(t *testing
 	}
 }
 
+// TestRaceBetweenChannelAndConnectionClose ensures allocating a new channel
+// does not race with shutting the connection down.
+//
+// See https://github.com/streadway/amqp/issues/251 - thanks to jmalloc for the
+// test case.
+func TestRaceBetweenChannelAndConnectionClose(t *testing.T) {
+	conn := integrationConnection(t, "allocation/shutdown race")
+
+	go conn.Close()
+	for i := 0; i < 10; i++ {
+		go func() {
+			ch, err := conn.Channel()
+			if err == nil {
+				ch.Close()
+			}
+		}()
+	}
+}
+
 func TestQueueDeclareOnAClosedConnectionFails(t *testing.T) {
 	conn := integrationConnection(t, "queue declare on close")
 	ch, _ := conn.Channel()
