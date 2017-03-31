@@ -57,7 +57,9 @@ type Config struct {
 	// the underlying library will use a generic set of client properties.
 	Properties Table
 
-	// Locale negotiated between the client and the server
+	// Connection locale that we expect to always be en_US
+	// Even though servers must return it as per the AMQP 0-9-1 spec,
+	// we are not aware of it being used other than to satisfy the spec requirements
 	Locale string
 
 	// Dial returns a net.Conn prepared for a TLS handshake with TSLClientConfig,
@@ -134,6 +136,7 @@ func defaultDial(network, addr string) (net.Conn, error) {
 func Dial(url string) (*Connection, error) {
 	return DialConfig(url, Config{
 		Heartbeat: defaultHeartbeat,
+		Locale:    defaultLocale,
 	})
 }
 
@@ -146,6 +149,7 @@ func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 	return DialConfig(url, Config{
 		Heartbeat:       defaultHeartbeat,
 		TLSClientConfig: amqps,
+		Locale:          defaultLocale,
 	})
 }
 
@@ -168,10 +172,6 @@ func DialConfig(url string, config Config) (*Connection, error) {
 
 	if config.Vhost == "" {
 		config.Vhost = uri.Vhost
-	}
-
-	if config.Locale == "" {
-		config.Locale = defaultLocale
 	}
 
 	addr := net.JoinHostPort(uri.Host, strconv.FormatInt(int64(uri.Port), 10))
@@ -710,6 +710,9 @@ func (c *Connection) openStart(config Config) error {
 	// Save this mechanism off as the one we chose
 	c.Config.SASL = []Authentication{auth}
 
+	// Set the connection locale to client locale
+	c.Config.Locale = config.Locale
+
 	return c.openTune(config, auth)
 }
 
@@ -739,11 +742,6 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 		// so at this point, we know it's an auth error, but the socket
 		// was closed instead.  Return a meaningful error.
 		return ErrCredentials
-	}
-
-	// If Locale was not negotiated in the initial handshake, use the default locale
-	if c.Config.Locale == "" {
-		c.Config.Locale = defaultLocale
 	}
 
 	// When the server and client both use default 0, then the max channel is

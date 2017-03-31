@@ -26,7 +26,11 @@ type server struct {
 }
 
 func defaultConfig() Config {
-	return Config{SASL: []Authentication{&PlainAuth{"guest", "guest"}}, Vhost: "/"}
+	return Config{
+		SASL:   []Authentication{&PlainAuth{"guest", "guest"}},
+		Vhost:  "/",
+		Locale: defaultLocale,
+	}
 }
 
 func newSession(t *testing.T) (io.ReadWriteCloser, *server) {
@@ -192,7 +196,7 @@ func TestDefaultClientProperties(t *testing.T) {
 	}
 
 	if want, got := defaultLocale, srv.start.Locale; want != got {
-		t.Errorf("expected version %s got: %s", want, got)
+		t.Errorf("expected locale %s got: %s", want, got)
 	}
 }
 
