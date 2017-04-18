@@ -8,6 +8,7 @@ package amqp
 import (
 	"reflect"
 	"sync"
+	"sync/atomic"
 )
 
 // 0      1         3             7                  size+7 size+8
@@ -25,7 +26,6 @@ should be discarded and a new channel established.
 */
 type Channel struct {
 	destructor sync.Once
-	sendM      sync.Mutex // sequence channel frames
 	m          sync.Mutex // struct field mutex
 	confirmM   sync.Mutex // publisher confirms state mutex
 
@@ -35,6 +35,9 @@ type Channel struct {
 	consumers *consumers
 
 	id uint16
+
+	// closed is set to 1 when the channel has been closed - see Channel.send()
+	closed int32
 
 	// true when we will never notify again
 	noNotify bool
@@ -64,10 +67,6 @@ type Channel struct {
 	// State machine that manages frame order, must only be mutated by the connection
 	recv func(*Channel, frame) error
 
-	// State that manages the send behavior after before and after shutdown, must
-	// only be mutated in shutdown()
-	send func(*Channel, message) error
-
 	// Current state for frame re-assembly, only mutated from recv
 	message messageWithContent
 	header  *headerFrame
@@ -83,7 +82,6 @@ func newChannel(c *Connection, id uint16) *Channel {
 		consumers:  makeConsumers(),
 		confirms:   newConfirms(),
 		recv:       (*Channel).recvMethod,
-		send:       (*Channel).sendOpen,
 		errors:     make(chan *Error, 1),
 	}
 }
@@ -102,10 +100,9 @@ func (ch *Channel) shutdown(e *Error) {
 			}
 		}
 
-		// Lock to avoid racing with ch.call()
-		ch.sendM.Lock()
-		ch.send = (*Channel).sendClosed
-		ch.sendM.Unlock()
+		// Signal that from now on, Channel.send() should call
+		// Channel.sendClosed()
+		atomic.StoreInt32(&ch.closed, 1)
 
 		// Notify RPC if we're selecting
 		if e != nil {
@@ -138,6 +135,19 @@ func (ch *Channel) shutdown(e *Error) {
 	})
 }
 
+// send calls Channel.sendOpen() during normal operation.
+//
+// After the channel has been closed, send calls Channel.sendClosed(), ensuring
+// only 'channel.close' is sent to the server.
+func (ch *Channel) send(msg message) (err error) {
+	// If the channel is closed, use Channel.sendClosed()
+	if atomic.LoadInt32(&ch.closed) == 1 {
+		return ch.sendClosed(msg)
+	}
+
+	return ch.sendOpen(msg)
+}
+
 func (ch *Channel) open() error {
 	return ch.call(&channelOpen{}, &channelOpenOk{})
 }
@@ -145,12 +155,9 @@ func (ch *Channel) open() error {
 // Performs a request/response call for when the message is not NoWait and is
 // specified as Synchronous.
 func (ch *Channel) call(req message, res ...message) error {
-	ch.sendM.Lock()
-	if err := ch.send(ch, req); err != nil {
-		ch.sendM.Unlock()
+	if err := ch.send(req); err != nil {
 		return err
 	}
-	ch.sendM.Unlock()
 
 	if req.wait() {
 		select {
@@ -252,13 +259,13 @@ func (ch *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
 		ch.connection.closeChannel(ch, newError(m.ReplyCode, m.ReplyText))
-		ch.send(ch, &channelCloseOk{})
+		ch.send(&channelCloseOk{})
 
 	case *channelFlow:
 		for _, c := range ch.flows {
 			c <- m.Active
 		}
-		ch.send(ch, &channelFlowOk{Active: m.Active})
+		ch.send(&channelFlowOk{Active: m.Active})
 
 	case *basicCancel:
 		for _, c := range ch.cancels {
@@ -1285,7 +1292,7 @@ func (ch *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 	ch.m.Lock()
 	defer ch.m.Unlock()
 
-	if err := ch.send(ch, &basicPublish{
+	if err := ch.send(&basicPublish{
 		Exchange:   exchange,
 		RoutingKey: key,
 		Mandatory:  mandatory,
@@ -1502,7 +1509,7 @@ is true.
 See also Delivery.Ack
 */
 func (ch *Channel) Ack(tag uint64, multiple bool) error {
-	return ch.send(ch, &basicAck{
+	return ch.send(&basicAck{
 		DeliveryTag: tag,
 		Multiple:    multiple,
 	})
@@ -1516,7 +1523,7 @@ it must be redelivered or dropped.
 See also Delivery.Nack
 */
 func (ch *Channel) Nack(tag uint64, multiple bool, requeue bool) error {
-	return ch.send(ch, &basicNack{
+	return ch.send(&basicNack{
 		DeliveryTag: tag,
 		Multiple:    multiple,
 		Requeue:     requeue,
@@ -1531,7 +1538,7 @@ multiple messages, reducing the amount of protocol messages to exchange.
 See also Delivery.Reject
 */
 func (ch *Channel) Reject(tag uint64, requeue bool) error {
-	return ch.send(ch, &basicReject{
+	return ch.send(&basicReject{
 		DeliveryTag: tag,
 		Requeue:     requeue,
 	})
