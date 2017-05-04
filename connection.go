@@ -381,17 +381,12 @@ func (c *Connection) shutdown(err *Error) {
 
 	c.destructor.Do(func() {
 		c.m.Lock()
-		closes := make([]chan *Error, len(c.closes))
-		copy(closes, c.closes)
-		c.m.Unlock()
+		defer c.m.Unlock()
+
 		if err != nil {
-			for _, c := range closes {
+			for _, c := range c.closes {
 				c <- err
 			}
-		}
-
-		for _, ch := range c.channels {
-			c.closeChannel(ch, err)
 		}
 
 		if err != nil {
@@ -400,9 +395,7 @@ func (c *Connection) shutdown(err *Error) {
 		// Shutdown handler goroutine can still receive the result.
 		close(c.errors)
 
-		c.conn.Close()
-
-		for _, c := range closes {
+		for _, c := range c.closes {
 			close(c)
 		}
 
@@ -410,9 +403,20 @@ func (c *Connection) shutdown(err *Error) {
 			close(c)
 		}
 
-		c.m.Lock()
+		// Shutdown the channel, but do not use closeChannel() as it calls
+		// releaseChannel() which requires the connection lock.
+		//
+		// Ranging over c.channels and calling releaseChannel() that mutates
+		// c.channels is racy - see commit 6063341 for an example.
+		for _, ch := range c.channels {
+			ch.shutdown(err)
+		}
+
+		c.conn.Close()
+
+		c.channels = map[uint16]*Channel{}
+		c.allocator = newAllocator(1, c.Config.ChannelMax)
 		c.noNotify = true
-		c.m.Unlock()
 	})
 }
 

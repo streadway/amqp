@@ -12,6 +12,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestRequiredServerLocale(t *testing.T) {
@@ -68,6 +69,8 @@ func TestChannelOpenOnAClosedConnectionFails_ReleasesAllocatedChannel(t *testing
 // See https://github.com/streadway/amqp/issues/251 - thanks to jmalloc for the
 // test case.
 func TestRaceBetweenChannelAndConnectionClose(t *testing.T) {
+	defer time.AfterFunc(10*time.Second, func() { panic("Close deadlock") }).Stop()
+
 	conn := integrationConnection(t, "allocation/shutdown race")
 
 	go conn.Close()
@@ -88,6 +91,8 @@ func TestRaceBetweenChannelAndConnectionClose(t *testing.T) {
 // See https://github.com/streadway/amqp/pull/253#issuecomment-292464811 for
 // more details - thanks to jmalloc again.
 func TestRaceBetweenChannelShutdownAndSend(t *testing.T) {
+	defer time.AfterFunc(10*time.Second, func() { panic("Close deadlock") }).Stop()
+
 	conn := integrationConnection(t, "channel close/send race")
 	defer conn.Close()
 
