@@ -28,6 +28,7 @@ type Channel struct {
 	destructor sync.Once
 	m          sync.Mutex // struct field mutex
 	confirmM   sync.Mutex // publisher confirms state mutex
+	notifyM    sync.RWMutex
 
 	connection *Connection
 
@@ -93,6 +94,10 @@ func (ch *Channel) shutdown(e *Error) {
 		ch.m.Lock()
 		defer ch.m.Unlock()
 
+		// Grab an exclusive lock for the notify channels
+		ch.notifyM.Lock()
+		defer ch.notifyM.Unlock()
+
 		// Broadcast abnormal shutdown
 		if e != nil {
 			for _, c := range ch.closes {
@@ -126,6 +131,13 @@ func (ch *Channel) shutdown(e *Error) {
 		for _, c := range ch.cancels {
 			close(c)
 		}
+
+		// Set the slices to nil to prevent the dispatch() range from sending on
+		// the now closed channels after we release the notifyM mutex
+		ch.flows = nil
+		ch.closes = nil
+		ch.returns = nil
+		ch.cancels = nil
 
 		if ch.confirms != nil {
 			ch.confirms.Close()
@@ -262,22 +274,28 @@ func (ch *Channel) dispatch(msg message) {
 		ch.send(&channelCloseOk{})
 
 	case *channelFlow:
+		ch.notifyM.RLock()
 		for _, c := range ch.flows {
 			c <- m.Active
 		}
+		ch.notifyM.RUnlock()
 		ch.send(&channelFlowOk{Active: m.Active})
 
 	case *basicCancel:
+		ch.notifyM.RLock()
 		for _, c := range ch.cancels {
 			c <- m.ConsumerTag
 		}
+		ch.notifyM.RUnlock()
 		ch.consumers.close(m.ConsumerTag)
 
 	case *basicReturn:
 		ret := newReturn(*m)
+		ch.notifyM.RLock()
 		for _, c := range ch.returns {
 			c <- *ret
 		}
+		ch.notifyM.RUnlock()
 
 	case *basicAck:
 		if ch.confirming {
@@ -415,8 +433,8 @@ graceful close, no error will be sent.
 
 */
 func (ch *Channel) NotifyClose(c chan *Error) chan *Error {
-	ch.m.Lock()
-	defer ch.m.Unlock()
+	ch.notifyM.Lock()
+	defer ch.notifyM.Unlock()
 
 	if ch.noNotify {
 		close(c)
@@ -461,8 +479,8 @@ basic.ack messages from getting rate limited with your basic.publish messages.
 
 */
 func (ch *Channel) NotifyFlow(c chan bool) chan bool {
-	ch.m.Lock()
-	defer ch.m.Unlock()
+	ch.notifyM.Lock()
+	defer ch.notifyM.Unlock()
 
 	if ch.noNotify {
 		close(c)
@@ -483,8 +501,8 @@ information about why the publishing failed.
 
 */
 func (ch *Channel) NotifyReturn(c chan Return) chan Return {
-	ch.m.Lock()
-	defer ch.m.Unlock()
+	ch.notifyM.Lock()
+	defer ch.notifyM.Unlock()
 
 	if ch.noNotify {
 		close(c)
@@ -504,8 +522,8 @@ The subscription tag is returned to the listener.
 
 */
 func (ch *Channel) NotifyCancel(c chan string) chan string {
-	ch.m.Lock()
-	defer ch.m.Unlock()
+	ch.notifyM.Lock()
+	defer ch.notifyM.Unlock()
 
 	if ch.noNotify {
 		close(c)
@@ -566,8 +584,8 @@ Channel.Close() or Connection.Close().
 
 */
 func (ch *Channel) NotifyPublish(confirm chan Confirmation) chan Confirmation {
-	ch.m.Lock()
-	defer ch.m.Unlock()
+	ch.notifyM.Lock()
+	defer ch.notifyM.Unlock()
 
 	if ch.noNotify {
 		close(confirm)

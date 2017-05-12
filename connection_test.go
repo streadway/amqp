@@ -14,6 +14,27 @@ import (
 	"testing"
 )
 
+func TestRequiredServerLocale(t *testing.T) {
+	conn := integrationConnection(t, "AMQP 0-9-1 required server locale")
+	requiredServerLocale := defaultLocale
+
+	for _, locale := range conn.Locales {
+		if locale == requiredServerLocale {
+			return
+		}
+	}
+
+	t.Fatalf("AMQP 0-9-1 server must support at least the %s locale, server sent the following locales: %#v", requiredServerLocale, conn.Locales)
+}
+
+func TestDefaultConnectionLocale(t *testing.T) {
+	conn := integrationConnection(t, "client default locale")
+
+	if conn.Config.Locale != defaultLocale {
+		t.Fatalf("Expected default connection locale to be %s, is was: %s", defaultLocale, conn.Config.Locale)
+	}
+}
+
 func TestChannelOpenOnAClosedConnectionFails(t *testing.T) {
 	conn := integrationConnection(t, "channel on close")
 
