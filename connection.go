@@ -26,6 +26,7 @@ const (
 	defaultProduct           = "https://github.com/streadway/amqp"
 	defaultVersion           = "β"
 	defaultChannelMax        = maxChannelMax
+	defaultLocale            = "en_US"
 )
 
 // Config is used in DialConfig and Open to specify the desired tuning
@@ -55,6 +56,11 @@ type Config struct {
 	// This is an optional setting - if the application does not set this,
 	// the underlying library will use a generic set of client properties.
 	Properties Table
+
+	// Connection locale that we expect to always be en_US
+	// Even though servers must return it as per the AMQP 0-9-1 spec,
+	// we are not aware of it being used other than to satisfy the spec requirements
+	Locale string
 
 	// Dial returns a net.Conn prepared for a TLS handshake with TSLClientConfig,
 	// then an AMQP connection handshake.
@@ -91,9 +97,10 @@ type Connection struct {
 
 	Config Config // The negotiated Config after connection.open
 
-	Major      int   // Server's major version
-	Minor      int   // Server's minor version
-	Properties Table // Server properties
+	Major      int      // Server's major version
+	Minor      int      // Server's minor version
+	Properties Table    // Server properties
+	Locales    []string // Server locales
 
 	closed int32 // Will be 1 if the connection is closed, 0 otherwise. Should only be accessed as atomic
 }
@@ -129,6 +136,7 @@ func defaultDial(network, addr string) (net.Conn, error) {
 func Dial(url string) (*Connection, error) {
 	return DialConfig(url, Config{
 		Heartbeat: defaultHeartbeat,
+		Locale:    defaultLocale,
 	})
 }
 
@@ -141,6 +149,7 @@ func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 	return DialConfig(url, Config{
 		Heartbeat:       defaultHeartbeat,
 		TLSClientConfig: amqps,
+		Locale:          defaultLocale,
 	})
 }
 
@@ -689,6 +698,7 @@ func (c *Connection) openStart(config Config) error {
 	c.Major = int(start.VersionMajor)
 	c.Minor = int(start.VersionMinor)
 	c.Properties = Table(start.ServerProperties)
+	c.Locales = strings.Split(start.Locales, " ")
 
 	// eventually support challenge/response here by also responding to
 	// connectionSecure.
@@ -699,6 +709,9 @@ func (c *Connection) openStart(config Config) error {
 
 	// Save this mechanism off as the one we chose
 	c.Config.SASL = []Authentication{auth}
+
+	// Set the connection locale to client locale
+	c.Config.Locale = config.Locale
 
 	return c.openTune(config, auth)
 }
@@ -717,9 +730,10 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 	}
 
 	ok := &connectionStartOk{
+		ClientProperties: config.Properties,
 		Mechanism:        auth.Mechanism(),
 		Response:         auth.Response(),
-		ClientProperties: config.Properties,
+		Locale:           config.Locale,
 	}
 	tune := &connectionTune{}
 
