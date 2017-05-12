@@ -6,9 +6,8 @@ This is an AMQP 0.9.1 client with RabbitMQ extensions in Go.
 
 ## Project Maturity
 
-This project has been used in production systems for over 3 years. It is reasonably mature
-and feature complete, and as of November 2016 has [a team of maintainers](https://github.com/streadway/amqp/issues/215)
-instead of being a one man show.
+This project has been used in production systems for many years. It is reasonably mature
+and feature complete, and as of November 2016 has [a team of maintainers](https://github.com/streadway/amqp/issues/215).
 
 Future API changes are unlikely but possible. They will be discussed on [Github
 issues](https://github.com/streadway/amqp/issues) along with any bugs or
