@@ -605,7 +605,7 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 // channel.shutdown() which closes all registered notification channels - checks
 // for a "send on closed channel" panic
 func TestChannelReturnsCloseRace(t *testing.T) {
-	defer time.AfterFunc(1*time.Second, func() { panic("Shutdown deadlock") }).Stop()
+	defer time.AfterFunc(5*time.Second, func() { panic("Shutdown deadlock") }).Stop()
 	ch := newChannel(&Connection{}, 1)
 
 	// Register a channel to close in channel.shutdown()
