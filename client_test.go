@@ -599,3 +599,32 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 		}
 	}
 }
+
+// TestChannelReturnsCloseRace ensures that receiving a basicReturn frame and
+// sending the notification to the bound channel does not race with
+// channel.shutdown() which closes all registered notification channels - checks
+// for a "send on closed channel" panic
+func TestChannelReturnsCloseRace(t *testing.T) {
+	defer time.AfterFunc(1*time.Second, func() { panic("Shutdown deadlock") }).Stop()
+	ch := newChannel(&Connection{}, 1)
+
+	// Register a channel to close in channel.shutdown()
+	notify := make(chan Return, 1)
+	ch.NotifyReturn(notify)
+
+	go func() {
+		for range notify {
+			// Drain notifications
+		}
+	}()
+
+	// Simulate receiving a load of returns (triggering a write to the above
+	// channel) while we call shutdown concurrently
+	go func() {
+		for i := 0; i < 100; i++ {
+			ch.dispatch(&basicReturn{})
+		}
+	}()
+
+	ch.shutdown(nil)
+}
