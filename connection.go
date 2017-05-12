@@ -585,6 +585,10 @@ func (c *Connection) allocateChannel() (*Channel, error) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
+	if c.isClosed() {
+		return nil, ErrClosed
+	}
+
 	id, ok := c.allocator.next()
 	if !ok {
 		return nil, ErrChannelMax

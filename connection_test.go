@@ -62,6 +62,46 @@ func TestChannelOpenOnAClosedConnectionFails_ReleasesAllocatedChannel(t *testing
 	}
 }
 
+// TestRaceBetweenChannelAndConnectionClose ensures allocating a new channel
+// does not race with shutting the connection down.
+//
+// See https://github.com/streadway/amqp/issues/251 - thanks to jmalloc for the
+// test case.
+func TestRaceBetweenChannelAndConnectionClose(t *testing.T) {
+	conn := integrationConnection(t, "allocation/shutdown race")
+
+	go conn.Close()
+	for i := 0; i < 10; i++ {
+		go func() {
+			ch, err := conn.Channel()
+			if err == nil {
+				ch.Close()
+			}
+		}()
+	}
+}
+
+// TestRaceBetweenChannelShutdownAndSend ensures closing a channel
+// (channel.shutdown) does not race with calling channel.send() from any other
+// goroutines.
+//
+// See https://github.com/streadway/amqp/pull/253#issuecomment-292464811 for
+// more details - thanks to jmalloc again.
+func TestRaceBetweenChannelShutdownAndSend(t *testing.T) {
+	conn := integrationConnection(t, "channel close/send race")
+	defer conn.Close()
+
+	ch, _ := conn.Channel()
+
+	go ch.Close()
+	for i := 0; i < 10; i++ {
+		go func() {
+			// ch.Ack calls ch.send() internally.
+			ch.Ack(42, false)
+		}()
+	}
+}
+
 func TestQueueDeclareOnAClosedConnectionFails(t *testing.T) {
 	conn := integrationConnection(t, "queue declare on close")
 	ch, _ := conn.Channel()
