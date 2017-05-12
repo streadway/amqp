@@ -1,3 +1,5 @@
+[![Build Status](https://secure.travis-ci.org/streadway/amqp.png)](http://travis-ci.org/streadway/amqp)
+
 # Go RabbitMQ Client Library
 
 This is an AMQP 0.9.1 client with RabbitMQ extensions in Go.
@@ -62,10 +64,6 @@ reference and usage.
 [RabbitMQ tutorials in
 Go](https://github.com/rabbitmq/rabbitmq-tutorials/tree/master/go) are also
 available.
-
-## Continuous Integration
-
-[![Build Status](https://secure.travis-ci.org/streadway/amqp.png)](http://travis-ci.org/streadway/amqp)
 
 ## Contributing
 
