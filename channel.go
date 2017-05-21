@@ -1000,16 +1000,18 @@ included in every Delivery in the ConsumerTag field
 
 When autoAck (also known as noAck) is true, the server will acknowledge
 deliveries to this consumer prior to writing the delivery to the network.  When
-autoAck is true, the consumer should not call Delivery.Ack.  Automatically
+autoAck is true, the consumer should not call Delivery.Ack. Automatically
 acknowledging deliveries means that some deliveries may get lost if the
 consumer is unable to process them after the server delivers them.
+See http://www.rabbitmq.com/confirms.html for more details.
 
 When exclusive is true, the server will ensure that this is the sole consumer
-from this queue.  When exclusive is false, the server will fairly distribute
+from this queue. When exclusive is false, the server will fairly distribute
 deliveries across multiple consumers.
 
-When noLocal is true, the server will not deliver publishing sent from the same
-connection to this consumer.  It's advisable to use separate connections for
+The noLocal flag is not supported by RabbitMQ.
+
+It's advisable to use separate connections for
 Channel.Publish and Channel.Consume so not to have TCP pushback on publishing
 affect the ability to consume messages, so this parameter is here mostly for
 completeness.
@@ -1023,7 +1025,7 @@ or server.
 
 When the channel or connection closes, all delivery chans will also close.
 
-Deliveries on the returned chan will be buffered indefinitely.  To limit memory
+Deliveries on the returned chan will be buffered indefinitely. To limit memory
 of this buffer, use the Channel.Qos method to limit the amount of
 unacknowledged/buffered deliveries the server will deliver on this Channel.
 
