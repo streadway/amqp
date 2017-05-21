@@ -814,7 +814,9 @@ func (c *Connection) openComplete() error {
 		_ = deadliner.SetDeadline(time.Time{})
 	}
 
+	c.m.Lock()
 	c.allocator = newAllocator(1, c.Config.ChannelMax)
+	c.m.Unlock()
 	return nil
 }
 
