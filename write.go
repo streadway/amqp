@@ -362,7 +362,7 @@ func writeField(w io.Writer, value interface{}) (err error) {
 
 	case time.Time:
 		buf[0] = 'T'
-		binary.BigEndian.PutUint64(buf[1:9], uint64(v.Unix()))
+		binary.BigEndian.PutUint64(buf[1:9], uint64(v.UnixNano()))
 		enc = buf[:9]
 
 	case Table:

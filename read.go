@@ -146,11 +146,11 @@ func readFloat64(r io.Reader) (v float64, err error) {
 }
 
 func readTimestamp(r io.Reader) (v time.Time, err error) {
-	var sec int64
-	if err = binary.Read(r, binary.BigEndian, &sec); err != nil {
+	var nanoSec int64
+	if err = binary.Read(r, binary.BigEndian, &nanoSec); err != nil {
 		return
 	}
-	return time.Unix(sec, 0), nil
+	return time.Unix(nanoSec, 0), nil
 }
 
 /*
