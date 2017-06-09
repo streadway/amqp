@@ -1732,6 +1732,34 @@ func TestConsumerCancelNotification(t *testing.T) {
 	}
 }
 
+func TestConcurrentChannelAndConnectionClose(t *testing.T) {
+	c := integrationConnection(t, "concurrent channel and connection test")
+	if c != nil {
+		ch, err := c.Channel()
+		if err != nil {
+			t.Fatalf("got error on channel.open: %v", err)
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		starter := make(chan struct{})
+		go func() {
+			defer wg.Done()
+			<-starter
+			c.Close()
+		}()
+
+		go func() {
+			defer wg.Done()
+			<-starter
+			ch.Close()
+		}()
+		close(starter)
+		wg.Wait()
+	}
+}
+
 /*
  * Support for integration tests
  */

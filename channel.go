@@ -143,6 +143,7 @@ func (ch *Channel) shutdown(e *Error) {
 			ch.confirms.Close()
 		}
 
+		close(ch.errors)
 		ch.noNotify = true
 	})
 }
@@ -173,8 +174,11 @@ func (ch *Channel) call(req message, res ...message) error {
 
 	if req.wait() {
 		select {
-		case e := <-ch.errors:
-			return e
+		case e, ok := <-ch.errors:
+			if ok {
+				return e
+			}
+			return ErrClosed
 
 		case msg := <-ch.rpc:
 			if msg != nil {
