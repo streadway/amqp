@@ -39,8 +39,24 @@ func TestIntegrationOpenCloseChannel(t *testing.T) {
 	if c := integrationConnection(t, "channel"); c != nil {
 		defer c.Close()
 
-		if _, err := c.Channel(); err != nil {
-			t.Errorf("Channel could not be opened: %s", err)
+		ch, err := c.Channel()
+		if err != nil {
+			t.Fatalf("create channel 1: %s", err)
+		}
+		ch.Close()
+	}
+}
+
+func TestIntegrationHighChannelChurnInTightLoop(t *testing.T) {
+	if c := integrationConnection(t, "channel churn"); c != nil {
+		defer c.Close()
+
+		for i := 0; i < 1000; i++ {
+			ch, err := c.Channel()
+			if err != nil {
+				t.Fatalf("create channel 1: %s", err)
+			}
+			ch.Close()
 		}
 	}
 }
