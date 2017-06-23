@@ -26,81 +26,67 @@ func ExampleConfig_timeout() {
 }
 
 func ExampleDialTLS() {
-	// This example assume you have a RabbitMQ node running on localhost
-	// with TLS enabled.
+	// This is a step-by-step guide to configure TLS in RabbitMQ 3.6.9
+	// running on OS X 10.11
 	//
-	// The easiest way to create the CA, certificates and keys required for these
-	// examples is by using tls-gen: https://github.com/michaelklishin/tls-gen
+	// RabbitMQ was installed via Homebrew:
 	//
-	// A comprehensive RabbitMQ TLS guide can be found at
-	// http://www.rabbitmq.com/ssl.html
+	// 	brew install rabbitmq
 	//
-	// Once you have the required TLS files in place, use the following
-	// rabbitmq.config example for the RabbitMQ node that you will run on
-	// localhost:
+	// 1. Create a self-signed CA certificate, client and server key pairs
+	// using tls-gen:
 	//
-	//   [
-	//   {rabbit, [
-	//     {tcp_listeners, []},     % listens on 127.0.0.1:5672
-	//     {ssl_listeners, [5671]}, % listens on 0.0.0.0:5671
-	//     {ssl_options, [{cacertfile,"/path/to/your/testca/cacert.pem"},
-	//                    {certfile,"/path/to/your/server/cert.pem"},
-	//                    {keyfile,"/path/to/your/server/key.pem"},
-	//                    {verify,verify_peer},
-	//                    {fail_if_no_peer_cert,true}]}
-	//     ]}
-	//   ].
+	// 	cd ~
+	// 	git clone https://github.com/michaelklishin/tls-gen
+	// 	cd tls-gen/basic
+	// 	make
 	//
+	// If you get stuck, refer to the tls-gen README: https://github.com/michaelklishin/tls-gen
 	//
-	// In the above rabbitmq.config example, we are disabling the plain AMQP port
-	// and verifying that clients and fail if no certificate is presented.
+	// 2. Configure TLS in RabbitMQ, edit /usr/local/etc/rabbitmq/rabbitmq.config:
 	//
-	// The self-signing certificate authority's certificate (cacert.pem) must be
-	// included in the RootCAs to be trusted, otherwise the server certificate
-	// will fail certificate verification.
+	//   	[
+	//   		{rabbit, [
+	//   		  	{tcp_listeners, []},     			% disable plain AMQP port
+	//   		  	{ssl_listeners, ["127.0.0.1", 5671]}, 		% enable SSL AMQP port
+	//   		  	{ssl_options, [{cacertfile,"~/tls-gen/basic/result/ca_certificate.pem"},
+	//   		  	               {certfile,"~/tls-gen/basic/result/server_certificate.pem"},
+	//   		  	               {keyfile,"~/tls-gen/basic/result/server_key.pem"},
+	//   		  	               {verify,verify_peer},
+	//   		  	               {fail_if_no_peer_cert,true}]} 	% fail auth if no certificate is present
+	//   		  ]}
+	//   	].
 	//
-	// Alternatively to adding it to the tls.Config. you can add the CA's cert to
-	// your system's root CAs.  The tls package will use the system roots
-	// specific to each support OS.  Under OS X, add (drag/drop) cacert.pem
-	// file to the 'Certificates' section of KeyChain.app to add and always
-	// trust.  You can also add it via the command line:
+	// 3. Start RabbitMQ (stop any running instances first)
 	//
-	//   security add-certificate testca/cacert.pem
-	//   security add-trusted-cert testca/cacert.pem
+	//      rabbitmq-server
 	//
-	// If you depend on the system root CAs, then use nil for the RootCAs field
-	// so the system roots will be loaded instead.
+	// 4. Confirm that RabbitMQ is listening on 127.0.0.1:5671
 	//
-	// Server names are validated by the crypto/tls package, so the server
-	// certificate must be made for the hostname in the URL.  Find the commonName
-	// (CN) and make sure the hostname in the URL matches this common name.  Per
-	// the RabbitMQ instructions (or tls-gen) for a self-signed cert, this defaults to the
-	// current hostname.
+	// 	rabbitmqctl status | grep listeners -A 5
 	//
-	//   openssl x509 -noout -in /path/to/certificate.pem -subject
-	//
-	// If your server name in your certificate is different than the host you are
-	// connecting to, set the hostname used for verification in
-	// ServerName field of the tls.Config struct.
+	// A comprehensive RabbitMQ TLS guide, suitable for production
+	// deployments, can be found at http://www.rabbitmq.com/ssl.html
 	cfg := new(tls.Config)
 
-	// see at the top
+	// The self-signing CA certificate must be included in the RootCAs to
+	// be trusted, otherwise the server certificate will fail certificate
+	// verification.
 	cfg.RootCAs = x509.NewCertPool()
 
-	if ca, err := ioutil.ReadFile("testca/cacert.pem"); err == nil {
+	if ca, err := ioutil.ReadFile("~/tls-gen/basic/result/ca_certificate.pem"); err == nil {
 		cfg.RootCAs.AppendCertsFromPEM(ca)
 	}
 
-	// Move the client cert and key to a location specific to your application
-	// and load them here.
-
-	if cert, err := tls.LoadX509KeyPair("client/cert.pem", "client/key.pem"); err == nil {
+	// Add client certificate & key
+	if cert, err := tls.LoadX509KeyPair("~/tls-gen/basic/result/client_certificate.pem", "~/tls-gen/basic/result/client_key.pem"); err == nil {
 		cfg.Certificates = append(cfg.Certificates, cert)
 	}
 
-	// see a note about Common Name (CN) at the top
-	conn, err := amqp.DialTLS("amqps://server-name-from-certificate/", cfg)
+	// tls-gen ensures the Common Name (CN) is generated correctly
+	conn, err := amqp.DialTLS("amqps://127.0.0.1/", cfg)
 
+	// Connection will succeed, there are no errors
 	log.Printf("conn: %v, err: %v", conn, err)
 }
 
