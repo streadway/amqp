@@ -111,7 +111,10 @@ func publish(sessions chan chan session, messages <-chan message) {
 		for {
 			var body message
 			select {
-			case confirmed := <-confirm:
+			case confirmed, ok := <-confirm:
+				if !ok {
+					break Publish
+				}
 				if !confirmed.Ack {
 					log.Printf("nack message %d, body: %q", confirmed.DeliveryTag, string(body))
 				}
