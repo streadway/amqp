@@ -276,6 +276,7 @@ func (ch *Channel) dispatch(msg message) {
 	case *channelClose:
 		ch.connection.closeChannel(ch, newError(m.ReplyCode, m.ReplyText))
 		ch.send(&channelCloseOk{})
+		ch.connection.releaseChannel(ch.id)
 
 	case *channelFlow:
 		ch.notifyM.RLock()
@@ -418,6 +419,7 @@ It is safe to call this method multiple times.
 
 */
 func (ch *Channel) Close() error {
+	defer ch.connection.releaseChannel(ch.id)
 	defer ch.connection.closeChannel(ch, nil)
 	return ch.call(
 		&channelClose{ReplyCode: replySuccess},

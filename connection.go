@@ -633,7 +633,6 @@ func (c *Connection) openChannel() (*Channel, error) {
 // this connection.
 func (c *Connection) closeChannel(ch *Channel, e *Error) {
 	ch.shutdown(e)
-	c.releaseChannel(ch.id)
 }
 
 /*
