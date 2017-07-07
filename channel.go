@@ -274,8 +274,13 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 func (ch *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
-		ch.connection.closeChannel(ch, newError(m.ReplyCode, m.ReplyText))
+		// lock before sending connection.close-ok
+		// to avoid unexpected interleaving with basic.publish frames if
+		// publishing is happening concurrently
+		ch.m.Lock()
 		ch.send(&channelCloseOk{})
+		ch.m.Unlock()
+		ch.connection.closeChannel(ch, newError(m.ReplyCode, m.ReplyText))
 
 	case *channelFlow:
 		ch.notifyM.RLock()
