@@ -274,8 +274,8 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 func (ch *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
 	case *channelClose:
-		ch.connection.closeChannel(ch, newError(m.ReplyCode, m.ReplyText))
 		ch.send(&channelCloseOk{})
+		ch.connection.closeChannel(ch, newError(m.ReplyCode, m.ReplyText))
 
 	case *channelFlow:
 		ch.notifyM.RLock()
