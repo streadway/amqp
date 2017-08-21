@@ -134,10 +134,10 @@ func (uri URI) String() string {
 	authority.Scheme = uri.Scheme
 
 	if uri.Username != defaultURI.Username || uri.Password != defaultURI.Password {
-		 authority.User = url.User(uri.Username)
+		authority.User = url.User(uri.Username)
 
 		if uri.Password != defaultURI.Password {
-			 authority.User = url.UserPassword(uri.Username, uri.Password)
+			authority.User = url.UserPassword(uri.Username, uri.Password)
 		}
 	}
 
