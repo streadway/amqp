@@ -114,7 +114,7 @@ func (ch *Channel) shutdown(e *Error) {
 			ch.errors <- e
 		}
 
-		ch.consumers.closeAll()
+		ch.consumers.close()
 
 		for _, c := range ch.closes {
 			close(c)
@@ -296,7 +296,7 @@ func (ch *Channel) dispatch(msg message) {
 			c <- m.ConsumerTag
 		}
 		ch.notifyM.RUnlock()
-		ch.consumers.close(m.ConsumerTag)
+		ch.consumers.cancel(m.ConsumerTag)
 
 	case *basicReturn:
 		ret := newReturn(*m)
@@ -679,10 +679,10 @@ func (ch *Channel) Cancel(consumer string, noWait bool) error {
 	}
 
 	if req.wait() {
-		ch.consumers.close(res.ConsumerTag)
+		ch.consumers.cancel(res.ConsumerTag)
 	} else {
 		// Potentially could drop deliveries in flight
-		ch.consumers.close(consumer)
+		ch.consumers.cancel(consumer)
 	}
 
 	return nil
@@ -1032,11 +1032,14 @@ exception will be raised and the channel will be closed.
 Optional arguments can be provided that have specific semantics for the queue
 or server.
 
-When the channel or connection closes, all delivery chans will also close.
+Inflight messages, limited by Channel.Qos will be buffered until received from
+the returned chan.
 
-Deliveries on the returned chan will be buffered indefinitely. To limit memory
-of this buffer, use the Channel.Qos method to limit the amount of
-unacknowledged/buffered deliveries the server will deliver on this Channel.
+When the Channel or Connection is closed, all buffered and inflight messages will
+be dropped.
+
+When the consumer tag is cancelled, all inflight messages will be delivered until
+the returned chan is closed.
 
 */
 func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args Table) (<-chan Delivery, error) {
@@ -1068,7 +1071,7 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 	ch.consumers.add(consumer, deliveries)
 
 	if err := ch.call(req, res); err != nil {
-		ch.consumers.close(consumer)
+		ch.consumers.cancel(consumer)
 		return nil, err
 	}
 
