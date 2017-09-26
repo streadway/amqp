@@ -205,7 +205,7 @@ var uriTests = []testURI{
 		vhost:    defaultURI.Vhost,
 		canon:    "amqp://[fe80::1%25en0]/",
 	},
-	
+
 	{
 		url:      "amqp://[fe80::1]:5671",
 		username: defaultURI.Username,
