@@ -155,7 +155,8 @@ func (uri URI) String() string {
 	}
 
 	if uri.Vhost != defaultURI.Vhost {
-		// Avoid net/url to escape "%2F" to "%252F".
+		// Make sure net/url does not double escape, e.g.
+		// "%2F" does not become "%252F".
 		authority.Path = uri.Vhost
 		authority.RawPath = url.QueryEscape(uri.Vhost)
 	} else {

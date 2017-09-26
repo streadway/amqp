@@ -177,6 +177,46 @@ var uriTests = []testURI{
 	},
 
 	{
+		url:      "amqp://[fe80::1]",
+		username: defaultURI.Username,
+		password: defaultURI.Password,
+		host:     "fe80::1",
+		port:     defaultURI.Port,
+		vhost:    defaultURI.Vhost,
+		canon:    "amqp://[fe80::1]/",
+	},
+
+	{
+		url:      "amqp://[fe80::1]",
+		username: defaultURI.Username,
+		password: defaultURI.Password,
+		host:     "fe80::1",
+		port:     defaultURI.Port,
+		vhost:    defaultURI.Vhost,
+		canon:    "amqp://[fe80::1]/",
+	},
+
+	{
+		url:      "amqp://[fe80::1%25en0]",
+		username: defaultURI.Username,
+		password: defaultURI.Password,
+		host:     "fe80::1%en0",
+		port:     defaultURI.Port,
+		vhost:    defaultURI.Vhost,
+		canon:    "amqp://[fe80::1%25en0]/",
+	},
+	
+	{
+		url:      "amqp://[fe80::1]:5671",
+		username: defaultURI.Username,
+		password: defaultURI.Password,
+		host:     "fe80::1",
+		port:     5671,
+		vhost:    defaultURI.Vhost,
+		canon:    "amqp://[fe80::1]:5671/",
+	},
+
+	{
 		url:      "amqps:///",
 		username: defaultURI.Username,
 		password: defaultURI.Password,
