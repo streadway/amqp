@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // 0      1         3             7                  size+7 size+8
@@ -197,6 +198,8 @@ func (ch *Channel) call(req message, res ...message) error {
 			// error on the Connection.  This indicates we have already been
 			// shutdown and if were waiting, will have returned from the errors chan.
 			return ErrClosed
+		case <-time.After(ch.connection.Config.Heartbeat):
+			return ErrChannelOpTimeout
 		}
 	}
 
