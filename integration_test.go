@@ -579,7 +579,7 @@ func TestIntegrationNonBlockingClose(t *testing.T) {
 
 		// Simulate a consumer
 		go func() {
-			for _ = range msgs {
+			for range msgs {
 				t.Logf("Oh my, received message on an empty queue")
 			}
 		}()
