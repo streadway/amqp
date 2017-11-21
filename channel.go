@@ -30,7 +30,7 @@ type Channel struct {
 	m          sync.Mutex // struct field mutex
 	confirmM   sync.Mutex // publisher confirms state mutex
 	notifyM    sync.RWMutex
-	rpcM      sync.Mutex
+	rpcM       sync.Mutex
 
 	connection *Connection
 
