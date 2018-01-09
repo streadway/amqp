@@ -626,7 +626,7 @@ consumers on all channels on the same connection.  When false, the Channel.Qos
 settings will apply to all existing and future consumers on this channel.
 
 Please see the RabbitMQ Consumer Prefetch documentation for an explanation of
-how the global flag is implemented in RabbitMQ, as it is differs from the
+how the global flag is implemented in RabbitMQ, as it differs from the
 AMQP 0.9.1 specification in that global Qos settings are limited in scope to
 channels, not connections (https://www.rabbitmq.com/consumer-prefetch.html).
 
