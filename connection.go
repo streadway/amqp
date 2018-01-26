@@ -794,7 +794,7 @@ func (c *Connection) openVhost(config Config) error {
 
 	if err := c.call(req, res); err != nil {
 		// Cannot be closed yet, but we know it's a vhost problem
-		return ErrVhost
+		return err
 	}
 
 	c.Config.Vhost = config.Vhost
