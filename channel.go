@@ -820,7 +820,7 @@ func (ch *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusi
 QueueInspect passively declares a queue by name to inspect the current message
 count and consumer count.
 
-Use this method to check how many unacknowledged messages reside in the queue,
+Use this method to check how many messages ready for delivery reside in the queue,
 how many consumers are receiving deliveries, and whether a queue by this
 name already exists.
 
