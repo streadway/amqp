@@ -1545,6 +1545,9 @@ is true.
 See also Delivery.Ack
 */
 func (ch *Channel) Ack(tag uint64, multiple bool) error {
+	ch.m.Lock()
+	defer ch.m.Unlock()
+
 	return ch.send(&basicAck{
 		DeliveryTag: tag,
 		Multiple:    multiple,
@@ -1559,6 +1562,9 @@ it must be redelivered or dropped.
 See also Delivery.Nack
 */
 func (ch *Channel) Nack(tag uint64, multiple bool, requeue bool) error {
+	ch.m.Lock()
+	defer ch.m.Unlock()
+
 	return ch.send(&basicNack{
 		DeliveryTag: tag,
 		Multiple:    multiple,
