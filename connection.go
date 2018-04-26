@@ -46,6 +46,9 @@ type Config struct {
 	FrameSize  int           // 0 max bytes means unlimited
 	Heartbeat  time.Duration // less than 1s uses the server's interval
 
+	// Force heartbeats to be disabled, even if server specifies an interval
+	DisableHeartbeat bool
+
 	// TLSClientConfig specifies the client configuration of the TLS connection
 	// when establishing a tls transport.
 	// If the URL uses an amqps scheme, then an empty tls.Config with the
@@ -769,6 +772,9 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 	c.Config.Heartbeat = time.Second * time.Duration(pick(
 		int(config.Heartbeat/time.Second),
 		int(tune.Heartbeat)))
+	if config.DisableHeartbeat {
+		c.Config.Heartbeat = 0
+	}
 
 	// "The client should start sending heartbeats after receiving a
 	// Connection.Tune method"
