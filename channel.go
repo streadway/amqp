@@ -1123,7 +1123,7 @@ Note: RabbitMQ declares the default exchange types like 'amq.fanout' as
 durable, so queues that bind to these pre-declared exchanges must also be
 durable.
 
-Exchanges declared as `internal` do not accept accept publishings. Internal
+Exchanges declared as `internal` do not accept publishings. Internal
 exchanges are useful when you wish to implement inter-exchange topologies
 that should not be exposed to users of the broker.
 
