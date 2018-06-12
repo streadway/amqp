@@ -1,23 +1,27 @@
 package amqp
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // confirms resequences and notifies one or multiple publisher confirmation listeners
 type confirms struct {
 	m         sync.Mutex
 	listeners []chan Confirmation
 	sequencer map[uint64]Confirmation
-	published uint64
+	published atomic.Value
 	expecting uint64
 }
 
 // newConfirms allocates a confirms
 func newConfirms() *confirms {
-	return &confirms{
+	c := &confirms{
 		sequencer: map[uint64]Confirmation{},
-		published: 0,
 		expecting: 1,
 	}
+	c.published.Store(uint64(0))
+	return c
 }
 
 func (c *confirms) Listen(l chan Confirmation) {
@@ -29,11 +33,8 @@ func (c *confirms) Listen(l chan Confirmation) {
 
 // publish increments the publishing counter
 func (c *confirms) Publish() uint64 {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.published++
-	return c.published
+	c.published.Store(c.published.Load().(uint64) + 1)
+	return c.published.Load().(uint64)
 }
 
 // confirm confirms one publishing, increments the expecting delivery tag, and
@@ -48,7 +49,7 @@ func (c *confirms) confirm(confirmation Confirmation) {
 
 // resequence confirms any out of order delivered confirmations
 func (c *confirms) resequence() {
-	for c.expecting <= c.published {
+	for c.expecting <= c.published.Load().(uint64) {
 		sequenced, found := c.sequencer[c.expecting]
 		if !found {
 			return

@@ -1183,6 +1183,37 @@ func TestIntegrationConfirm(t *testing.T) {
 	}
 }
 
+func TestIntegrationConfirmNoLocks(t *testing.T) {
+	if c, ch := integrationQueue(t, "confirm"); c != nil {
+		defer c.Close()
+
+		confirms := ch.NotifyPublish(make(chan Confirmation))
+
+		if err := ch.Confirm(false); err != nil {
+			t.Fatalf("could not confirm")
+		}
+
+		var wg sync.WaitGroup
+
+		time.AfterFunc(time.Second*10, func() {
+			panic("deadlock")
+		})
+
+		messagesNumber := 10000
+		wg.Add(messagesNumber)
+		go func() {
+			for i := 1; i <= messagesNumber; i++ {
+				defer wg.Done()
+				ch.Publish("", "confirm", false, false, Publishing{Body: []byte("confirm")})
+
+				<-confirms
+			}
+
+		}()
+		wg.Wait()
+	}
+}
+
 // https://github.com/streadway/amqp/issues/61
 func TestRoundTripAllFieldValueTypes61(t *testing.T) {
 	if conn := integrationConnection(t, "issue61"); conn != nil {
