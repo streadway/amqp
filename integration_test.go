@@ -1195,8 +1195,11 @@ func TestIntegrationConfirmNoLocks(t *testing.T) {
 
 		var wg sync.WaitGroup
 
+		finished := false
 		time.AfterFunc(time.Second*10, func() {
-			panic("deadlock")
+			if !finished {
+				panic("deadlock")
+			}
 		})
 
 		messagesNumber := 10000
@@ -1211,6 +1214,8 @@ func TestIntegrationConfirmNoLocks(t *testing.T) {
 
 		}()
 		wg.Wait()
+
+		finished = true
 	}
 }
 
