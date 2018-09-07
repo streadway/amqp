@@ -235,11 +235,11 @@ func TestIntegrationQueueDeclarePassiveOnMissingExchangeShouldError(t *testing.T
 
 		if _, err := ch.QueueDeclarePassive(
 			"test-integration-missing-passive-queue", // name
-			false, // duration (note: not durable)
-			true,  // auto-delete
-			false, // exclusive
-			false, // noWait
-			nil,   // arguments
+			false,                                    // duration (note: not durable)
+			true,                                     // auto-delete
+			false,                                    // exclusive
+			false,                                    // noWait
+			nil,                                      // arguments
 		); err == nil {
 			t.Fatal("QueueDeclarePassive of a missing queue should error")
 		}
