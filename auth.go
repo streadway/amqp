@@ -44,7 +44,7 @@ func (auth *AMQPlainAuth) Mechanism() string {
 
 // Response returns the null character delimited encoding for the SASL PLAIN Mechanism.
 func (auth *AMQPlainAuth) Response() string {
-	return fmt.Sprintf("LOGIN%sPASSWORD:%s", auth.Username, auth.Password)
+	return fmt.Sprintf("LOGIN:%sPASSWORD:%s", auth.Username, auth.Password)
 }
 
 // Finds the first mechanism preferred by the client that the server supports.
