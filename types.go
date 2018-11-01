@@ -200,6 +200,7 @@ type Decimal struct {
 //   byte
 //   float32
 //   float64
+//   int
 //   int16
 //   int32
 //   int64
@@ -225,7 +226,7 @@ type Table map[string]interface{}
 
 func validateField(f interface{}) error {
 	switch fv := f.(type) {
-	case nil, bool, byte, int16, int32, int64, float32, float64, string, []byte, Decimal, time.Time:
+	case nil, bool, byte, int, int16, int32, int64, float32, float64, string, []byte, Decimal, time.Time:
 		return nil
 
 	case []interface{}:
