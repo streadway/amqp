@@ -52,7 +52,7 @@ type Delivery struct {
 
 	DeliveryTag uint64
 	Redelivered bool
-	Exchange    string // basic.publish exhange
+	Exchange    string // basic.publish exchange
 	RoutingKey  string // basic.publish routing key
 
 	Body []byte
