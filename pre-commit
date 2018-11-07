@@ -16,16 +16,17 @@ local_go_version_is_latest_stable() {
   go version | grep -q $LATEST_STABLE_SUPPORTED_GO_VERSION
 }
 
-error() {
+log_error() {
   echo "$*" 1>&2
 }
 
 run_gofmt() {
-  error "Detected latest version of go... checking gofmt, golint and got vet"
   GOFMT_FILES=$(gofmt -l .)
-  if [ -n "$GOFMT_FILES" ]; then
-    error "gofmt failed for the following files:
+  if [ -n "$GOFMT_FILES" ]
+  then
+    log_error "gofmt failed for the following files:
 $GOFMT_FILES
+
 please run 'gofmt -w .' on your changes before committing."
     exit 1
   fi
@@ -33,9 +34,11 @@ please run 'gofmt -w .' on your changes before committing."
 
 run_golint() {
   GOLINT_ERRORS=$(golint ./... | grep -v "Id should be")
-  if [ -n "$GOLINT_ERRORS" ]; then
-    error "golint failed for the following reasons:
+  if [ -n "$GOLINT_ERRORS" ]
+  then
+    log_error "golint failed for the following reasons:
 $GOLINT_ERRORS
+
 please run 'golint ./...' on your changes before committing."
     exit 1
   fi
@@ -43,17 +46,20 @@ please run 'golint ./...' on your changes before committing."
 
 run_govet() {
   GOVET_ERRORS=$(go tool vet ./*.go 2>&1)
-  if [ -n "$GOVET_ERRORS" ]; then
-    error "go vet failed for the following reasons:
+  if [ -n "$GOVET_ERRORS" ]
+  then
+    log_error "go vet failed for the following reasons:
 $GOVET_ERRORS
+
 please run 'go tool vet ./*.go' on your changes before committing."
     exit 1
   fi
 }
 
 run_unit_tests() {
-  if [ -z "$NOTEST" ]; then
-    error 'Running short tests...'
+  if [ -z "$NOTEST" ]
+  then
+    log_error 'Running short tests...'
     env AMQP_URL= go test -short
   fi
 }
