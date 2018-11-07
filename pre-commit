@@ -1,29 +1,67 @@
 #!/bin/sh
 
-GOFMT_FILES=$(gofmt -l .)
-if [ -n "${GOFMT_FILES}" ]; then
-  printf >&2 'gofmt failed for the following files:\n%s\n\nplease run "gofmt -w ." on your changes before committing.\n' "${GOFMT_FILES}"
-  exit 1
-fi
+LATEST_STABLE_SUPPORTED_GO_VERSION="1.11"
 
-GOLINT_ERRORS=$(golint ./... | grep -v "Id should be")
-if [ -n "${GOLINT_ERRORS}" ]; then
-  printf >&2 'golint failed for the following reasons:\n%s\n\nplease run 'golint ./...' on your changes before committing.\n' "${GOLINT_ERRORS}"
-  exit 1
-fi
+main() {
+  if local_go_version_is_latest_stable
+  then
+    run_gofmt
+    run_golint
+    run_govet
+  fi
+  run_unit_tests
+}
 
-GOVET_ERRORS=$(go tool vet *.go 2>&1)
-if [ -n "${GOVET_ERRORS}" ]; then
-  printf >&2 'go vet failed for the following reasons:\n%s\n\nplease run "go tool vet *.go" on your changes before committing.\n' "${GOVET_ERRORS}"
-  exit 1
-fi
+local_go_version_is_latest_stable() {
+  go version | grep -q $LATEST_STABLE_SUPPORTED_GO_VERSION
+}
 
-if [ -z "${NOTEST}" ]; then
-  printf >&2 'Running short tests...\n'
-  env AMQP_URL= go test -short -v | egrep 'PASS|ok'
+log_error() {
+  echo "$*" 1>&2
+}
 
-  if [ $? -ne 0 ]; then
-    printf >&2 'go test failed, please fix before committing.\n'
+run_gofmt() {
+  GOFMT_FILES=$(gofmt -l .)
+  if [ -n "$GOFMT_FILES" ]
+  then
+    log_error "gofmt failed for the following files:
+$GOFMT_FILES
+
+please run 'gofmt -w .' on your changes before committing."
     exit 1
   fi
-fi
+}
+
+run_golint() {
+  GOLINT_ERRORS=$(golint ./... | grep -v "Id should be")
+  if [ -n "$GOLINT_ERRORS" ]
+  then
+    log_error "golint failed for the following reasons:
+$GOLINT_ERRORS
+
+please run 'golint ./...' on your changes before committing."
+    exit 1
+  fi
+}
+
+run_govet() {
+  GOVET_ERRORS=$(go tool vet ./*.go 2>&1)
+  if [ -n "$GOVET_ERRORS" ]
+  then
+    log_error "go vet failed for the following reasons:
+$GOVET_ERRORS
+
+please run 'go tool vet ./*.go' on your changes before committing."
+    exit 1
+  fi
+}
+
+run_unit_tests() {
+  if [ -z "$NOTEST" ]
+  then
+    log_error 'Running short tests...'
+    env AMQP_URL= go test -short
+  fi
+}
+
+main
