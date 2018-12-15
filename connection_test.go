@@ -178,3 +178,18 @@ func TestPlaintextDialTLS(t *testing.T) {
 	}
 	conn.Close()
 }
+
+// TestIsClosed will test the public method IsClosed on a connection.
+func TestIsClosed(t *testing.T) {
+	conn := integrationConnection(t, "public IsClosed()")
+
+	if conn.IsClosed() {
+		t.Fatalf("connection expected to not be marked as closed")
+	}
+
+	conn.Close()
+
+	if !conn.IsClosed() {
+		t.Fatal("connection expected to be marked as closed")
+	}
+}
