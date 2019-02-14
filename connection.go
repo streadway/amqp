@@ -111,21 +111,23 @@ type readDeadliner interface {
 	SetReadDeadline(time.Time) error
 }
 
-// defaultDial establishes a connection when config.Dial is not provided
-func defaultDial(network, addr string) (net.Conn, error) {
-	conn, err := net.DialTimeout(network, addr, defaultConnectionTimeout)
-	if err != nil {
-		return nil, err
-	}
+// DefaultDial establishes a connection when config.Dial is not provided
+func DefaultDial(connectionTimeout time.Duration) func(network, addr string) (net.Conn, error) {
+	return func(network, addr string) (net.Conn, error) {
+		conn, err := net.DialTimeout(network, addr, connectionTimeout)
+		if err != nil {
+			return nil, err
+		}
 
-	// Heartbeating hasn't started yet, don't stall forever on a dead server.
-	// A deadline is set for TLS and AMQP handshaking. After AMQP is established,
-	// the deadline is cleared in openComplete.
-	if err := conn.SetDeadline(time.Now().Add(defaultConnectionTimeout)); err != nil {
-		return nil, err
-	}
+		// Heartbeating hasn't started yet, don't stall forever on a dead server.
+		// A deadline is set for TLS and AMQP handshaking. After AMQP is established,
+		// the deadline is cleared in openComplete.
+		if err := conn.SetDeadline(time.Now().Add(connectionTimeout)); err != nil {
+			return nil, err
+		}
 
-	return conn, nil
+		return conn, nil
+	}
 }
 
 // Dial accepts a string in the AMQP URI format and returns a new Connection
@@ -180,7 +182,7 @@ func DialConfig(url string, config Config) (*Connection, error) {
 
 	dialer := config.Dial
 	if dialer == nil {
-		dialer = defaultDial
+		dialer = DefaultDial(defaultConnectionTimeout)
 	}
 
 	conn, err = dialer("tcp", addr)
