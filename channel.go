@@ -59,7 +59,7 @@ type Channel struct {
 	cancels []chan string
 
 	// Allocated when in confirm mode in order to track publish counter and order confirms
-	confirms   *confirms
+	confirms   *Confirms
 	confirming bool
 
 	// Selects on any errors from shutdown during RPC
@@ -1590,6 +1590,6 @@ func (ch *Channel) Reject(tag uint64, requeue bool) error {
 }
 
 // Confirms returns control structure over confirm mode
-func (ch *Channel) Confirms() *confirms {
+func (ch *Channel) Confirms() *Confirms {
 	return ch.confirms
 }

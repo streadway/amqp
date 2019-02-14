@@ -125,8 +125,8 @@ func (uri URI) PlainAuth() *PlainAuth {
 	}
 }
 
-// PlainAuth returns a PlainAuth structure based on the parsed URI's
-// Username and Password fields.
+// AMQPlainAuth returns a username and password
+// parsed from the URI
 func (uri URI) AMQPlainAuth() *AMQPlainAuth {
 	return &AMQPlainAuth{
 		Username: uri.Username,
