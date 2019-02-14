@@ -32,6 +32,21 @@ func (auth *PlainAuth) Response() string {
 	return fmt.Sprintf("\000%s\000%s", auth.Username, auth.Password)
 }
 
+// AMQPLAINAuth is similar to PlainAuth
+type AMQPlainAuth struct {
+	Username string
+	Password string
+}
+
+func (auth *AMQPlainAuth) Mechanism() string {
+	return "AMQPLAIN"
+}
+
+// Response returns the null character delimited encoding for the SASL PLAIN Mechanism.
+func (auth *AMQPlainAuth) Response() string {
+	return fmt.Sprintf("LOGIN:%sPASSWORD:%s", auth.Username, auth.Password)
+}
+
 // Finds the first mechanism preferred by the client that the server supports.
 func pickSASLMechanism(client []Authentication, serverMechanisms []string) (auth Authentication, ok bool) {
 	for _, auth = range client {
