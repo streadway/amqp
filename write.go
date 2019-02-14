@@ -308,6 +308,11 @@ func writeField(w io.Writer, value interface{}) (err error) {
 		binary.BigEndian.PutUint16(buf[1:3], uint16(v))
 		enc = buf[:3]
 
+	case int:
+		buf[0] = 'I'
+		binary.BigEndian.PutUint32(buf[1:5], uint32(v))
+		enc = buf[:5]
+
 	case int32:
 		buf[0] = 'I'
 		binary.BigEndian.PutUint32(buf[1:5], uint32(v))
