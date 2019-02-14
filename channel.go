@@ -1588,3 +1588,8 @@ func (ch *Channel) Reject(tag uint64, requeue bool) error {
 		Requeue:     requeue,
 	})
 }
+
+// Confirms returns control structure over confirm mode
+func (ch *Channel) Confirms() *confirms {
+	return ch.confirms
+}
