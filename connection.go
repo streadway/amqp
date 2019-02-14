@@ -319,7 +319,7 @@ including the underlying io, Channels, Notify listeners and Channel consumers
 will also be closed.
 */
 func (c *Connection) Close() error {
-	if c.isClosed() {
+	if c.IsClosed() {
 		return ErrClosed
 	}
 
@@ -334,7 +334,7 @@ func (c *Connection) Close() error {
 }
 
 func (c *Connection) closeWith(err *Error) error {
-	if c.isClosed() {
+	if c.IsClosed() {
 		return ErrClosed
 	}
 
@@ -348,12 +348,14 @@ func (c *Connection) closeWith(err *Error) error {
 	)
 }
 
-func (c *Connection) isClosed() bool {
+// IsClosed returns true if the connection is marked as closed, otherwise false
+// is returned.
+func (c *Connection) IsClosed() bool {
 	return (atomic.LoadInt32(&c.closed) == 1)
 }
 
 func (c *Connection) send(f frame) error {
-	if c.isClosed() {
+	if c.IsClosed() {
 		return ErrClosed
 	}
 
@@ -593,7 +595,7 @@ func (c *Connection) allocateChannel() (*Channel, error) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
-	if c.isClosed() {
+	if c.IsClosed() {
 		return nil, ErrClosed
 	}
 
