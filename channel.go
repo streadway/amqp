@@ -20,6 +20,83 @@ import (
 //  octet   short         long         size octets       octet
 const frameHeaderSize = 1 + 2 + 4 + 1
 
+// NotifyChannel represents a set of methods that could be used on AMQP channel to notify about different events
+type NotifyChannel interface {
+	NotifyPublish(confirm chan Confirmation) chan Confirmation
+	NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64)
+	NotifyCancel(c chan string) chan string
+	NotifyReturn(c chan Return) chan Return
+	NotifyFlow(c chan bool) chan bool
+	NotifyClose(c chan *Error) chan *Error
+}
+
+// TxChannel represents a set of methods that could be used to operate with transaction mode
+type TxChannel interface {
+	Tx() error
+	TxRollback() error
+	TxCommit() error
+}
+
+// ConsumeOnlyChannel represents a set of methods that could be used to consume the deliveries, but not to publish them
+type ConsumeOnlyChannel interface {
+	Qos(prefetchCount, prefetchSize int, global bool) error
+	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args Table) (<-chan Delivery, error)
+	Cancel(consumer string, noWait bool) error
+	Get(queue string, autoAck bool) (msg Delivery, ok bool, err error)
+	Ack(tag uint64, multiple bool) error
+	Nack(tag uint64, multiple bool, requeue bool) error
+	Reject(tag uint64, requeue bool) error
+	Recover(requeue bool) error
+	Flow(active bool) error
+}
+
+// TxConsumeOnlyChannel represents a set of methods used to consume the deliveries with transaction capabilities
+type TxConsumeOnlyChannel interface {
+	TxChannel
+	ConsumeOnlyChannel
+}
+
+// PublishOnlyChannel represents a set of methods used to publish new messages
+type PublishOnlyChannel interface {
+	Publish(exchange, key string, mandatory, immediate bool, msg Publishing) error
+	Confirm(noWait bool) error
+	Confirms() *Confirms
+}
+
+// TxPublishOnlyChannel represents a set of methods used to publish new messages with transaction capabilities
+type TxPublishOnlyChannel interface {
+	PublishOnlyChannel
+	TxChannel
+}
+
+// ServerConfigureChannel represents set of methods used by AMQP channel to edit, bind or delete exchanges and queues
+type ServerConfigureChannel interface {
+	ExchangeDeclare(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error
+	ExchangeBind(destination, key, source string, noWait bool, args Table) error
+	ExchangeUnbind(destination, key, source string, noWait bool, args Table) error
+	ExchangeDelete(name string, ifUnused, noWait bool) error
+	ExchangeDeclarePassive(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error
+
+	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error)
+	QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int, error)
+	QueuePurge(name string, noWait bool) (int, error)
+	QueueUnbind(name, key, exchange string, args Table) error
+	QueueBind(name, key, exchange string, noWait bool, args Table) error
+	QueueInspect(name string) (Queue, error)
+	QueueDeclarePassive(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error)
+}
+
+// ChannelInterface represents a set of methods used to fully operate with AMQP channels
+type ChannelInterface interface {
+	TxChannel
+	NotifyChannel
+	ConsumeOnlyChannel
+	PublishOnlyChannel
+	ServerConfigureChannel
+
+	Close() error
+}
+
 /*
 Channel represents an AMQP channel. Used as a context for valid message
 exchange.  Errors on methods with this Channel as a receiver means this channel
