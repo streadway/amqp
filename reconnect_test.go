@@ -8,7 +8,7 @@ import (
 )
 
 // Every connection should declare the topology they expect
-func setup(url, queue string) (*amqp.Connection, *amqp.Channel, error) {
+func setup(url, queue string) (amqp.ConnectionInterface, amqp.ChannelInterface, error) {
 	conn, err := amqp.Dial(url)
 	if err != nil {
 		return nil, nil, err
@@ -26,7 +26,7 @@ func setup(url, queue string) (*amqp.Connection, *amqp.Channel, error) {
 	return conn, ch, nil
 }
 
-func consume(url, queue string) (*amqp.Connection, <-chan amqp.Delivery, error) {
+func consume(url, queue string) (amqp.ConnectionInterface, <-chan amqp.Delivery, error) {
 	conn, ch, err := setup(url, queue)
 	if err != nil {
 		return nil, nil, err
