@@ -6,6 +6,7 @@
 package amqp
 
 import (
+	"context"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -161,25 +162,27 @@ func (ch *Channel) send(msg message) (err error) {
 	return ch.sendOpen(msg)
 }
 
-func (ch *Channel) open() error {
-	return ch.call(&channelOpen{}, &channelOpenOk{})
+func (ch *Channel) open(ctx context.Context) error {
+	return ch.call(ctx, &channelOpen{}, &channelOpenOk{})
 }
 
 // Performs a request/response call for when the message is not NoWait and is
 // specified as Synchronous.
-func (ch *Channel) call(req message, res ...message) error {
+func (ch *Channel) call(ctx context.Context, req message, res ...message) error {
 	if err := ch.send(req); err != nil {
 		return err
 	}
 
 	if req.wait() {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case e, ok := <-ch.errors:
 			if ok {
 				return e
 			}
-			return ErrClosed
 
+			return ErrClosed
 		case msg := <-ch.rpc:
 			if msg != nil {
 				for _, try := range res {
@@ -423,8 +426,13 @@ It is safe to call this method multiple times.
 
 */
 func (ch *Channel) Close() error {
+	return ch.CloseContext(context.Background())
+}
+
+func (ch *Channel) CloseContext(ctx context.Context) error {
 	defer ch.connection.closeChannel(ch, nil)
 	return ch.call(
+		ctx,
 		&channelClose{ReplyCode: replySuccess},
 		&channelCloseOk{},
 	)
@@ -642,7 +650,17 @@ greater as described by benchmarks on RabbitMQ.
 http://www.rabbitmq.com/blog/2012/04/25/rabbitmq-performance-measurements-part-2/
 */
 func (ch *Channel) Qos(prefetchCount, prefetchSize int, global bool) error {
+	return ch.QosContext(
+		context.Background(),
+		prefetchCount,
+		prefetchSize,
+		global,
+	)
+}
+
+func (ch *Channel) QosContext(ctx context.Context, prefetchCount, prefetchSize int, global bool) error {
 	return ch.call(
+		ctx,
 		&basicQos{
 			PrefetchCount: uint16(prefetchCount),
 			PrefetchSize:  uint32(prefetchSize),
@@ -672,13 +690,17 @@ client without an ack, and will not be redelivered to other consumers.
 
 */
 func (ch *Channel) Cancel(consumer string, noWait bool) error {
+	return ch.CancelContext(context.Background(), consumer, noWait)
+}
+
+func (ch *Channel) CancelContext(ctx context.Context, consumer string, noWait bool) error {
 	req := &basicCancel{
 		ConsumerTag: consumer,
 		NoWait:      noWait,
 	}
 	res := &basicCancelOk{}
 
-	if err := ch.call(req, res); err != nil {
+	if err := ch.call(ctx, req, res); err != nil {
 		return err
 	}
 
@@ -746,6 +768,18 @@ declared with these parameters, and the channel will be closed.
 
 */
 func (ch *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
+	return ch.QueueDeclareContext(
+		context.Background(),
+		name,
+		durable,
+		autoDelete,
+		exclusive,
+		noWait,
+		args,
+	)
+}
+
+func (ch *Channel) QueueDeclareContext(ctx context.Context, name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
 	if err := args.Validate(); err != nil {
 		return Queue{}, err
 	}
@@ -761,7 +795,7 @@ func (ch *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noW
 	}
 	res := &queueDeclareOk{}
 
-	if err := ch.call(req, res); err != nil {
+	if err := ch.call(ctx, req, res); err != nil {
 		return Queue{}, err
 	}
 
@@ -786,6 +820,18 @@ can be used to test for the existence of a queue.
 
 */
 func (ch *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
+	return ch.QueueDeclarePassiveContext(
+		context.Background(),
+		name,
+		durable,
+		autoDelete,
+		exclusive,
+		noWait,
+		args,
+	)
+}
+
+func (ch *Channel) QueueDeclarePassiveContext(ctx context.Context, name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
 	if err := args.Validate(); err != nil {
 		return Queue{}, err
 	}
@@ -801,7 +847,7 @@ func (ch *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusi
 	}
 	res := &queueDeclareOk{}
 
-	if err := ch.call(req, res); err != nil {
+	if err := ch.call(ctx, req, res); err != nil {
 		return Queue{}, err
 	}
 
@@ -832,13 +878,17 @@ channel will be closed.
 
 */
 func (ch *Channel) QueueInspect(name string) (Queue, error) {
+	return ch.QueueInspectContext(context.Background(), name)
+}
+
+func (ch *Channel) QueueInspectContext(ctx context.Context, name string) (Queue, error) {
 	req := &queueDeclare{
 		Queue:   name,
 		Passive: true,
 	}
 	res := &queueDeclareOk{}
 
-	err := ch.call(req, res)
+	err := ch.call(ctx, req, res)
 
 	state := Queue{
 		Name:      name,
@@ -894,11 +944,23 @@ closed with an error.
 
 */
 func (ch *Channel) QueueBind(name, key, exchange string, noWait bool, args Table) error {
+	return ch.QueueBindContext(
+		context.Background(),
+		name,
+		key,
+		exchange,
+		noWait,
+		args,
+	)
+}
+
+func (ch *Channel) QueueBindContext(ctx context.Context, name, key, exchange string, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&queueBind{
 			Queue:      name,
 			Exchange:   exchange,
@@ -919,11 +981,16 @@ unbind the queue from the default exchange.
 
 */
 func (ch *Channel) QueueUnbind(name, key, exchange string, args Table) error {
+	return ch.QueueUnbindContext(context.Background(), name, key, exchange, args)
+}
+
+func (ch *Channel) QueueUnbindContext(ctx context.Context, name, key, exchange string, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&queueUnbind{
 			Queue:      name,
 			Exchange:   exchange,
@@ -945,13 +1012,17 @@ If noWait is true, do not wait for the server response and the number of
 messages purged will not be meaningful.
 */
 func (ch *Channel) QueuePurge(name string, noWait bool) (int, error) {
+	return ch.QueuePurgeContext(context.Background(), name, noWait)
+}
+
+func (ch *Channel) QueuePurgeContext(ctx context.Context, name string, noWait bool) (int, error) {
 	req := &queuePurge{
 		Queue:  name,
 		NoWait: noWait,
 	}
 	res := &queuePurgeOk{}
 
-	err := ch.call(req, res)
+	err := ch.call(ctx, req, res)
 
 	return int(res.MessageCount), err
 }
@@ -976,6 +1047,16 @@ be closed.
 
 */
 func (ch *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int, error) {
+	return ch.QueueDeleteContext(
+		context.Background(),
+		name,
+		ifUnused,
+		ifEmpty,
+		noWait,
+	)
+}
+
+func (ch *Channel) QueueDeleteContext(ctx context.Context, name string, ifUnused, ifEmpty, noWait bool) (int, error) {
 	req := &queueDelete{
 		Queue:    name,
 		IfUnused: ifUnused,
@@ -984,7 +1065,7 @@ func (ch *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int
 	}
 	res := &queueDeleteOk{}
 
-	err := ch.call(req, res)
+	err := ch.call(ctx, req, res)
 
 	return int(res.MessageCount), err
 }
@@ -1047,6 +1128,19 @@ the returned chan is closed.
 
 */
 func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args Table) (<-chan Delivery, error) {
+	return ch.ConsumeContext(
+		context.Background(),
+		queue,
+		consumer,
+		autoAck,
+		exclusive,
+		noLocal,
+		noWait,
+		args,
+	)
+}
+
+func (ch *Channel) ConsumeContext(ctx context.Context, queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args Table) (<-chan Delivery, error) {
 	// When we return from ch.call, there may be a delivery already for the
 	// consumer that hasn't been added to the consumer hash yet.  Because of
 	// this, we never rely on the server picking a consumer tag for us.
@@ -1074,12 +1168,12 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 
 	ch.consumers.add(consumer, deliveries)
 
-	if err := ch.call(req, res); err != nil {
+	if err := ch.call(ctx, req, res); err != nil {
 		ch.consumers.cancel(consumer)
 		return nil, err
 	}
 
-	return (<-chan Delivery)(deliveries), nil
+	return deliveries, nil
 }
 
 /*
@@ -1135,11 +1229,25 @@ Optional amqp.Table of arguments that are specific to the server's implementatio
 the exchange can be sent for exchange types that require extra parameters.
 */
 func (ch *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
+	return ch.ExchangeDeclareContext(
+		context.Background(),
+		name,
+		kind,
+		durable,
+		autoDelete,
+		internal,
+		noWait,
+		args,
+	)
+}
+
+func (ch *Channel) ExchangeDeclareContext(ctx context.Context, name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&exchangeDeclare{
 			Exchange:   name,
 			Type:       kind,
@@ -1164,11 +1272,25 @@ can be used to detect the existence of an exchange.
 
 */
 func (ch *Channel) ExchangeDeclarePassive(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
+	return ch.ExchangeDeclarePassiveContext(
+		context.Background(),
+		name,
+		kind,
+		durable,
+		autoDelete,
+		internal,
+		noWait,
+		args,
+	)
+}
+
+func (ch *Channel) ExchangeDeclarePassiveContext(ctx context.Context, name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&exchangeDeclare{
 			Exchange:   name,
 			Type:       kind,
@@ -1198,7 +1320,12 @@ been deleted.  Failing to delete the channel could close the channel.  Add a
 NotifyClose listener to respond to these channel exceptions.
 */
 func (ch *Channel) ExchangeDelete(name string, ifUnused, noWait bool) error {
+	return ch.ExchangeDeleteContext(context.Background(), name, ifUnused, noWait)
+}
+
+func (ch *Channel) ExchangeDeleteContext(ctx context.Context, name string, ifUnused, noWait bool) error {
 	return ch.call(
+		ctx,
 		&exchangeDelete{
 			Exchange: name,
 			IfUnused: ifUnused,
@@ -1240,11 +1367,23 @@ handle these errors.
 Optional arguments specific to the exchanges bound can also be specified.
 */
 func (ch *Channel) ExchangeBind(destination, key, source string, noWait bool, args Table) error {
+	return ch.ExchangeBindContext(
+		context.Background(),
+		destination,
+		key,
+		source,
+		noWait,
+		args,
+	)
+}
+
+func (ch *Channel) ExchangeBindContext(ctx context.Context, destination, key, source string, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&exchangeBind{
 			Destination: destination,
 			Source:      source,
@@ -1271,11 +1410,23 @@ provided.  These must match the same arguments specified in ExchangeBind to
 identify the binding.
 */
 func (ch *Channel) ExchangeUnbind(destination, key, source string, noWait bool, args Table) error {
+	return ch.ExchangeBindContext(
+		context.Background(),
+		destination,
+		key,
+		source,
+		noWait,
+		args,
+	)
+}
+
+func (ch *Channel) ExchangeUnbindContext(ctx context.Context, destination, key, source string, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&exchangeUnbind{
 			Destination: destination,
 			Source:      source,
@@ -1379,11 +1530,15 @@ the channel or connection is closed, the message will not get requeued.
 
 */
 func (ch *Channel) Get(queue string, autoAck bool) (msg Delivery, ok bool, err error) {
+	return ch.GetContext(context.Background(), queue, autoAck)
+}
+
+func (ch *Channel) GetContext(ctx context.Context, queue string, autoAck bool) (msg Delivery, ok bool, err error) {
 	req := &basicGet{Queue: queue, NoAck: autoAck}
 	res := &basicGetOk{}
 	empty := &basicGetEmpty{}
 
-	if err := ch.call(req, res, empty); err != nil {
+	if err := ch.call(ctx, req, res, empty); err != nil {
 		return Delivery{}, false, err
 	}
 
@@ -1410,8 +1565,11 @@ Once a channel has been put into transaction mode, it cannot be taken out of
 transaction mode.  Use a different channel for non-transactional semantics.
 
 */
-func (ch *Channel) Tx() error {
+func (ch *Channel) Tx() error { return ch.TxContext(context.Background()) }
+
+func (ch *Channel) TxContext(ctx context.Context) error {
 	return ch.call(
+		ctx,
 		&txSelect{},
 		&txSelectOk{},
 	)
@@ -1425,7 +1583,12 @@ Calling this method without having called Channel.Tx is an error.
 
 */
 func (ch *Channel) TxCommit() error {
+	return ch.TxCommitContext(context.Background())
+}
+
+func (ch *Channel) TxCommitContext(ctx context.Context) error {
 	return ch.call(
+		ctx,
 		&txCommit{},
 		&txCommitOk{},
 	)
@@ -1439,7 +1602,12 @@ Calling this method without having called Channel.Tx is an error.
 
 */
 func (ch *Channel) TxRollback() error {
+	return ch.TxRollbackContext(context.Background())
+}
+
+func (ch *Channel) TxRollbackContext(ctx context.Context) error {
 	return ch.call(
+		ctx,
 		&txRollback{},
 		&txRollbackOk{},
 	)
@@ -1469,7 +1637,12 @@ Connections for publishings and deliveries.
 
 */
 func (ch *Channel) Flow(active bool) error {
+	return ch.FlowContext(context.Background(), active)
+}
+
+func (ch *Channel) FlowContext(ctx context.Context, active bool) error {
 	return ch.call(
+		ctx,
 		&channelFlow{Active: active},
 		&channelFlowOk{},
 	)
@@ -1501,7 +1674,12 @@ exception could occur if the server does not support this method.
 
 */
 func (ch *Channel) Confirm(noWait bool) error {
+	return ch.ConfirmContext(context.Background(), noWait)
+}
+
+func (ch *Channel) ConfirmContext(ctx context.Context, noWait bool) error {
 	if err := ch.call(
+		ctx,
 		&confirmSelect{Nowait: noWait},
 		&confirmSelectOk{},
 	); err != nil {
@@ -1529,7 +1707,12 @@ will be closed.
 Note: this method is not implemented on RabbitMQ, use Delivery.Nack instead
 */
 func (ch *Channel) Recover(requeue bool) error {
+	return ch.RecoverContext(context.Background(), requeue)
+}
+
+func (ch *Channel) RecoverContext(ctx context.Context, requeue bool) error {
 	return ch.call(
+		ctx,
 		&basicRecover{Requeue: requeue},
 		&basicRecoverOk{},
 	)

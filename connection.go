@@ -7,6 +7,7 @@ package amqp
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"io"
 	"net"
@@ -622,13 +623,13 @@ func (c *Connection) releaseChannel(id uint16) {
 }
 
 // openChannel allocates and opens a channel, must be paired with closeChannel
-func (c *Connection) openChannel() (*Channel, error) {
+func (c *Connection) openChannel(ctx context.Context) (*Channel, error) {
 	ch, err := c.allocateChannel()
 	if err != nil {
 		return nil, err
 	}
 
-	if err := ch.open(); err != nil {
+	if err := ch.open(ctx); err != nil {
 		c.releaseChannel(ch.id)
 		return nil, err
 	}
@@ -650,7 +651,11 @@ invalid and a new Channel should be opened.
 
 */
 func (c *Connection) Channel() (*Channel, error) {
-	return c.openChannel()
+	return c.ChannelContext(context.Background())
+}
+
+func (c *Connection) ChannelContext(ctx context.Context) (*Channel, error) {
+	return c.openChannel(ctx)
 }
 
 func (c *Connection) call(req message, res ...message) error {
