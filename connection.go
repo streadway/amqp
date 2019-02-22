@@ -669,6 +669,12 @@ func (c *Connection) ChannelContext(ctx context.Context) (*Channel, error) {
 }
 
 func (c *Connection) call(ctx context.Context, req message, res ...message) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	// Special case for when the protocol header frame is sent insted of a
 	// request method
 	if req != nil {

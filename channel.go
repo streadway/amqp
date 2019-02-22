@@ -169,6 +169,12 @@ func (ch *Channel) open(ctx context.Context) error {
 // Performs a request/response call for when the message is not NoWait and is
 // specified as Synchronous.
 func (ch *Channel) call(ctx context.Context, req message, res ...message) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	if err := ch.send(req); err != nil {
 		return err
 	}
