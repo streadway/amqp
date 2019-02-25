@@ -685,6 +685,7 @@ func (c *Connection) call(ctx context.Context, req message, res ...message) erro
 
 	select {
 	case <-ctx.Done():
+		c.shutdown(ErrClosed)
 		return ctx.Err()
 	case err, ok := <-c.errors:
 		if !ok {
