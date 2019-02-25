@@ -20,7 +20,9 @@ const (
 )
 
 // Constants for custom error code
-const Canceled = 542
+const (
+	Canceled = 542
+)
 
 var (
 	// ErrClosed is returned when the channel or connection is not open
