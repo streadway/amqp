@@ -182,7 +182,7 @@ func (ch *Channel) call(ctx context.Context, req message, res ...message) error 
 	if req.wait() {
 		select {
 		case <-ctx.Done():
-			ch.connection.closeChannel(ch, nil)
+			ch.connection.closeChannel(ch, ErrCanceled)
 			return ctx.Err()
 		case e, ok := <-ch.errors:
 			if ok {

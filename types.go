@@ -19,6 +19,9 @@ const (
 	ExchangeHeaders = "headers"
 )
 
+// Constants for custom error code
+const Canceled = 542
+
 var (
 	// ErrClosed is returned when the channel or connection is not open
 	ErrClosed = &Error{Code: ChannelError, Reason: "channel/connection is not open"}
@@ -57,8 +60,13 @@ var (
 	// client.
 	ErrUnexpectedFrame = &Error{Code: UnexpectedFrame, Reason: "unexpected frame received"}
 
-	// ErrFieldType is returned when writing a message containing a Go type unsupported by AMQP.
+	// ErrFieldType is returned when writing a message containing a Go type
+	// unsupported by AMQP.
 	ErrFieldType = &Error{Code: SyntaxError, Reason: "unsupported table field type"}
+
+	// ErrCanceled is returned when the given context during a RPC call is
+	// canceled.
+	ErrCanceled = &Error{Code: Canceled, Reason: "RPC call canceled"}
 )
 
 // Error captures the code and reason a channel or connection has been closed
