@@ -20,14 +20,6 @@ func newConfirms() *confirms {
 	}
 }
 
-// Published returns sequential number of published messages
-func (c *confirms) Published() uint64 {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	return c.published
-}
-
 func (c *confirms) Listen(l chan Confirmation) {
 	c.m.Lock()
 	defer c.m.Unlock()
