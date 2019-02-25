@@ -225,6 +225,13 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	return OpenContext(context.Background(), conn, config)
 }
 
+/*
+OpenContext accepts an already established connection, or other io.ReadWriteCloser as
+a transport.  Use this method if you have established a TLS connection or wish
+to use your own custom transport.
+
+The connection will be automaticaly closed if the context is canceled
+*/
 func OpenContext(ctx context.Context, conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	c := &Connection{
 		conn:      conn,
@@ -328,6 +335,18 @@ func (c *Connection) Close() error {
 	return c.CloseContext(context.Background())
 }
 
+/*
+CloseContext requests and waits for the response to close the AMQP connection.
+
+It's advisable to use this message when publishing to ensure all kernel buffers
+have been flushed on the server and client before exiting.
+
+An error indicates that server may not have received this request to close but
+the connection should be treated as closed regardless.
+
+All resources associated with this connection, including the underlying io,
+Channels, Notify listeners and Channel consumers will also be closed.
+*/
 func (c *Connection) CloseContext(ctx context.Context) error {
 	if c.IsClosed() {
 		return ErrClosed
@@ -656,7 +675,7 @@ func (c *Connection) closeChannel(ch *Channel, e *Error) {
 
 /*
 Channel opens a unique, concurrent server channel to process the bulk of AMQP
-messages.  Any error from methods on this receiver will render the receiver
+messages. Any error from methods on this receiver will render the receiver
 invalid and a new Channel should be opened.
 
 */
@@ -664,6 +683,12 @@ func (c *Connection) Channel() (*Channel, error) {
 	return c.ChannelContext(context.Background())
 }
 
+/*
+ChannelContext opens a unique, concurrent server channel to process the bulk of AMQP
+messages. Any error from methods on this receiver will render the receiver
+invalid and a new Channel should be opened.
+
+*/
 func (c *Connection) ChannelContext(ctx context.Context) (*Channel, error) {
 	return c.openChannel(ctx)
 }
