@@ -2,8 +2,8 @@ package amqp
 
 import "sync"
 
-// Confirms resequences and notifies one or multiple publisher confirmation listeners
-type Confirms struct {
+// confirms resequences and notifies one or multiple publisher confirmation listeners
+type confirms struct {
 	m         sync.Mutex
 	listeners []chan Confirmation
 	sequencer map[uint64]Confirmation
@@ -12,8 +12,8 @@ type Confirms struct {
 }
 
 // newConfirms allocates a confirms
-func newConfirms() *Confirms {
-	return &Confirms{
+func newConfirms() *confirms {
+	return &confirms{
 		sequencer: map[uint64]Confirmation{},
 		published: 0,
 		expecting: 1,
@@ -21,24 +21,22 @@ func newConfirms() *Confirms {
 }
 
 // Published returns sequential number of published messages
-func (c *Confirms) Published() uint64 {
+func (c *confirms) Published() uint64 {
 	c.m.Lock()
 	defer c.m.Unlock()
 
 	return c.published
 }
 
-// Listen is used to listen on incoming confirmations
-// of publishes
-func (c *Confirms) Listen(l chan Confirmation) {
+func (c *confirms) Listen(l chan Confirmation) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
 	c.listeners = append(c.listeners, l)
 }
 
-// Publish increments the publishing counter
-func (c *Confirms) Publish() uint64 {
+// publish increments the publishing counter
+func (c *confirms) Publish() uint64 {
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -48,7 +46,7 @@ func (c *Confirms) Publish() uint64 {
 
 // confirm confirms one publishing, increments the expecting delivery tag, and
 // removes bookkeeping for that delivery tag.
-func (c *Confirms) confirm(confirmation Confirmation) {
+func (c *confirms) confirm(confirmation Confirmation) {
 	delete(c.sequencer, c.expecting)
 	c.expecting++
 	for _, l := range c.listeners {
@@ -57,7 +55,7 @@ func (c *Confirms) confirm(confirmation Confirmation) {
 }
 
 // resequence confirms any out of order delivered confirmations
-func (c *Confirms) resequence() {
+func (c *confirms) resequence() {
 	for c.expecting <= c.published {
 		sequenced, found := c.sequencer[c.expecting]
 		if !found {
@@ -67,8 +65,8 @@ func (c *Confirms) resequence() {
 	}
 }
 
-// One confirms one publishing and all following in the publishing sequence
-func (c *Confirms) One(confirmed Confirmation) {
+// one confirms one publishing and all following in the publishing sequence
+func (c *confirms) One(confirmed Confirmation) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -80,8 +78,8 @@ func (c *Confirms) One(confirmed Confirmation) {
 	c.resequence()
 }
 
-// Multiple confirms all publishings up until the delivery tag
-func (c *Confirms) Multiple(confirmed Confirmation) {
+// multiple confirms all publishings up until the delivery tag
+func (c *confirms) Multiple(confirmed Confirmation) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -92,7 +90,7 @@ func (c *Confirms) Multiple(confirmed Confirmation) {
 }
 
 // Close closes all listeners, discarding any out of sequence confirmations
-func (c *Confirms) Close() error {
+func (c *confirms) Close() error {
 	c.m.Lock()
 	defer c.m.Unlock()
 
