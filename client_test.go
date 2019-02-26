@@ -739,14 +739,54 @@ func TestTimeoutQosContextTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	if err := ch.QosContext(ctx, 2, 0, false); err != context.DeadlineExceeded {
+	if err := ch.QosContext(ctx, 2, 0, false); err != ErrCanceled {
 		t.Fatalf("wrong timeout error: %v", err)
 	}
 
 	select {
 	case <-ch.NotifyClose(make(chan *Error)):
+		t.Errorf("Channel should not be closed")
 	default:
-		t.Errorf("Channel should not be opened")
+	}
+}
+
+func TestTimeoutQosContextTimeoutDropping(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+	defer srv.C.Close()
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(1, &basicQos{})
+		time.Sleep(100 * time.Millisecond)
+		srv.send(1, &basicQosOk{})
+
+		srv.recv(1, &basicQos{})
+		srv.send(1, &basicQosOk{})
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	if err := ch.QosContext(ctx, 2, 0, false); err != ErrCanceled {
+		t.Fatalf("wrong timeout error: %v", err)
+	}
+
+	ctx = context.Background()
+	if err := ch.QosContext(ctx, 2, 0, false); err != nil {
+		t.Fatalf("wrong error returned: %v", err)
 	}
 }
 
@@ -780,7 +820,7 @@ func TestTimeoutQosContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if err := ch.QosContext(ctx, 2, 0, false); err != context.Canceled {
+	if err := ch.QosContext(ctx, 2, 0, false); err != ErrCanceled {
 		t.Fatalf("wrong canceled error: %v", err)
 	}
 
@@ -788,7 +828,7 @@ func TestTimeoutQosContextCanceled(t *testing.T) {
 
 	select {
 	case <-ch.NotifyClose(errCh):
-		t.Errorf("Channel should be opened")
+		t.Errorf("Channel should not be closed")
 	default:
 	}
 
@@ -801,7 +841,7 @@ func TestTimeoutQosContextCanceled(t *testing.T) {
 	}
 }
 
-func OpenContextTimeout(t *testing.T) {
+func TestOpenContextTimeout(t *testing.T) {
 	rwc, srv := newSession(t)
 	defer rwc.Close()
 	defer srv.C.Close()
@@ -819,11 +859,11 @@ func OpenContextTimeout(t *testing.T) {
 
 	c, err := OpenContext(ctx, rwc, defaultConfig())
 
-	if err != context.DeadlineExceeded {
+	if err != ErrCanceled {
 		t.Fatalf("Open should return a Deadline exceeded error: %v (%s)", c, err)
 	}
 
-	if !c.IsClosed() {
-		t.Errorf("Connection should be closed")
+	if c.IsClosed() {
+		t.Errorf("Connection should not be closed")
 	}
 }

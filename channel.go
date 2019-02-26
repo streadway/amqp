@@ -80,7 +80,7 @@ func newChannel(c *Connection, id uint16) *Channel {
 	return &Channel{
 		connection: c,
 		id:         id,
-		rpc:        make(chan message),
+		rpc:        make(chan message, 1),
 		consumers:  makeConsumers(),
 		confirms:   newConfirms(),
 		recv:       (*Channel).recvMethod,
@@ -171,8 +171,16 @@ func (ch *Channel) open(ctx context.Context) error {
 func (ch *Channel) call(ctx context.Context, req message, res ...message) error {
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return ErrCanceled
 	default:
+	}
+
+	if req.wait() {
+		// draining rpc response channel from dropped messages
+		select {
+		case <-ch.rpc:
+		default:
+		}
 	}
 
 	if err := ch.send(req); err != nil {
@@ -182,8 +190,7 @@ func (ch *Channel) call(ctx context.Context, req message, res ...message) error 
 	if req.wait() {
 		select {
 		case <-ctx.Done():
-			ch.connection.closeChannel(ch, ErrCanceled)
-			return ctx.Err()
+			return ErrCanceled
 		case e, ok := <-ch.errors:
 			if ok {
 				return e
@@ -340,7 +347,10 @@ func (ch *Channel) dispatch(msg message) {
 		// deliveries are in flight and a no-wait cancel has happened
 
 	default:
-		ch.rpc <- msg
+		select {
+		case ch.rpc <- msg:
+		default:
+		}
 	}
 }
 

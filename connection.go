@@ -237,7 +237,7 @@ func OpenContext(ctx context.Context, conn io.ReadWriteCloser, config Config) (*
 		conn:      conn,
 		writer:    &writer{bufio.NewWriter(conn)},
 		channels:  make(map[uint16]*Channel),
-		rpc:       make(chan message),
+		rpc:       make(chan message, 1),
 		sends:     make(chan time.Time),
 		errors:    make(chan *Error, 1),
 		deadlines: make(chan readDeadliner, 1),
@@ -488,7 +488,10 @@ func (c *Connection) dispatch0(f frame) {
 				c <- Blocking{Active: false}
 			}
 		default:
-			c.rpc <- m
+			select {
+			case c.rpc <- m:
+			default:
+			}
 		}
 	case *heartbeatFrame:
 		// kthx - all reads reset our deadline.  so we can drop this
@@ -696,13 +699,19 @@ func (c *Connection) ChannelContext(ctx context.Context) (*Channel, error) {
 func (c *Connection) call(ctx context.Context, req message, res ...message) error {
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return ErrCanceled
 	default:
 	}
 
 	// Special case for when the protocol header frame is sent insted of a
 	// request method
 	if req != nil {
+		// draining rpc response channel from dropped messages
+		select {
+		case <-c.rpc:
+		default:
+		}
+
 		if err := c.send(&methodFrame{ChannelId: 0, Method: req}); err != nil {
 			return err
 		}
@@ -710,8 +719,7 @@ func (c *Connection) call(ctx context.Context, req message, res ...message) erro
 
 	select {
 	case <-ctx.Done():
-		c.shutdown(ErrCanceled)
-		return ctx.Err()
+		return ErrCanceled
 	case err, ok := <-c.errors:
 		if !ok {
 			return ErrClosed
@@ -849,6 +857,9 @@ func (c *Connection) openVhost(ctx context.Context, config Config) error {
 	res := &connectionOpenOk{}
 
 	if err := c.call(ctx, req, res); err != nil {
+		if err == ErrCanceled {
+			return err
+		}
 		// Cannot be closed yet, but we know it's a vhost problem
 		return ErrVhost
 	}
