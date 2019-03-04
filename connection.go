@@ -106,6 +106,9 @@ type Connection struct {
 	Locales    []string // Server locales
 
 	closed int32 // Will be 1 if the connection is closed, 0 otherwise. Should only be accessed as atomic
+
+	// Number of frame to drop before before considering it as the valid response
+	dropped uint32
 }
 
 type readDeadliner interface {
@@ -237,7 +240,7 @@ func OpenContext(ctx context.Context, conn io.ReadWriteCloser, config Config) (*
 		conn:      conn,
 		writer:    &writer{bufio.NewWriter(conn)},
 		channels:  make(map[uint16]*Channel),
-		rpc:       make(chan message, 1),
+		rpc:       make(chan message),
 		sends:     make(chan time.Time),
 		errors:    make(chan *Error, 1),
 		deadlines: make(chan readDeadliner, 1),
@@ -488,10 +491,12 @@ func (c *Connection) dispatch0(f frame) {
 				c <- Blocking{Active: false}
 			}
 		default:
-			select {
-			case c.rpc <- m:
-			default:
+			if d := atomic.LoadUint32(&c.dropped); d > 0 {
+				atomic.AddUint32(&c.dropped, ^uint32(0))
+				return
 			}
+
+			c.rpc <- m
 		}
 	case *heartbeatFrame:
 		// kthx - all reads reset our deadline.  so we can drop this
@@ -706,12 +711,6 @@ func (c *Connection) call(ctx context.Context, req message, res ...message) erro
 	// Special case for when the protocol header frame is sent insted of a
 	// request method
 	if req != nil {
-		// draining rpc response channel from dropped messages
-		select {
-		case <-c.rpc:
-		default:
-		}
-
 		if err := c.send(&methodFrame{ChannelId: 0, Method: req}); err != nil {
 			return err
 		}
@@ -719,6 +718,7 @@ func (c *Connection) call(ctx context.Context, req message, res ...message) erro
 
 	select {
 	case <-ctx.Done():
+		atomic.AddUint32(&c.dropped, 1)
 		return ErrCanceled
 	case err, ok := <-c.errors:
 		if !ok {

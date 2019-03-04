@@ -38,6 +38,9 @@ type Channel struct {
 
 	id uint16
 
+	// Number of frame to drop before before considering it as the valid response
+	dropped uint32
+
 	// closed is set to 1 when the channel has been closed - see Channel.send()
 	closed int32
 
@@ -80,7 +83,7 @@ func newChannel(c *Connection, id uint16) *Channel {
 	return &Channel{
 		connection: c,
 		id:         id,
-		rpc:        make(chan message, 1),
+		rpc:        make(chan message),
 		consumers:  makeConsumers(),
 		confirms:   newConfirms(),
 		recv:       (*Channel).recvMethod,
@@ -175,14 +178,6 @@ func (ch *Channel) call(ctx context.Context, req message, res ...message) error 
 	default:
 	}
 
-	if req.wait() {
-		// draining rpc response channel from dropped messages
-		select {
-		case <-ch.rpc:
-		default:
-		}
-	}
-
 	if err := ch.send(req); err != nil {
 		return err
 	}
@@ -190,6 +185,7 @@ func (ch *Channel) call(ctx context.Context, req message, res ...message) error 
 	if req.wait() {
 		select {
 		case <-ctx.Done():
+			atomic.AddUint32(&ch.dropped, 1)
 			return ErrCanceled
 		case e, ok := <-ch.errors:
 			if ok {
@@ -347,10 +343,12 @@ func (ch *Channel) dispatch(msg message) {
 		// deliveries are in flight and a no-wait cancel has happened
 
 	default:
-		select {
-		case ch.rpc <- msg:
-		default:
+		if d := atomic.LoadUint32(&ch.dropped); d > 0 {
+			atomic.AddUint32(&ch.dropped, ^uint32(0))
+			return
 		}
+
+		ch.rpc <- msg
 	}
 }
 
