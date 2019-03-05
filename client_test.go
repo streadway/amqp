@@ -10,6 +10,7 @@ import (
 	"context"
 	"io"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
@@ -866,4 +867,97 @@ func TestOpenContextTimeout(t *testing.T) {
 	if c.IsClosed() {
 		t.Errorf("Connection should not be closed")
 	}
+}
+
+func TestCanceledSequencing(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+	defer srv.C.Close()
+
+	var wg sync.WaitGroup
+
+	wg.Add(4)
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(1, &basicQos{})
+		srv.recv(1, &confirmSelect{})
+		srv.recv(1, &basicQos{})
+		srv.recv(1, &channelFlow{})
+
+		time.Sleep(10 * time.Millisecond)
+		srv.send(1, &basicQosOk{})
+
+		time.Sleep(10 * time.Millisecond)
+		srv.send(1, &confirmSelectOk{})
+
+		time.Sleep(10 * time.Millisecond)
+		srv.send(1, &basicQosOk{})
+
+		time.Sleep(10 * time.Millisecond)
+		srv.send(1, &channelFlowOk{})
+
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
+		srv.C.Close()
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
+	}
+
+	go func() {
+		defer wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		if err := ch.QosContext(ctx, 0, 0, false); err != ErrCanceled {
+			t.Fatalf("wrong error: %v", err)
+		}
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+
+	go func() {
+		defer wg.Done()
+		if err := ch.ConfirmContext(context.Background(), false); err != nil {
+			t.Fatalf("wrong error: %v", err)
+		}
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+
+	go func() {
+		defer wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		if err := ch.QosContext(ctx, 0, 0, false); err != ErrCanceled {
+			t.Fatalf("wrong error: %v", err)
+		}
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+
+	go func() {
+		defer wg.Done()
+		if err := ch.FlowContext(context.Background(), false); err != nil {
+			t.Fatalf("wrong error: %v", err)
+		}
+	}()
+
+	wg.Wait()
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("unexpected error during connection close: %v", err)
+	}
+
 }

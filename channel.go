@@ -39,7 +39,8 @@ type Channel struct {
 	id uint16
 
 	// Number of frame to drop before before considering it as the valid response
-	dropped uint32
+	responsesM sync.Mutex
+	responses  []*uint32
 
 	// closed is set to 1 when the channel has been closed - see Channel.send()
 	closed int32
@@ -182,10 +183,16 @@ func (ch *Channel) call(ctx context.Context, req message, res ...message) error 
 		return err
 	}
 
+	var status uint32
+
+	ch.responsesM.Lock()
+	ch.responses = append(ch.responses, &status)
+	ch.responsesM.Unlock()
+
 	if req.wait() {
 		select {
 		case <-ctx.Done():
-			atomic.AddUint32(&ch.dropped, 1)
+			atomic.StoreUint32(&status, 1)
 			return ErrCanceled
 		case e, ok := <-ch.errors:
 			if ok {
@@ -343,12 +350,21 @@ func (ch *Channel) dispatch(msg message) {
 		// deliveries are in flight and a no-wait cancel has happened
 
 	default:
-		if d := atomic.LoadUint32(&ch.dropped); d > 0 {
-			atomic.AddUint32(&ch.dropped, ^uint32(0))
+		var status *uint32
+
+		ch.responsesM.Lock()
+
+		if len(ch.responses) == 0 {
+			ch.responsesM.Unlock()
 			return
 		}
 
-		ch.rpc <- msg
+		status, ch.responses = ch.responses[0], ch.responses[1:]
+		ch.responsesM.Unlock()
+
+		if atomic.LoadUint32(status) == 0 {
+			ch.rpc <- msg
+		}
 	}
 }
 
