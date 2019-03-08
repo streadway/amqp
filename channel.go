@@ -183,13 +183,13 @@ func (ch *Channel) call(ctx context.Context, req message, res ...message) error 
 		return err
 	}
 
-	var status uint32
-
-	ch.responsesM.Lock()
-	ch.responses = append(ch.responses, &status)
-	ch.responsesM.Unlock()
-
 	if req.wait() {
+		var status uint32
+
+		ch.responsesM.Lock()
+		ch.responses = append(ch.responses, &status)
+		ch.responsesM.Unlock()
+
 		select {
 		case <-ctx.Done():
 			atomic.StoreUint32(&status, 1)
