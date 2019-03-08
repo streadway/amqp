@@ -32,12 +32,13 @@ func (auth *PlainAuth) Response() string {
 	return fmt.Sprintf("\000%s\000%s", auth.Username, auth.Password)
 }
 
-// AMQPLAINAuth is similar to PlainAuth
+// AMQPlainAuth is similar to PlainAuth
 type AMQPlainAuth struct {
 	Username string
 	Password string
 }
 
+// Mechanism returns "AMQPLAIN"
 func (auth *AMQPlainAuth) Mechanism() string {
 	return "AMQPLAIN"
 }
