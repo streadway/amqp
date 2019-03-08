@@ -761,7 +761,7 @@ func TestTimeoutQosContextTimeoutDropping(t *testing.T) {
 		srv.channelOpen(1)
 
 		srv.recv(1, &basicQos{})
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(150 * time.Millisecond)
 		srv.send(1, &basicQosOk{})
 
 		srv.recv(1, &basicQos{})

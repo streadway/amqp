@@ -179,17 +179,22 @@ func (ch *Channel) call(ctx context.Context, req message, res ...message) error 
 	default:
 	}
 
+	var status uint32
+
+	ch.responsesM.Lock()
+
 	if err := ch.send(req); err != nil {
+		ch.responsesM.Unlock()
 		return err
 	}
 
 	if req.wait() {
-		var status uint32
-
-		ch.responsesM.Lock()
 		ch.responses = append(ch.responses, &status)
-		ch.responsesM.Unlock()
+	}
 
+	ch.responsesM.Unlock()
+
+	if req.wait() {
 		select {
 		case <-ctx.Done():
 			atomic.StoreUint32(&status, 1)
