@@ -725,6 +725,10 @@ func TestTimeoutQosContextTimeout(t *testing.T) {
 		srv.channelOpen(1)
 
 		srv.recv(1, &basicQos{})
+
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
+		srv.C.Close()
 	}()
 
 	c, err := Open(rwc, defaultConfig())
@@ -748,6 +752,10 @@ func TestTimeoutQosContextTimeout(t *testing.T) {
 	case <-ch.NotifyClose(make(chan *Error)):
 		t.Errorf("Channel should not be closed")
 	default:
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("unexpected error during connection close: %v", err)
 	}
 }
 
