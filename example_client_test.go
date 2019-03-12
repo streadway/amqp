@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// This exports a Queue object that wraps this library. It
+// This exports a Session object that wraps this library. It
 // automatically reconnects when the connection fails, and
 // blocks all pushes until the connection succeeds. It also
 // confirms every outgoing message, so none are lost.
@@ -27,133 +27,204 @@ func Example() {
 	for {
 		time.Sleep(time.Second * 3)
 		if err := queue.Push(message); err != nil {
-			fmt.Printf("Push failed: %s", err)
+			fmt.Printf("Push failed: %s\n", err)
 		} else {
 			fmt.Println("Push succeeded!")
 		}
 	}
 }
 
-// Queue represents a connection to a specific queue.
-type Queue struct {
-	name          string
-	logger        *log.Logger
-	connection    *amqp.Connection
-	channel       *amqp.Channel
-	done          chan bool
-	notifyClose   chan *amqp.Error
-	notifyConfirm chan amqp.Confirmation
-	isConnected   bool
+type Session struct {
+	name            string
+	logger          *log.Logger
+	connection      *amqp.Connection
+	channel         *amqp.Channel
+	done            chan bool
+	notifyConnClose chan *amqp.Error
+	notifyChanClose chan *amqp.Error
+	notifyConfirm   chan amqp.Confirmation
+	isReady         bool
 }
 
 const (
 	// When reconnecting to the server after connection failure
 	reconnectDelay = 5 * time.Second
 
+	// When setting up the channel after a channel exception
+	reInitDelay = 2 * time.Second
+
 	// When resending messages the server didn't confirm
 	resendDelay = 5 * time.Second
 )
 
 var (
-	errNotConnected  = errors.New("not connected to the queue")
-	errNotConfirmed  = errors.New("message not confirmed")
-	errAlreadyClosed = errors.New("already closed: not connected to the queue")
+	errNotConnected  = errors.New("not connected to a server")
+	errAlreadyClosed = errors.New("already closed: not connected to the server")
+	errShutdown      = errors.New("session is shutting down")
 )
 
-// New creates a new queue instance, and automatically
+// New creates a new consumer state instance, and automatically
 // attempts to connect to the server.
-func New(name string, addr string) *Queue {
-	queue := Queue{
+func New(name string, addr string) *Session {
+	session := Session{
 		logger: log.New(os.Stdout, "", log.LstdFlags),
 		name:   name,
 		done:   make(chan bool),
 	}
-	go queue.handleReconnect(addr)
-	return &queue
+	go session.handleReconnect(addr)
+	return &session
 }
 
 // handleReconnect will wait for a connection error on
-// notifyClose, and then continously attempt to reconnect.
-func (queue *Queue) handleReconnect(addr string) {
+// notifyConnClose, and then continuously attempt to reconnect.
+func (session *Session) handleReconnect(addr string) {
 	for {
-		queue.isConnected = false
+		session.isReady = false
 		log.Println("Attempting to connect")
-		for !queue.connect(addr) {
+
+		conn, err := session.connect(addr)
+
+		if err != nil {
 			log.Println("Failed to connect. Retrying...")
-			time.Sleep(reconnectDelay)
+
+			select {
+			case <-session.done:
+				return
+			case <-time.After(reconnectDelay):
+			}
+			continue
 		}
-		select {
-		case <-queue.done:
-			return
-		case <-queue.notifyClose:
+
+		if done := session.handleReInit(conn); done {
+			break
 		}
 	}
 }
 
-// connect will make a single attempt to connect to
-// RabbitMQ. It returns the success of the attempt.
-func (queue *Queue) connect(addr string) bool {
+// connect will create a new AMQP connection
+func (session *Session) connect(addr string) (*amqp.Connection, error) {
 	conn, err := amqp.Dial(addr)
+
 	if err != nil {
-		return false
+		return nil, err
 	}
+
+	session.changeConnection(conn)
+	log.Println("Connected!")
+	return conn, nil
+}
+
+// handleReconnect will wait for a channel error
+// and then continuously attempt to re-initialize both channels
+func (session *Session) handleReInit(conn *amqp.Connection) bool {
+	for {
+		session.isReady = false
+
+		err := session.init(conn)
+
+		if err != nil {
+			log.Println("Failed to initialize channel. Retrying...")
+
+			select {
+			case <-session.done:
+				return true
+			case <-time.After(reInitDelay):
+			}
+			continue
+		}
+
+		select {
+		case <-session.done:
+			return true
+		case <-session.notifyConnClose:
+			log.Println("Connection closed. Reconnecting...")
+			return false
+		case <-session.notifyChanClose:
+			log.Println("Channel closed. Re-running init...")
+		}
+	}
+}
+
+// init will initialize channel & declare queue
+func (session *Session) init(conn *amqp.Connection) error {
 	ch, err := conn.Channel()
+
 	if err != nil {
-		return false
+		return err
 	}
-	ch.Confirm(false)
+
+	err = ch.Confirm(false)
+
+	if err != nil {
+		return err
+	}
 	_, err = ch.QueueDeclare(
-		queue.name,
+		session.name,
 		false, // Durable
 		false, // Delete when unused
 		false, // Exclusive
 		false, // No-wait
 		nil,   // Arguments
 	)
+
 	if err != nil {
-		return false
+		return err
 	}
-	queue.changeConnection(conn, ch)
-	queue.isConnected = true
-	log.Println("Connected!")
-	return true
+
+	session.changeChannel(ch)
+	session.isReady = true
+	log.Println("Setup!")
+
+	return nil
 }
 
 // changeConnection takes a new connection to the queue,
+// and updates the close listener to reflect this.
+func (session *Session) changeConnection(connection *amqp.Connection) {
+	session.connection = connection
+	session.notifyConnClose = make(chan *amqp.Error)
+	session.connection.NotifyClose(session.notifyConnClose)
+}
+
+// changeChannel takes a new channel to the queue,
 // and updates the channel listeners to reflect this.
-func (queue *Queue) changeConnection(connection *amqp.Connection, channel *amqp.Channel) {
-	queue.connection = connection
-	queue.channel = channel
-	queue.notifyClose = make(chan *amqp.Error)
-	queue.notifyConfirm = make(chan amqp.Confirmation)
-	queue.channel.NotifyClose(queue.notifyClose)
-	queue.channel.NotifyPublish(queue.notifyConfirm)
+func (session *Session) changeChannel(channel *amqp.Channel) {
+	session.channel = channel
+	session.notifyChanClose = make(chan *amqp.Error)
+	session.notifyConfirm = make(chan amqp.Confirmation)
+	session.channel.NotifyClose(session.notifyChanClose)
+	session.channel.NotifyPublish(session.notifyConfirm)
 }
 
 // Push will push data onto the queue, and wait for a confirm.
-// If no confirms are recieved until within the resendTimeout,
-// it continuously resends messages until a confirm is recieved.
+// If no confirms are received until within the resendTimeout,
+// it continuously re-sends messages until a confirm is received.
 // This will block until the server sends a confirm. Errors are
 // only returned if the push action itself fails, see UnsafePush.
-func (queue *Queue) Push(data []byte) error {
-	if !queue.isConnected {
+func (session *Session) Push(data []byte) error {
+	if !session.isReady {
 		return errors.New("failed to push push: not connected")
 	}
 	for {
-		err := queue.UnsafePush(data)
+		err := session.UnsafePush(data)
 		if err != nil {
-			queue.logger.Println("Push failed. Retrying...")
+			session.logger.Println("Push failed. Retrying...")
+			select {
+			case <-session.done:
+				return errShutdown
+			case <-time.After(resendDelay):
+			}
 			continue
 		}
 		select {
-		case confirm := <-queue.notifyConfirm:
+		case confirm := <-session.notifyConfirm:
 			if confirm.Ack {
-				queue.logger.Println("Push confirmed!")
+				session.logger.Println("Push confirmed!")
 				return nil
 			}
 		case <-time.After(resendDelay):
 		}
-		queue.logger.Println("Push didn't confirm. Retrying...")
+		session.logger.Println("Push didn't confirm. Retrying...")
 	}
 }
 
@@ -161,15 +232,15 @@ func (queue *Queue) Push(data []byte) error {
 // confirmation. It returns an error if it fails to connect.
 // No guarantees are provided for whether the server will
 // recieve the message.
-func (queue *Queue) UnsafePush(data []byte) error {
-	if !queue.isConnected {
+func (session *Session) UnsafePush(data []byte) error {
+	if !session.isReady {
 		return errNotConnected
 	}
-	return queue.channel.Publish(
-		"",         // Exchange
-		queue.name, // Routing key
-		false,      // Mandatory
-		false,      // Immediate
+	return session.channel.Publish(
+		"",           // Exchange
+		session.name, // Routing key
+		false,        // Mandatory
+		false,        // Immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        data,
@@ -181,12 +252,12 @@ func (queue *Queue) UnsafePush(data []byte) error {
 // It is required to call delivery.Ack when it has been
 // successfully processed, or delivery.Nack when it fails.
 // Ignoring this will cause data to build up on the server.
-func (queue *Queue) Stream() (<-chan amqp.Delivery, error) {
-	if !queue.isConnected {
+func (session *Session) Stream() (<-chan amqp.Delivery, error) {
+	if !session.isReady {
 		return nil, errNotConnected
 	}
-	return queue.channel.Consume(
-		queue.name,
+	return session.channel.Consume(
+		session.name,
 		"",    // Consumer
 		false, // Auto-Ack
 		false, // Exclusive
@@ -197,19 +268,19 @@ func (queue *Queue) Stream() (<-chan amqp.Delivery, error) {
 }
 
 // Close will cleanly shutdown the channel and connection.
-func (queue *Queue) Close() error {
-	if !queue.isConnected {
+func (session *Session) Close() error {
+	if !session.isReady {
 		return errAlreadyClosed
 	}
-	err := queue.channel.Close()
+	err := session.channel.Close()
 	if err != nil {
 		return err
 	}
-	err = queue.connection.Close()
+	err = session.connection.Close()
 	if err != nil {
 		return err
 	}
-	close(queue.done)
-	queue.isConnected = false
+	close(session.done)
+	session.isReady = false
 	return nil
 }
