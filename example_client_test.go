@@ -3,10 +3,11 @@ package amqp_test
 import (
 	"errors"
 	"fmt"
-	"github.com/streadway/amqp"
 	"log"
 	"os"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 // This exports a Session object that wraps this library. It

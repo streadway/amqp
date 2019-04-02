@@ -1192,7 +1192,7 @@ func TestRoundTripAllFieldValueTypes61(t *testing.T) {
 		headers := Table{
 			"A": []interface{}{
 				[]interface{}{"nested array", int32(3)},
-				Decimal{2, 1},
+				Decimal{Scale: 2, Value: 1},
 				Table{"S": "nested table in array"},
 				int32(2 << 20),
 				string("array string"),
@@ -1206,7 +1206,7 @@ func TestRoundTripAllFieldValueTypes61(t *testing.T) {
 				bool(true),
 				[]byte{'b', '2'},
 			},
-			"D": Decimal{1, 1},
+			"D": Decimal{Scale: 1, Value: 1},
 			"F": Table{"S": "nested table in table"},
 			"I": int32(1 << 20),
 			"S": string("string"),

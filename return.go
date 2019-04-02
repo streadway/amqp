@@ -7,6 +7,8 @@ package amqp
 
 import (
 	"time"
+
+	"github.com/streadway/amqp/internal/proto"
 )
 
 // Return captures a flattened struct of fields returned by the server when a
@@ -36,8 +38,8 @@ type Return struct {
 	Body []byte
 }
 
-func newReturn(msg basicReturn) *Return {
-	props, body := msg.getContent()
+func newReturn(msg proto.BasicReturn) *Return {
+	props, body := msg.GetContent()
 
 	return &Return{
 		ReplyCode:  msg.ReplyCode,

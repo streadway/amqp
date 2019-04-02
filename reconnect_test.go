@@ -2,8 +2,9 @@ package amqp_test
 
 import (
 	"fmt"
-	"github.com/streadway/amqp"
 	"os"
+
+	"github.com/streadway/amqp"
 )
 
 // Every connection should declare the topology they expect
