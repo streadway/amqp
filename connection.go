@@ -73,23 +73,6 @@ type Config struct {
 	Dial func(network, addr string) (net.Conn, error)
 }
 
-// NotifyConnection represents set of methods used to notify about different events that happened to AMQP connection
-type NotifyConnection interface {
-	NotifyBlocked(receiver chan Blocking) chan Blocking
-	NotifyClose(receiver chan *Error) chan *Error
-}
-
-// ConnectionInterface represents set of methods used to fully operate with AMQP connection
-type ConnectionInterface interface {
-	NotifyConnection
-
-	Channel() (ChannelInterface, error)
-	ConnectionState() tls.ConnectionState
-	LocalAddr() net.Addr
-	Close() error
-	IsClosed() bool
-}
-
 // Connection manages the serialization and deserialization of frames from IO
 // and dispatches the frames to the appropriate channel.  All RPC methods and
 // asynchronous Publishing, Delivery, Ack, Nack and Return messages are
@@ -641,7 +624,7 @@ func (c *Connection) releaseChannel(id uint16) {
 }
 
 // openChannel allocates and opens a channel, must be paired with closeChannel
-func (c *Connection) openChannel() (ChannelInterface, error) {
+func (c *Connection) openChannel() (*Channel, error) {
 	ch, err := c.allocateChannel()
 	if err != nil {
 		return nil, err
@@ -652,7 +635,7 @@ func (c *Connection) openChannel() (ChannelInterface, error) {
 		return nil, err
 	}
 
-	return ChannelInterface(ch), nil
+	return ch, nil
 }
 
 // closeChannel releases and initiates a shutdown of the channel.  All channel
@@ -669,7 +652,7 @@ messages.  Any error from methods on this receiver will render the receiver
 invalid and a new Channel should be opened.
 
 */
-func (c *Connection) Channel() (ChannelInterface, error) {
+func (c *Connection) Channel() (*Channel, error) {
 	return c.openChannel()
 }
 
