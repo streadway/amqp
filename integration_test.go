@@ -450,7 +450,7 @@ func TestIntegrationChannelClosing(t *testing.T) {
 		// This function is run on every channel after it is successfully
 		// opened. It can do something to verify something. It should be
 		// quick; many channels may be opened!
-		f := func(t *testing.T, c ChannelInterface) {
+		f := func(t *testing.T, c *Channel) {
 			return
 		}
 
@@ -497,7 +497,7 @@ func TestIntegrationChannelClosing(t *testing.T) {
 
 		// multiple channels
 		for _, n := range []int{2, 4, 8, 16, 32, 64, 128, 256} {
-			channels := make([]ChannelInterface, n)
+			channels := make([]*Channel, n)
 			for i := 0; i < n; i++ {
 				var err error
 				if channels[i], err = c.Channel(); err != nil {
@@ -1807,7 +1807,7 @@ func integrationConnection(t *testing.T, name string) *Connection {
 }
 
 // Returns a connection, channel and declares a queue when the AMQP_URL is in the environment
-func integrationQueue(t *testing.T, name string) (*Connection, ChannelInterface) {
+func integrationQueue(t *testing.T, name string) (*Connection, *Channel) {
 	if conn := integrationConnection(t, name); conn != nil {
 		if channel, err := conn.Channel(); err == nil {
 			if _, err = channel.QueueDeclare(name, false, true, false, false, nil); err == nil {
