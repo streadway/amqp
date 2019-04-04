@@ -16,8 +16,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/streadway/amqp/internal/proto"
 )
 
 const (
@@ -86,7 +84,7 @@ type Connection struct {
 	conn io.ReadWriteCloser
 
 	rpc       chan message
-	writer    *proto.Writer
+	writer    *writer
 	sends     chan time.Time     // timestamps of each frame sent
 	deadlines chan readDeadliner // heartbeater updates read deadlines
 
@@ -225,7 +223,7 @@ to use your own custom transport.
 func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	c := &Connection{
 		conn:      conn,
-		writer:    proto.NewWriter(bufio.NewWriter(conn)),
+		writer:    &writer{bufio.NewWriter(conn)},
 		channels:  make(map[uint16]*Channel),
 		rpc:       make(chan message),
 		sends:     make(chan time.Time),
@@ -328,11 +326,11 @@ func (c *Connection) Close() error {
 
 	defer c.shutdown(nil)
 	return c.call(
-		&proto.ConnectionClose{
-			ReplyCode: proto.ReplySuccess,
+		&connectionClose{
+			ReplyCode: replySuccess,
 			ReplyText: "kthxbai",
 		},
-		&proto.ConnectionCloseOk{},
+		&connectionCloseOk{},
 	)
 }
 
@@ -343,11 +341,11 @@ func (c *Connection) closeWith(err *Error) error {
 
 	defer c.shutdown(err)
 	return c.call(
-		&proto.ConnectionClose{
+		&connectionClose{
 			ReplyCode: uint16(err.Code),
 			ReplyText: err.Reason,
 		},
-		&proto.ConnectionCloseOk{},
+		&connectionCloseOk{},
 	)
 }
 
@@ -369,7 +367,7 @@ func (c *Connection) send(f frame) error {
 	if err != nil {
 		// shutdown could be re-entrant from signaling notify chans
 		go c.shutdown(&Error{
-			Code:   proto.FrameError,
+			Code:   FrameError,
 			Reason: err.Error(),
 		})
 	} else {
@@ -432,7 +430,7 @@ func (c *Connection) shutdown(err *Error) {
 // All methods sent to the connection channel should be synchronous so we
 // can handle them directly without a framing component
 func (c *Connection) demux(f frame) {
-	if f.Channel() == 0 {
+	if f.channel() == 0 {
 		c.dispatch0(f)
 	} else {
 		c.dispatchN(f)
@@ -441,28 +439,28 @@ func (c *Connection) demux(f frame) {
 
 func (c *Connection) dispatch0(f frame) {
 	switch mf := f.(type) {
-	case *proto.MethodFrame:
+	case *methodFrame:
 		switch m := mf.Method.(type) {
-		case *proto.ConnectionClose:
+		case *connectionClose:
 			// Send immediately as shutdown will close our side of the writer.
-			c.send(&proto.MethodFrame{
+			c.send(&methodFrame{
 				ChannelId: 0,
-				Method:    &proto.ConnectionCloseOk{},
+				Method:    &connectionCloseOk{},
 			})
 
 			c.shutdown(newError(m.ReplyCode, m.ReplyText))
-		case *proto.ConnectionBlocked:
+		case *connectionBlocked:
 			for _, c := range c.blocks {
 				c <- Blocking{Active: true, Reason: m.Reason}
 			}
-		case *proto.ConnectionUnblocked:
+		case *connectionUnblocked:
 			for _, c := range c.blocks {
 				c <- Blocking{Active: false}
 			}
 		default:
 			c.rpc <- m
 		}
-	case *proto.HeartbeatFrame:
+	case *heartbeatFrame:
 		// kthx - all reads reset our deadline.  so we can drop this
 	default:
 		// lolwat - channel0 only responds to methods and heartbeats
@@ -472,7 +470,7 @@ func (c *Connection) dispatch0(f frame) {
 
 func (c *Connection) dispatchN(f frame) {
 	c.m.Lock()
-	channel := c.channels[f.Channel()]
+	channel := c.channels[f.channel()]
 	c.m.Unlock()
 
 	if channel != nil {
@@ -495,14 +493,14 @@ func (c *Connection) dispatchN(f frame) {
 // order.
 func (c *Connection) dispatchClosed(f frame) {
 	// Only consider method frames, drop content/header frames
-	if mf, ok := f.(*proto.MethodFrame); ok {
+	if mf, ok := f.(*methodFrame); ok {
 		switch mf.Method.(type) {
-		case *proto.ChannelClose:
-			c.send(&proto.MethodFrame{
-				ChannelId: f.Channel(),
-				Method:    &proto.ChannelCloseOk{},
+		case *channelClose:
+			c.send(&methodFrame{
+				ChannelId: f.channel(),
+				Method:    &channelCloseOk{},
 			})
-		case *proto.ChannelCloseOk:
+		case *channelCloseOk:
 			// we are already closed, so do nothing
 		default:
 			// unexpected method on closed channel
@@ -516,14 +514,14 @@ func (c *Connection) dispatchClosed(f frame) {
 // handle on channel 0 (the connection channel).
 func (c *Connection) reader(r io.Reader) {
 	buf := bufio.NewReader(r)
-	frames := proto.NewReader(buf)
+	frames := &reader{buf}
 	conn, haveDeadliner := r.(readDeadliner)
 
 	for {
 		frame, err := frames.ReadFrame()
 
 		if err != nil {
-			c.shutdown(&Error{Code: proto.FrameError, Reason: err.Error()})
+			c.shutdown(&Error{Code: FrameError, Reason: err.Error()})
 			return
 		}
 
@@ -562,7 +560,7 @@ func (c *Connection) heartbeater(interval time.Duration, done chan *Error) {
 		case at := <-sendTicks:
 			// When idle, fill the space with a heartbeat frame
 			if at.Sub(lastSent) > interval-time.Second {
-				if err := c.send(&proto.HeartbeatFrame{}); err != nil {
+				if err := c.send(&heartbeatFrame{}); err != nil {
 					// send heartbeats even after close/closeOk so we
 					// tick until the connection starts erroring
 					return
@@ -659,7 +657,7 @@ func (c *Connection) call(req message, res ...message) error {
 	// Special case for when the protocol header frame is sent insted of a
 	// request method
 	if req != nil {
-		if err := c.send(&proto.MethodFrame{ChannelId: 0, Method: req}); err != nil {
+		if err := c.send(&methodFrame{ChannelId: 0, Method: req}); err != nil {
 			return err
 		}
 	}
@@ -698,7 +696,7 @@ func (c *Connection) call(req message, res ...message) error {
 //    close-Connection    = C:CLOSE S:CLOSE-OK
 //                        / S:CLOSE C:CLOSE-OK
 func (c *Connection) open(config Config) error {
-	if err := c.send(&proto.ProtocolHeader{}); err != nil {
+	if err := c.send(&protocolHeader{}); err != nil {
 		return err
 	}
 
@@ -706,7 +704,7 @@ func (c *Connection) open(config Config) error {
 }
 
 func (c *Connection) openStart(config Config) error {
-	start := &proto.ConnectionStart{}
+	start := &connectionStart{}
 
 	if err := c.call(nil, start); err != nil {
 		return err
@@ -746,13 +744,13 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 		"consumer_cancel_notify": true,
 	}
 
-	ok := &proto.ConnectionStartOk{
+	ok := &connectionStartOk{
 		ClientProperties: config.Properties,
 		Mechanism:        auth.Mechanism(),
 		Response:         auth.Response(),
 		Locale:           config.Locale,
 	}
-	tune := &proto.ConnectionTune{}
+	tune := &connectionTune{}
 
 	if err := c.call(ok, tune); err != nil {
 		// per spec, a connection can only be closed when it has been opened
@@ -783,9 +781,9 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 	// Connection.Tune method"
 	go c.heartbeater(c.Config.Heartbeat, c.NotifyClose(make(chan *Error, 1)))
 
-	if err := c.send(&proto.MethodFrame{
+	if err := c.send(&methodFrame{
 		ChannelId: 0,
-		Method: &proto.ConnectionTuneOk{
+		Method: &connectionTuneOk{
 			ChannelMax: uint16(c.Config.ChannelMax),
 			FrameMax:   uint32(c.Config.FrameSize),
 			Heartbeat:  uint16(c.Config.Heartbeat / time.Second),
@@ -798,8 +796,8 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 }
 
 func (c *Connection) openVhost(config Config) error {
-	req := &proto.ConnectionOpen{VirtualHost: config.Vhost}
-	res := &proto.ConnectionOpenOk{}
+	req := &connectionOpen{VirtualHost: config.Vhost}
+	res := &connectionOpenOk{}
 
 	if err := c.call(req, res); err != nil {
 		// Cannot be closed yet, but we know it's a vhost problem

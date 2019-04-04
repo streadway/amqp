@@ -11,20 +11,18 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/streadway/amqp/internal/proto"
 )
 
 type server struct {
 	*testing.T
-	r *proto.Reader      // framer <- client
-	w *proto.Writer      // framer -> client
+	r reader             // framer <- client
+	w writer             // framer -> client
 	S io.ReadWriteCloser // Server IO
 	C io.ReadWriteCloser // Client IO
 
 	// captured client frames
-	start proto.ConnectionStartOk
-	tune  proto.ConnectionTuneOk
+	start connectionStartOk
+	tune  connectionTuneOk
 }
 
 func defaultConfig() Config {
@@ -44,8 +42,8 @@ func newSession(t *testing.T) (io.ReadWriteCloser, *server) {
 
 	server := server{
 		T: t,
-		r: proto.NewReader(rws),
-		w: proto.NewWriter(rws),
+		r: reader{rws},
+		w: writer{rws},
 		S: rws,
 		C: rwc,
 	}
@@ -65,27 +63,27 @@ func (t *server) expectBytes(b []byte) {
 }
 
 func (t *server) send(channel int, m message) {
-	defer time.AfterFunc(time.Second, func() { t.Fatal("send deadlock") }).Stop()
+	defer time.AfterFunc(time.Second, func() { panic("send deadlock") }).Stop()
 
 	if msg, ok := m.(messageWithContent); ok {
-		props, body := msg.GetContent()
-		class, _ := msg.ID()
-		t.w.WriteFrame(&proto.MethodFrame{
+		props, body := msg.getContent()
+		class, _ := msg.id()
+		t.w.WriteFrame(&methodFrame{
 			ChannelId: uint16(channel),
 			Method:    msg,
 		})
-		t.w.WriteFrame(&proto.HeaderFrame{
+		t.w.WriteFrame(&headerFrame{
 			ChannelId:  uint16(channel),
 			ClassId:    class,
 			Size:       uint64(len(body)),
 			Properties: props,
 		})
-		t.w.WriteFrame(&proto.BodyFrame{
+		t.w.WriteFrame(&bodyFrame{
 			ChannelId: uint16(channel),
 			Body:      body,
 		})
 	} else {
-		t.w.WriteFrame(&proto.MethodFrame{
+		t.w.WriteFrame(&methodFrame{
 			ChannelId: uint16(channel),
 			Method:    m,
 		})
@@ -94,10 +92,10 @@ func (t *server) send(channel int, m message) {
 
 // drops all but method frames expected on the given channel
 func (t *server) recv(channel int, m message) message {
-	defer time.AfterFunc(time.Second, func() { t.Fatal("recv deadlock") }).Stop()
+	defer time.AfterFunc(time.Second, func() { panic("recv deadlock") }).Stop()
 
 	var remaining int
-	var header *proto.HeaderFrame
+	var header *headerFrame
 	var body []byte
 
 	for {
@@ -106,33 +104,33 @@ func (t *server) recv(channel int, m message) message {
 			t.Fatalf("frame err, read: %s", err)
 		}
 
-		if frame.Channel() != uint16(channel) {
-			t.Fatalf("expected frame on channel %d, got channel %d", channel, frame.Channel())
+		if frame.channel() != uint16(channel) {
+			t.Fatalf("expected frame on channel %d, got channel %d", channel, frame.channel())
 		}
 
 		switch f := frame.(type) {
-		case *proto.HeartbeatFrame:
+		case *heartbeatFrame:
 			// drop
 
-		case *proto.HeaderFrame:
+		case *headerFrame:
 			// start content state
 			header = f
 			remaining = int(header.Size)
 			if remaining == 0 {
-				m.(messageWithContent).SetContent(header.Properties, nil)
+				m.(messageWithContent).setContent(header.Properties, nil)
 				return m
 			}
 
-		case *proto.BodyFrame:
+		case *bodyFrame:
 			// continue until terminated
 			body = append(body, f.Body...)
 			remaining -= len(f.Body)
 			if remaining <= 0 {
-				m.(messageWithContent).SetContent(header.Properties, body)
+				m.(messageWithContent).setContent(header.Properties, body)
 				return m
 			}
 
-		case *proto.MethodFrame:
+		case *methodFrame:
 			if reflect.TypeOf(m) == reflect.TypeOf(f.Method) {
 				wantv := reflect.ValueOf(m).Elem()
 				havev := reflect.ValueOf(f.Method).Elem()
@@ -155,7 +153,7 @@ func (t *server) expectAMQP() {
 }
 
 func (t *server) connectionStart() {
-	t.send(0, &proto.ConnectionStart{
+	t.send(0, &connectionStart{
 		VersionMajor: 0,
 		VersionMinor: 9,
 		Mechanisms:   "PLAIN",
@@ -166,7 +164,7 @@ func (t *server) connectionStart() {
 }
 
 func (t *server) connectionTune() {
-	t.send(0, &proto.ConnectionTune{
+	t.send(0, &connectionTune{
 		ChannelMax: 11,
 		FrameMax:   20000,
 		Heartbeat:  10,
@@ -180,18 +178,18 @@ func (t *server) connectionOpen() {
 	t.connectionStart()
 	t.connectionTune()
 
-	t.recv(0, &proto.ConnectionOpen{})
-	t.send(0, &proto.ConnectionOpenOk{})
+	t.recv(0, &connectionOpen{})
+	t.send(0, &connectionOpenOk{})
 }
 
 func (t *server) connectionClose() {
-	t.recv(0, &proto.ConnectionClose{})
-	t.send(0, &proto.ConnectionCloseOk{})
+	t.recv(0, &connectionClose{})
+	t.send(0, &connectionCloseOk{})
 }
 
 func (t *server) channelOpen(id int) {
-	t.recv(id, &proto.ChannelOpen{})
-	t.send(id, &proto.ChannelOpenOk{})
+	t.recv(id, &channelOpen{})
+	t.send(id, &channelOpenOk{})
 }
 
 func TestDefaultClientProperties(t *testing.T) {
@@ -284,7 +282,7 @@ func TestOpenFailedSASLUnsupportedMechanisms(t *testing.T) {
 
 	go func() {
 		srv.expectAMQP()
-		srv.send(0, &proto.ConnectionStart{
+		srv.send(0, &connectionStart{
 			VersionMajor: 0,
 			VersionMinor: 9,
 			Mechanisms:   "KERBEROS NTLM",
@@ -321,7 +319,7 @@ func TestOpenFailedVhost(t *testing.T) {
 		srv.expectAMQP()
 		srv.connectionStart()
 		srv.connectionTune()
-		srv.recv(0, &proto.ConnectionOpen{})
+		srv.recv(0, &connectionOpen{})
 
 		// Now kill/timeout the connection on bad Vhost
 		rwc.Close()
@@ -341,30 +339,30 @@ func TestConfirmMultipleOrdersDeliveryTags(t *testing.T) {
 		srv.connectionOpen()
 		srv.channelOpen(1)
 
-		srv.recv(1, &proto.ConfirmSelect{})
-		srv.send(1, &proto.ConfirmSelectOk{})
+		srv.recv(1, &confirmSelect{})
+		srv.send(1, &confirmSelectOk{})
 
-		srv.recv(1, &proto.BasicPublish{})
-		srv.recv(1, &proto.BasicPublish{})
-		srv.recv(1, &proto.BasicPublish{})
-		srv.recv(1, &proto.BasicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
 
 		// Single tag, plus multiple, should produce
 		// 2, 1, 3, 4
-		srv.send(1, &proto.BasicAck{DeliveryTag: 2})
-		srv.send(1, &proto.BasicAck{DeliveryTag: 1})
-		srv.send(1, &proto.BasicAck{DeliveryTag: 4, Multiple: true})
+		srv.send(1, &basicAck{DeliveryTag: 2})
+		srv.send(1, &basicAck{DeliveryTag: 1})
+		srv.send(1, &basicAck{DeliveryTag: 4, Multiple: true})
 
-		srv.recv(1, &proto.BasicPublish{})
-		srv.recv(1, &proto.BasicPublish{})
-		srv.recv(1, &proto.BasicPublish{})
-		srv.recv(1, &proto.BasicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
+		srv.recv(1, &basicPublish{})
 
 		// And some more, but in reverse order, multiple then one
 		// 5, 6, 7, 8
-		srv.send(1, &proto.BasicAck{DeliveryTag: 6, Multiple: true})
-		srv.send(1, &proto.BasicAck{DeliveryTag: 8})
-		srv.send(1, &proto.BasicAck{DeliveryTag: 7})
+		srv.send(1, &basicAck{DeliveryTag: 6, Multiple: true})
+		srv.send(1, &basicAck{DeliveryTag: 8})
+		srv.send(1, &basicAck{DeliveryTag: 7})
 	}()
 
 	c, err := Open(rwc, defaultConfig())
@@ -417,11 +415,11 @@ func TestNotifyClosesReusedPublisherConfirmChan(t *testing.T) {
 		srv.connectionOpen()
 		srv.channelOpen(1)
 
-		srv.recv(1, &proto.ConfirmSelect{})
-		srv.send(1, &proto.ConfirmSelectOk{})
+		srv.recv(1, &confirmSelect{})
+		srv.send(1, &confirmSelectOk{})
 
-		srv.recv(0, &proto.ConnectionClose{})
-		srv.send(0, &proto.ConnectionCloseOk{})
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
 	}()
 
 	c, err := Open(rwc, defaultConfig())
@@ -453,8 +451,8 @@ func TestNotifyClosesAllChansAfterConnectionClose(t *testing.T) {
 		srv.connectionOpen()
 		srv.channelOpen(1)
 
-		srv.recv(0, &proto.ConnectionClose{})
-		srv.send(0, &proto.ConnectionCloseOk{})
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
 	}()
 
 	c, err := Open(rwc, defaultConfig())
@@ -526,7 +524,7 @@ func TestPublishBodySliceIssue74(t *testing.T) {
 		srv.channelOpen(1)
 
 		for i := 0; i < publishings; i++ {
-			srv.recv(1, &proto.BasicPublish{})
+			srv.recv(1, &basicPublish{})
 		}
 
 		done <- true
@@ -566,7 +564,7 @@ func TestPublishZeroFrameSizeIssue161(t *testing.T) {
 		srv.channelOpen(1)
 
 		for i := 0; i < publishings; i++ {
-			srv.recv(1, &proto.BasicPublish{})
+			srv.recv(1, &basicPublish{})
 		}
 
 		done <- true
@@ -603,7 +601,7 @@ func TestPublishAndShutdownDeadlockIssue84(t *testing.T) {
 	go func() {
 		srv.connectionOpen()
 		srv.channelOpen(1)
-		srv.recv(1, &proto.BasicPublish{})
+		srv.recv(1, &basicPublish{})
 		// Mimic a broken io pipe so that Publish catches the error and goes into shutdown
 		srv.S.Close()
 	}()
@@ -649,7 +647,7 @@ func TestChannelReturnsCloseRace(t *testing.T) {
 	// channel) while we call shutdown concurrently
 	go func() {
 		for i := 0; i < 100; i++ {
-			ch.dispatch(&proto.BasicReturn{})
+			ch.dispatch(&basicReturn{})
 		}
 	}()
 
@@ -668,20 +666,20 @@ func TestLeakClosedConsumersIssue264(t *testing.T) {
 		srv.connectionOpen()
 		srv.channelOpen(1)
 
-		srv.recv(1, &proto.BasicQos{})
-		srv.send(1, &proto.BasicQosOk{})
+		srv.recv(1, &basicQos{})
+		srv.send(1, &basicQosOk{})
 
-		srv.recv(1, &proto.BasicConsume{})
-		srv.send(1, &proto.BasicConsumeOk{ConsumerTag: tag})
+		srv.recv(1, &basicConsume{})
+		srv.send(1, &basicConsumeOk{ConsumerTag: tag})
 
 		// This delivery is intended to be consumed
-		srv.send(1, &proto.BasicDeliver{ConsumerTag: tag, DeliveryTag: 1})
+		srv.send(1, &basicDeliver{ConsumerTag: tag, DeliveryTag: 1})
 
 		// This delivery is intended to be dropped
-		srv.send(1, &proto.BasicDeliver{ConsumerTag: tag, DeliveryTag: 2})
+		srv.send(1, &basicDeliver{ConsumerTag: tag, DeliveryTag: 2})
 
-		srv.recv(0, &proto.ConnectionClose{})
-		srv.send(0, &proto.ConnectionCloseOk{})
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
 		srv.C.Close()
 	}()
 

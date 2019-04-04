@@ -151,7 +151,7 @@ var (
   /* Rebuild from the spec/gen.go tool */
 
   {{with .Root}}
-  package proto
+  package amqp
 
   import (
     "fmt"
@@ -165,11 +165,10 @@ var (
 	// these constants.
 	const (
 	{{range $c := .Constants}}
-	{{.Name | public}} = {{.Value}}{{end}}
+	{{if $c.IsError}}{{.Name | public}}{{else}}{{.Name | private}}{{end}} = {{.Value}}{{end}}
   )
 
-	// IsSoftExceptionCode returns true if the exception code can be recovered
-	func IsSoftExceptionCode(code int) bool {
+	func isSoftExceptionCode(code int) bool {
 		switch code {
 		{{range $c := .Constants}} {{if $c.IsSoftError}} case {{$c.Value}}:
 			return true
@@ -183,44 +182,38 @@ var (
     {{range .Methods}}
       {{$method := .}}
 			{{$struct := $.StructName $class.Name $method.Name}}
-      // {{ $struct }} represents the AMQP message {{$class.Name}}.{{$method.Name}}
+      {{if .Docs}}/* {{range .Docs}} {{.Body | clean}} {{end}} */{{end}}
       type {{$struct}} struct {
         {{range .Fields}}
         {{$.FieldName .}} {{$.FieldType . | $.NativeType}} {{if .Label}}// {{.Label}}{{end}}{{end}}
-				{{if .Content}}Properties Properties
+				{{if .Content}}Properties properties
 				Body []byte{{end}}
       }
 
-			// ID returns the AMQP class and method identifiers for this message
-			func (msg *{{$struct}}) ID() (uint16, uint16) {
+			func (msg *{{$struct}}) id() (uint16, uint16) {
 				return {{$class.Index}}, {{$method.Index}}
 			}
 
-			// Wait returns true when the client should expect a response from the server
-			func (msg *{{$struct}}) Wait() (bool) {
+			func (msg *{{$struct}}) wait() (bool) {
 				return {{.Synchronous}}{{if $.HasField "NoWait" .}} && !msg.NoWait{{end}}
 			}
 
 			{{if .Content}}
-			// GetContent returns the Properties and Body from this message
-      func (msg *{{$struct}}) GetContent() (Properties, []byte) {
+      func (msg *{{$struct}}) getContent() (properties, []byte) {
         return msg.Properties, msg.Body
       }
 
-			// SetContent sets the Properties and Body for serialization
-      func (msg *{{$struct}}) SetContent(props Properties, body []byte) {
+      func (msg *{{$struct}}) setContent(props properties, body []byte) {
         msg.Properties, msg.Body = props, body
       }
 			{{end}}
-      // Write serializes this message to the provided writer
-      func (msg *{{$struct}}) Write(w io.Writer) (err error) {
+      func (msg *{{$struct}}) write(w io.Writer) (err error) {
 				{{if $.HasType "bit" $method}}var bits byte{{end}}
         {{.Fields | $.Fieldsets | $.Partial "enc-"}}
         return
       }
 
-      // Read deserializes this message from the provided reader
-      func (msg *{{$struct}}) Read(r io.Reader) (err error) {
+      func (msg *{{$struct}}) read(r io.Reader) (err error) {
 				{{if $.HasType "bit" $method}}var bits byte{{end}}
         {{.Fields | $.Fieldsets | $.Partial "dec-"}}
         return
@@ -228,8 +221,8 @@ var (
     {{end}}
   {{end}}
 
-  func (r *Reader) parseMethodFrame(channel uint16, size uint32) (f Frame, err error) {
-    mf := &MethodFrame {
+  func (r *reader) parseMethodFrame(channel uint16, size uint32) (f frame, err error) {
+    mf := &methodFrame {
       ChannelId: channel,
     }
 
@@ -250,7 +243,7 @@ var (
       case {{.Index}}: // {{$class.Name}} {{.Name}}
         //fmt.Println("NextMethod: class:{{$class.Index}} method:{{.Index}}")
         method := &{{$.StructName $class.Name .Name}}{}
-        if err = method.Read(r.r); err != nil {
+        if err = method.read(r.r); err != nil {
           return
         }
         mf.Method = method
@@ -491,7 +484,7 @@ func (renderer *renderer) Tag(d Domain) string {
 }
 
 func (renderer *renderer) StructName(parts ...string) string {
-	return public(parts[0:]...)
+	return parts[0] + public(parts[1:]...)
 }
 
 func clean(body string) (res string) {

@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 // Source code and contact info at http://github.com/streadway/amqp
 
-package proto
+package amqp
 
 import (
 	"bytes"
@@ -13,14 +13,9 @@ import (
 	"time"
 )
 
-// NewReader returns an AMQP 0.9 frame reader
-func NewReader(r io.Reader) *Reader {
-	return &Reader{r: r}
-}
-
 /*
-ReadFrame reads a frame from an input stream and returns an interface that can
-be cast into one of the following:
+Reads a frame from an input stream and returns an interface that can be cast into
+one of the following:
 
    methodFrame
    PropertiesFrame
@@ -48,7 +43,7 @@ In realistic implementations where performance is a concern, we would use
 
 “gathering reads” to avoid doing three separate system calls to read a frame.
 */
-func (r *Reader) ReadFrame() (frame Frame, err error) {
+func (r *reader) ReadFrame() (frame frame, err error) {
 	var scratch [7]byte
 
 	if _, err = io.ReadFull(r.r, scratch[:7]); err != nil {
@@ -60,22 +55,22 @@ func (r *Reader) ReadFrame() (frame Frame, err error) {
 	size := binary.BigEndian.Uint32(scratch[3:7])
 
 	switch typ {
-	case FrameMethod:
+	case frameMethod:
 		if frame, err = r.parseMethodFrame(channel, size); err != nil {
 			return
 		}
 
-	case FrameHeader:
+	case frameHeader:
 		if frame, err = r.parseHeaderFrame(channel, size); err != nil {
 			return
 		}
 
-	case FrameBody:
+	case frameBody:
 		if frame, err = r.parseBodyFrame(channel, size); err != nil {
 			return nil, err
 		}
 
-	case FrameHeartbeat:
+	case frameHeartbeat:
 		if frame, err = r.parseHeartbeatFrame(channel, size); err != nil {
 			return
 		}
@@ -88,7 +83,7 @@ func (r *Reader) ReadFrame() (frame Frame, err error) {
 		return nil, err
 	}
 
-	if scratch[0] != FrameEnd {
+	if scratch[0] != frameEnd {
 		return nil, ErrFrame
 	}
 
@@ -336,8 +331,8 @@ func hasProperty(mask uint16, prop int) bool {
 	return int(mask)&prop > 0
 }
 
-func (r *Reader) parseHeaderFrame(channel uint16, size uint32) (frame Frame, err error) {
-	hf := &HeaderFrame{
+func (r *reader) parseHeaderFrame(channel uint16, size uint32) (frame frame, err error) {
+	hf := &headerFrame{
 		ChannelId: channel,
 	}
 
@@ -433,8 +428,8 @@ func (r *Reader) parseHeaderFrame(channel uint16, size uint32) (frame Frame, err
 	return hf, nil
 }
 
-func (r *Reader) parseBodyFrame(channel uint16, size uint32) (frame Frame, err error) {
-	bf := &BodyFrame{
+func (r *reader) parseBodyFrame(channel uint16, size uint32) (frame frame, err error) {
+	bf := &bodyFrame{
 		ChannelId: channel,
 		Body:      make([]byte, size),
 	}
@@ -448,8 +443,8 @@ func (r *Reader) parseBodyFrame(channel uint16, size uint32) (frame Frame, err e
 
 var errHeartbeatPayload = errors.New("Heartbeats should not have a payload")
 
-func (r *Reader) parseHeartbeatFrame(channel uint16, size uint32) (frame Frame, err error) {
-	hf := &HeartbeatFrame{
+func (r *reader) parseHeartbeatFrame(channel uint16, size uint32) (frame frame, err error) {
+	hf := &heartbeatFrame{
 		ChannelId: channel,
 	}
 

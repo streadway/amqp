@@ -9,8 +9,6 @@ import (
 	"reflect"
 	"sync"
 	"sync/atomic"
-
-	"github.com/streadway/amqp/internal/proto"
 )
 
 // 0      1         3             7                  size+7 size+8
@@ -72,7 +70,7 @@ type Channel struct {
 
 	// Current state for frame re-assembly, only mutated from recv
 	message messageWithContent
-	header  *proto.HeaderFrame
+	header  *headerFrame
 	body    []byte
 }
 
@@ -164,7 +162,7 @@ func (ch *Channel) send(msg message) (err error) {
 }
 
 func (ch *Channel) open() error {
-	return ch.call(&proto.ChannelOpen{}, &proto.ChannelOpenOk{})
+	return ch.call(&channelOpen{}, &channelOpenOk{})
 }
 
 // Performs a request/response call for when the message is not NoWait and is
@@ -174,7 +172,7 @@ func (ch *Channel) call(req message, res ...message) error {
 		return err
 	}
 
-	if req.Wait() {
+	if req.wait() {
 		select {
 		case e, ok := <-ch.errors:
 			if ok {
@@ -208,8 +206,8 @@ func (ch *Channel) call(req message, res ...message) error {
 func (ch *Channel) sendClosed(msg message) (err error) {
 	// After a 'channel.close' is sent or received the only valid response is
 	// channel.close-ok
-	if _, ok := msg.(*proto.ChannelCloseOk); ok {
-		return ch.connection.send(&proto.MethodFrame{
+	if _, ok := msg.(*channelCloseOk); ok {
+		return ch.connection.send(&methodFrame{
 			ChannelId: ch.id,
 			Method:    msg,
 		})
@@ -220,8 +218,8 @@ func (ch *Channel) sendClosed(msg message) (err error) {
 
 func (ch *Channel) sendOpen(msg message) (err error) {
 	if content, ok := msg.(messageWithContent); ok {
-		props, body := content.GetContent()
-		class, _ := content.ID()
+		props, body := content.getContent()
+		class, _ := content.id()
 
 		// catch client max frame size==0 and server max frame size==0
 		// set size to length of what we're trying to publish
@@ -232,14 +230,14 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 			size = len(body)
 		}
 
-		if err = ch.connection.send(&proto.MethodFrame{
+		if err = ch.connection.send(&methodFrame{
 			ChannelId: ch.id,
 			Method:    content,
 		}); err != nil {
 			return
 		}
 
-		if err = ch.connection.send(&proto.HeaderFrame{
+		if err = ch.connection.send(&headerFrame{
 			ChannelId:  ch.id,
 			ClassId:    class,
 			Size:       uint64(len(body)),
@@ -254,7 +252,7 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 				j = len(body)
 			}
 
-			if err = ch.connection.send(&proto.BodyFrame{
+			if err = ch.connection.send(&bodyFrame{
 				ChannelId: ch.id,
 				Body:      body[i:j],
 			}); err != nil {
@@ -262,7 +260,7 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 			}
 		}
 	} else {
-		err = ch.connection.send(&proto.MethodFrame{
+		err = ch.connection.send(&methodFrame{
 			ChannelId: ch.id,
 			Method:    msg,
 		})
@@ -275,24 +273,24 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 // goroutine, so assumes serialized access.
 func (ch *Channel) dispatch(msg message) {
 	switch m := msg.(type) {
-	case *proto.ChannelClose:
+	case *channelClose:
 		// lock before sending connection.close-ok
 		// to avoid unexpected interleaving with basic.publish frames if
 		// publishing is happening concurrently
 		ch.m.Lock()
-		ch.send(&proto.ChannelCloseOk{})
+		ch.send(&channelCloseOk{})
 		ch.m.Unlock()
 		ch.connection.closeChannel(ch, newError(m.ReplyCode, m.ReplyText))
 
-	case *proto.ChannelFlow:
+	case *channelFlow:
 		ch.notifyM.RLock()
 		for _, c := range ch.flows {
 			c <- m.Active
 		}
 		ch.notifyM.RUnlock()
-		ch.send(&proto.ChannelFlowOk{Active: m.Active})
+		ch.send(&channelFlowOk{Active: m.Active})
 
-	case *proto.BasicCancel:
+	case *basicCancel:
 		ch.notifyM.RLock()
 		for _, c := range ch.cancels {
 			c <- m.ConsumerTag
@@ -300,7 +298,7 @@ func (ch *Channel) dispatch(msg message) {
 		ch.notifyM.RUnlock()
 		ch.consumers.cancel(m.ConsumerTag)
 
-	case *proto.BasicReturn:
+	case *basicReturn:
 		ret := newReturn(*m)
 		ch.notifyM.RLock()
 		for _, c := range ch.returns {
@@ -308,7 +306,7 @@ func (ch *Channel) dispatch(msg message) {
 		}
 		ch.notifyM.RUnlock()
 
-	case *proto.BasicAck:
+	case *basicAck:
 		if ch.confirming {
 			if m.Multiple {
 				ch.confirms.Multiple(Confirmation{m.DeliveryTag, true})
@@ -317,7 +315,7 @@ func (ch *Channel) dispatch(msg message) {
 			}
 		}
 
-	case *proto.BasicNack:
+	case *basicNack:
 		if ch.confirming {
 			if m.Multiple {
 				ch.confirms.Multiple(Confirmation{m.DeliveryTag, false})
@@ -326,7 +324,7 @@ func (ch *Channel) dispatch(msg message) {
 			}
 		}
 
-	case *proto.BasicDeliver:
+	case *basicDeliver:
 		ch.consumers.send(m.ConsumerTag, newDelivery(ch, m))
 		// TODO log failed consumer and close channel, this can happen when
 		// deliveries are in flight and a no-wait cancel has happened
@@ -343,7 +341,7 @@ func (ch *Channel) transition(f func(*Channel, frame) error) error {
 
 func (ch *Channel) recvMethod(f frame) error {
 	switch frame := f.(type) {
-	case *proto.MethodFrame:
+	case *methodFrame:
 		if msg, ok := frame.Method.(messageWithContent); ok {
 			ch.body = make([]byte, 0)
 			ch.message = msg
@@ -353,11 +351,11 @@ func (ch *Channel) recvMethod(f frame) error {
 		ch.dispatch(frame.Method) // termination state
 		return ch.transition((*Channel).recvMethod)
 
-	case *proto.HeaderFrame:
+	case *headerFrame:
 		// drop
 		return ch.transition((*Channel).recvMethod)
 
-	case *proto.BodyFrame:
+	case *bodyFrame:
 		// drop
 		return ch.transition((*Channel).recvMethod)
 	}
@@ -367,22 +365,22 @@ func (ch *Channel) recvMethod(f frame) error {
 
 func (ch *Channel) recvHeader(f frame) error {
 	switch frame := f.(type) {
-	case *proto.MethodFrame:
+	case *methodFrame:
 		// interrupt content and handle method
 		return ch.recvMethod(f)
 
-	case *proto.HeaderFrame:
+	case *headerFrame:
 		// start collecting if we expect body frames
 		ch.header = frame
 
 		if frame.Size == 0 {
-			ch.message.SetContent(ch.header.Properties, ch.body)
+			ch.message.setContent(ch.header.Properties, ch.body)
 			ch.dispatch(ch.message) // termination state
 			return ch.transition((*Channel).recvMethod)
 		}
 		return ch.transition((*Channel).recvContent)
 
-	case *proto.BodyFrame:
+	case *bodyFrame:
 		// drop and reset
 		return ch.transition((*Channel).recvMethod)
 	}
@@ -394,19 +392,19 @@ func (ch *Channel) recvHeader(f frame) error {
 // defined by the header has been reached
 func (ch *Channel) recvContent(f frame) error {
 	switch frame := f.(type) {
-	case *proto.MethodFrame:
+	case *methodFrame:
 		// interrupt content and handle method
 		return ch.recvMethod(f)
 
-	case *proto.HeaderFrame:
+	case *headerFrame:
 		// drop and reset
 		return ch.transition((*Channel).recvMethod)
 
-	case *proto.BodyFrame:
+	case *bodyFrame:
 		ch.body = append(ch.body, frame.Body...)
 
 		if uint64(len(ch.body)) >= ch.header.Size {
-			ch.message.SetContent(ch.header.Properties, ch.body)
+			ch.message.setContent(ch.header.Properties, ch.body)
 			ch.dispatch(ch.message) // termination state
 			return ch.transition((*Channel).recvMethod)
 		}
@@ -427,8 +425,8 @@ It is safe to call this method multiple times.
 func (ch *Channel) Close() error {
 	defer ch.connection.closeChannel(ch, nil)
 	return ch.call(
-		&proto.ChannelClose{ReplyCode: proto.ReplySuccess},
-		&proto.ChannelCloseOk{},
+		&channelClose{ReplyCode: replySuccess},
+		&channelCloseOk{},
 	)
 }
 
@@ -645,12 +643,12 @@ http://www.rabbitmq.com/blog/2012/04/25/rabbitmq-performance-measurements-part-2
 */
 func (ch *Channel) Qos(prefetchCount, prefetchSize int, global bool) error {
 	return ch.call(
-		&proto.BasicQos{
+		&basicQos{
 			PrefetchCount: uint16(prefetchCount),
 			PrefetchSize:  uint32(prefetchSize),
 			Global:        global,
 		},
-		&proto.BasicQosOk{},
+		&basicQosOk{},
 	)
 }
 
@@ -674,17 +672,17 @@ client without an ack, and will not be redelivered to other consumers.
 
 */
 func (ch *Channel) Cancel(consumer string, noWait bool) error {
-	req := &proto.BasicCancel{
+	req := &basicCancel{
 		ConsumerTag: consumer,
 		NoWait:      noWait,
 	}
-	res := &proto.BasicCancelOk{}
+	res := &basicCancelOk{}
 
 	if err := ch.call(req, res); err != nil {
 		return err
 	}
 
-	if req.Wait() {
+	if req.wait() {
 		ch.consumers.cancel(res.ConsumerTag)
 	} else {
 		// Potentially could drop deliveries in flight
@@ -752,7 +750,7 @@ func (ch *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noW
 		return Queue{}, err
 	}
 
-	req := &proto.QueueDeclare{
+	req := &queueDeclare{
 		Queue:      name,
 		Passive:    false,
 		Durable:    durable,
@@ -761,13 +759,13 @@ func (ch *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noW
 		NoWait:     noWait,
 		Arguments:  args,
 	}
-	res := &proto.QueueDeclareOk{}
+	res := &queueDeclareOk{}
 
 	if err := ch.call(req, res); err != nil {
 		return Queue{}, err
 	}
 
-	if req.Wait() {
+	if req.wait() {
 		return Queue{
 			Name:      res.Queue,
 			Messages:  int(res.MessageCount),
@@ -792,7 +790,7 @@ func (ch *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusi
 		return Queue{}, err
 	}
 
-	req := &proto.QueueDeclare{
+	req := &queueDeclare{
 		Queue:      name,
 		Passive:    true,
 		Durable:    durable,
@@ -801,13 +799,13 @@ func (ch *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusi
 		NoWait:     noWait,
 		Arguments:  args,
 	}
-	res := &proto.QueueDeclareOk{}
+	res := &queueDeclareOk{}
 
 	if err := ch.call(req, res); err != nil {
 		return Queue{}, err
 	}
 
-	if req.Wait() {
+	if req.wait() {
 		return Queue{
 			Name:      res.Queue,
 			Messages:  int(res.MessageCount),
@@ -834,11 +832,11 @@ channel will be closed.
 
 */
 func (ch *Channel) QueueInspect(name string) (Queue, error) {
-	req := &proto.QueueDeclare{
+	req := &queueDeclare{
 		Queue:   name,
 		Passive: true,
 	}
-	res := &proto.QueueDeclareOk{}
+	res := &queueDeclareOk{}
 
 	err := ch.call(req, res)
 
@@ -901,14 +899,14 @@ func (ch *Channel) QueueBind(name, key, exchange string, noWait bool, args Table
 	}
 
 	return ch.call(
-		&proto.QueueBind{
+		&queueBind{
 			Queue:      name,
 			Exchange:   exchange,
 			RoutingKey: key,
 			NoWait:     noWait,
 			Arguments:  args,
 		},
-		&proto.QueueBindOk{},
+		&queueBindOk{},
 	)
 }
 
@@ -926,13 +924,13 @@ func (ch *Channel) QueueUnbind(name, key, exchange string, args Table) error {
 	}
 
 	return ch.call(
-		&proto.QueueUnbind{
+		&queueUnbind{
 			Queue:      name,
 			Exchange:   exchange,
 			RoutingKey: key,
 			Arguments:  args,
 		},
-		&proto.QueueUnbindOk{},
+		&queueUnbindOk{},
 	)
 }
 
@@ -947,11 +945,11 @@ If noWait is true, do not wait for the server response and the number of
 messages purged will not be meaningful.
 */
 func (ch *Channel) QueuePurge(name string, noWait bool) (int, error) {
-	req := &proto.QueuePurge{
+	req := &queuePurge{
 		Queue:  name,
 		NoWait: noWait,
 	}
-	res := &proto.QueuePurgeOk{}
+	res := &queuePurgeOk{}
 
 	err := ch.call(req, res)
 
@@ -978,13 +976,13 @@ be closed.
 
 */
 func (ch *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int, error) {
-	req := &proto.QueueDelete{
+	req := &queueDelete{
 		Queue:    name,
 		IfUnused: ifUnused,
 		IfEmpty:  ifEmpty,
 		NoWait:   noWait,
 	}
-	res := &proto.QueueDeleteOk{}
+	res := &queueDeleteOk{}
 
 	err := ch.call(req, res)
 
@@ -1061,7 +1059,7 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 		consumer = uniqueConsumerTag()
 	}
 
-	req := &proto.BasicConsume{
+	req := &basicConsume{
 		Queue:       queue,
 		ConsumerTag: consumer,
 		NoLocal:     noLocal,
@@ -1070,7 +1068,7 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 		NoWait:      noWait,
 		Arguments:   args,
 	}
-	res := &proto.BasicConsumeOk{}
+	res := &basicConsumeOk{}
 
 	deliveries := make(chan Delivery)
 
@@ -1142,7 +1140,7 @@ func (ch *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, inter
 	}
 
 	return ch.call(
-		&proto.ExchangeDeclare{
+		&exchangeDeclare{
 			Exchange:   name,
 			Type:       kind,
 			Passive:    false,
@@ -1152,7 +1150,7 @@ func (ch *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, inter
 			NoWait:     noWait,
 			Arguments:  args,
 		},
-		&proto.ExchangeDeclareOk{},
+		&exchangeDeclareOk{},
 	)
 }
 
@@ -1171,7 +1169,7 @@ func (ch *Channel) ExchangeDeclarePassive(name, kind string, durable, autoDelete
 	}
 
 	return ch.call(
-		&proto.ExchangeDeclare{
+		&exchangeDeclare{
 			Exchange:   name,
 			Type:       kind,
 			Passive:    true,
@@ -1181,7 +1179,7 @@ func (ch *Channel) ExchangeDeclarePassive(name, kind string, durable, autoDelete
 			NoWait:     noWait,
 			Arguments:  args,
 		},
-		&proto.ExchangeDeclareOk{},
+		&exchangeDeclareOk{},
 	)
 }
 
@@ -1201,12 +1199,12 @@ NotifyClose listener to respond to these channel exceptions.
 */
 func (ch *Channel) ExchangeDelete(name string, ifUnused, noWait bool) error {
 	return ch.call(
-		&proto.ExchangeDelete{
+		&exchangeDelete{
 			Exchange: name,
 			IfUnused: ifUnused,
 			NoWait:   noWait,
 		},
-		&proto.ExchangeDeleteOk{},
+		&exchangeDeleteOk{},
 	)
 }
 
@@ -1247,14 +1245,14 @@ func (ch *Channel) ExchangeBind(destination, key, source string, noWait bool, ar
 	}
 
 	return ch.call(
-		&proto.ExchangeBind{
+		&exchangeBind{
 			Destination: destination,
 			Source:      source,
 			RoutingKey:  key,
 			NoWait:      noWait,
 			Arguments:   args,
 		},
-		&proto.ExchangeBindOk{},
+		&exchangeBindOk{},
 	)
 }
 
@@ -1278,14 +1276,14 @@ func (ch *Channel) ExchangeUnbind(destination, key, source string, noWait bool, 
 	}
 
 	return ch.call(
-		&proto.ExchangeUnbind{
+		&exchangeUnbind{
 			Destination: destination,
 			Source:      source,
 			RoutingKey:  key,
 			NoWait:      noWait,
 			Arguments:   args,
 		},
-		&proto.ExchangeUnbindOk{},
+		&exchangeUnbindOk{},
 	)
 }
 
@@ -1330,13 +1328,13 @@ func (ch *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 	ch.m.Lock()
 	defer ch.m.Unlock()
 
-	if err := ch.send(&proto.BasicPublish{
+	if err := ch.send(&basicPublish{
 		Exchange:   exchange,
 		RoutingKey: key,
 		Mandatory:  mandatory,
 		Immediate:  immediate,
 		Body:       msg.Body,
-		Properties: proto.Properties{
+		Properties: properties{
 			Headers:         msg.Headers,
 			ContentType:     msg.ContentType,
 			ContentEncoding: msg.ContentEncoding,
@@ -1381,9 +1379,9 @@ the channel or connection is closed, the message will not get requeued.
 
 */
 func (ch *Channel) Get(queue string, autoAck bool) (msg Delivery, ok bool, err error) {
-	req := &proto.BasicGet{Queue: queue, NoAck: autoAck}
-	res := &proto.BasicGetOk{}
-	empty := &proto.BasicGetEmpty{}
+	req := &basicGet{Queue: queue, NoAck: autoAck}
+	res := &basicGetOk{}
+	empty := &basicGetEmpty{}
 
 	if err := ch.call(req, res, empty); err != nil {
 		return Delivery{}, false, err
@@ -1414,8 +1412,8 @@ transaction mode.  Use a different channel for non-transactional semantics.
 */
 func (ch *Channel) Tx() error {
 	return ch.call(
-		&proto.TxSelect{},
-		&proto.TxSelectOk{},
+		&txSelect{},
+		&txSelectOk{},
 	)
 }
 
@@ -1428,8 +1426,8 @@ Calling this method without having called Channel.Tx is an error.
 */
 func (ch *Channel) TxCommit() error {
 	return ch.call(
-		&proto.TxCommit{},
-		&proto.TxCommitOk{},
+		&txCommit{},
+		&txCommitOk{},
 	)
 }
 
@@ -1442,8 +1440,8 @@ Calling this method without having called Channel.Tx is an error.
 */
 func (ch *Channel) TxRollback() error {
 	return ch.call(
-		&proto.TxRollback{},
-		&proto.TxRollbackOk{},
+		&txRollback{},
+		&txRollbackOk{},
 	)
 }
 
@@ -1472,8 +1470,8 @@ Connections for publishings and deliveries.
 */
 func (ch *Channel) Flow(active bool) error {
 	return ch.call(
-		&proto.ChannelFlow{Active: active},
-		&proto.ChannelFlowOk{},
+		&channelFlow{Active: active},
+		&channelFlowOk{},
 	)
 }
 
@@ -1504,8 +1502,8 @@ exception could occur if the server does not support this method.
 */
 func (ch *Channel) Confirm(noWait bool) error {
 	if err := ch.call(
-		&proto.ConfirmSelect{Nowait: noWait},
-		&proto.ConfirmSelectOk{},
+		&confirmSelect{Nowait: noWait},
+		&confirmSelectOk{},
 	); err != nil {
 		return err
 	}
@@ -1532,8 +1530,8 @@ Note: this method is not implemented on RabbitMQ, use Delivery.Nack instead
 */
 func (ch *Channel) Recover(requeue bool) error {
 	return ch.call(
-		&proto.BasicRecover{Requeue: requeue},
-		&proto.BasicRecoverOk{},
+		&basicRecover{Requeue: requeue},
+		&basicRecoverOk{},
 	)
 }
 
@@ -1550,7 +1548,7 @@ func (ch *Channel) Ack(tag uint64, multiple bool) error {
 	ch.m.Lock()
 	defer ch.m.Unlock()
 
-	return ch.send(&proto.BasicAck{
+	return ch.send(&basicAck{
 		DeliveryTag: tag,
 		Multiple:    multiple,
 	})
@@ -1567,7 +1565,7 @@ func (ch *Channel) Nack(tag uint64, multiple bool, requeue bool) error {
 	ch.m.Lock()
 	defer ch.m.Unlock()
 
-	return ch.send(&proto.BasicNack{
+	return ch.send(&basicNack{
 		DeliveryTag: tag,
 		Multiple:    multiple,
 		Requeue:     requeue,
@@ -1585,7 +1583,7 @@ func (ch *Channel) Reject(tag uint64, requeue bool) error {
 	ch.m.Lock()
 	defer ch.m.Unlock()
 
-	return ch.send(&proto.BasicReject{
+	return ch.send(&basicReject{
 		DeliveryTag: tag,
 		Requeue:     requeue,
 	})

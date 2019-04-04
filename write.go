@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 // Source code and contact info at http://github.com/streadway/amqp
 
-package proto
+package amqp
 
 import (
 	"bufio"
@@ -15,14 +15,8 @@ import (
 	"time"
 )
 
-// NewWriter returns an AMQP 0.9 frame encoder
-func NewWriter(w io.Writer) *Writer {
-	return &Writer{w: w}
-}
-
-// WriteFrame encodes a frame to the writer
-func (w *Writer) WriteFrame(frame Frame) (err error) {
-	if err = frame.Write(w.w); err != nil {
+func (w *writer) WriteFrame(frame frame) (err error) {
+	if err = frame.write(w.w); err != nil {
 		return
 	}
 
@@ -33,15 +27,14 @@ func (w *Writer) WriteFrame(frame Frame) (err error) {
 	return
 }
 
-// Write implements Frame
-func (f *MethodFrame) Write(w io.Writer) (err error) {
+func (f *methodFrame) write(w io.Writer) (err error) {
 	var payload bytes.Buffer
 
 	if f.Method == nil {
 		return errors.New("malformed frame: missing method")
 	}
 
-	class, method := f.Method.ID()
+	class, method := f.Method.id()
 
 	if err = binary.Write(&payload, binary.BigEndian, class); err != nil {
 		return
@@ -51,22 +44,20 @@ func (f *MethodFrame) Write(w io.Writer) (err error) {
 		return
 	}
 
-	if err = f.Method.Write(&payload); err != nil {
+	if err = f.Method.write(&payload); err != nil {
 		return
 	}
 
-	return writeFrame(w, FrameMethod, f.ChannelId, payload.Bytes())
+	return writeFrame(w, frameMethod, f.ChannelId, payload.Bytes())
 }
 
-// Write implements Frame
+// Heartbeat
 //
 // Payload is empty
-func (f *HeartbeatFrame) Write(w io.Writer) (err error) {
-	return writeFrame(w, FrameHeartbeat, f.ChannelId, []byte{})
+func (f *heartbeatFrame) write(w io.Writer) (err error) {
+	return writeFrame(w, frameHeartbeat, f.ChannelId, []byte{})
 }
 
-// Write implements Frame
-//
 // CONTENT HEADER
 // 0          2        4           12               14
 // +----------+--------+-----------+----------------+------------- - -
@@ -74,7 +65,7 @@ func (f *HeartbeatFrame) Write(w io.Writer) (err error) {
 // +----------+--------+-----------+----------------+------------- - -
 //    short     short    long long       short        remainder...
 //
-func (f *HeaderFrame) Write(w io.Writer) (err error) {
+func (f *headerFrame) write(w io.Writer) (err error) {
 	var payload bytes.Buffer
 	var zeroTime time.Time
 
@@ -205,19 +196,19 @@ func (f *HeaderFrame) Write(w io.Writer) (err error) {
 		}
 	}
 
-	return writeFrame(w, FrameHeader, f.ChannelId, payload.Bytes())
+	return writeFrame(w, frameHeader, f.ChannelId, payload.Bytes())
 }
 
-// Write implements Frame
+// Body
 //
 // Payload is one byterange from the full body who's size is declared in the
 // Header frame
-func (f *BodyFrame) Write(w io.Writer) (err error) {
-	return writeFrame(w, FrameBody, f.ChannelId, f.Body)
+func (f *bodyFrame) write(w io.Writer) (err error) {
+	return writeFrame(w, frameBody, f.ChannelId, f.Body)
 }
 
 func writeFrame(w io.Writer, typ uint8, channel uint16, payload []byte) (err error) {
-	end := []byte{FrameEnd}
+	end := []byte{frameEnd}
 	size := uint(len(payload))
 
 	_, err = w.Write([]byte{
