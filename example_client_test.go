@@ -3,10 +3,11 @@ package amqp_test
 import (
 	"errors"
 	"fmt"
-	"github.com/streadway/amqp"
 	"log"
 	"os"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 // This exports a Session object that wraps this library. It
@@ -191,7 +192,7 @@ func (session *Session) changeConnection(connection *amqp.Connection) {
 func (session *Session) changeChannel(channel *amqp.Channel) {
 	session.channel = channel
 	session.notifyChanClose = make(chan *amqp.Error)
-	session.notifyConfirm = make(chan amqp.Confirmation)
+	session.notifyConfirm = make(chan amqp.Confirmation, 1)
 	session.channel.NotifyClose(session.notifyChanClose)
 	session.channel.NotifyPublish(session.notifyConfirm)
 }
