@@ -72,7 +72,7 @@ func main() {
 
 	pool := newPublisherPool("example", inflight, publishers)
 
-	for i := 0; i < 100; i ++ {
+	for i := 0; i < 100; i++ {
 		err = pool.Publish(&amqp.Publishing{Body: []byte(`hello`)})
 		if err != nil {
 			log.Fatal(err)
