@@ -553,7 +553,7 @@ ordered Ack and Nack DeliveryTag to the respective channels.
 For strict ordering, use NotifyPublish instead.
 */
 func (ch *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64) {
-	confirms := ch.NotifyPublish(make(chan Confirmation, len(ack)+len(nack)))
+	confirms := ch.NotifyPublish(make(chan Confirmation, cap(ack)+cap(nack)))
 
 	go func() {
 		for c := range confirms {
