@@ -1,14 +1,15 @@
 language: go
 
-addons:
-  apt:
-    packages:
-      - rabbitmq-server
-
 go:
   - 1.10.x
   - 1.11.x
   - 1.12.x
+  - 1.13.x
+
+addons:
+  apt:
+    packages:
+      - rabbitmq-server
 
 services:
   - rabbitmq
