@@ -33,6 +33,16 @@ func defaultConfig() Config {
 	}
 }
 
+func newServer(t *testing.T, serverIO, clientIO io.ReadWriteCloser) *server {
+	return &server{
+		T: t,
+		r: reader{serverIO},
+		w: writer{serverIO},
+		S: serverIO,
+		C: clientIO,
+	}
+}
+
 func newSession(t *testing.T) (io.ReadWriteCloser, *server) {
 	rs, wc := io.Pipe()
 	rc, ws := io.Pipe()
@@ -40,15 +50,7 @@ func newSession(t *testing.T) (io.ReadWriteCloser, *server) {
 	rws := &logIO{t, "server", pipe{rs, ws}}
 	rwc := &logIO{t, "client", pipe{rc, wc}}
 
-	server := server{
-		T: t,
-		r: reader{rws},
-		w: writer{rws},
-		S: rws,
-		C: rwc,
-	}
-
-	return rwc, &server
+	return rwc, newServer(t, rws, rwc)
 }
 
 func (t *server) expectBytes(b []byte) {

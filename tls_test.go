@@ -1,41 +1,15 @@
-package amqp_test
+package amqp
 
 import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io"
 	"net"
 	"testing"
 	"time"
-
-	"github.com/streadway/amqp"
 )
 
-type tlsServer struct {
-	net.Listener
-	URL    string
-	Config *tls.Config
-	Header chan []byte
-}
-
-// Captures the header for each accepted connection
-func (s *tlsServer) Serve() {
-	for {
-		c, err := s.Accept()
-		if err != nil {
-			return
-		}
-
-		header := make([]byte, 4)
-		io.ReadFull(c, header)
-		s.Header <- header
-		c.Write([]byte{'A', 'M', 'Q', 'P', 0, 0, 0, 0})
-		c.Close()
-	}
-}
-
-func tlsConfig() *tls.Config {
+func tlsServerConfig() *tls.Config {
 	cfg := new(tls.Config)
 
 	cfg.ClientCAs = x509.NewCertPool()
@@ -52,9 +26,40 @@ func tlsConfig() *tls.Config {
 	return cfg
 }
 
-func startTlsServer() tlsServer {
-	cfg := tlsConfig()
+func tlsClientConfig() *tls.Config {
+	cfg := new(tls.Config)
+	cfg.RootCAs = x509.NewCertPool()
+	cfg.RootCAs.AppendCertsFromPEM([]byte(caCert))
 
+	cert, err := tls.X509KeyPair([]byte(clientCert), []byte(clientKey))
+	if err != nil {
+		panic(err)
+	}
+
+	cfg.Certificates = append(cfg.Certificates, cert)
+
+	return cfg
+}
+
+type tlsServer struct {
+	net.Listener
+	URL      string
+	Config   *tls.Config
+	Sessions chan *server
+}
+
+// Captures the header for each accepted connection
+func (s *tlsServer) Serve(t *testing.T) {
+	for {
+		c, err := s.Accept()
+		if err != nil {
+			return
+		}
+		s.Sessions <- newServer(t, c, c)
+	}
+}
+
+func startTLSServer(t *testing.T, cfg *tls.Config) tlsServer {
 	l, err := tls.Listen("tcp", "127.0.0.1:0", cfg)
 	if err != nil {
 		panic(err)
@@ -64,39 +69,36 @@ func startTlsServer() tlsServer {
 		Listener: l,
 		Config:   cfg,
 		URL:      fmt.Sprintf("amqps://%s/", l.Addr().String()),
-		Header:   make(chan []byte, 1),
+		Sessions: make(chan *server),
 	}
+	go s.Serve(t)
 
-	go s.Serve()
 	return s
 }
 
-// Tests that the server has handshaked the connection and seen the client
-// protocol announcement.  Does not nest that the connection.open is successful.
+// Tests opening a connection of a TLS enabled socket server
 func TestTLSHandshake(t *testing.T) {
-	srv := startTlsServer()
+	srv := startTLSServer(t, tlsServerConfig())
 	defer srv.Close()
-
-	cfg := new(tls.Config)
-	cfg.RootCAs = x509.NewCertPool()
-	cfg.RootCAs.AppendCertsFromPEM([]byte(caCert))
-
-	cert, _ := tls.X509KeyPair([]byte(clientCert), []byte(clientKey))
-	cfg.Certificates = append(cfg.Certificates, cert)
-
-	c, err := amqp.DialTLS(srv.URL, cfg)
-
-	select {
-	case <-time.After(10 * time.Millisecond):
-		t.Fatalf("did not succeed to handshake the TLS connection after 10ms")
-	case header := <-srv.Header:
-		if string(header) != "AMQP" {
-			t.Fatalf("expected to handshake a TLS connection, got err: %v", err)
+	go func() {
+		select {
+		case <-time.After(10 * time.Millisecond):
+			t.Fatalf("server timeout waiting for TLS handshake from client")
+		case session := <-srv.Sessions:
+			session.connectionOpen()
+			session.connectionClose()
+			session.S.Close()
 		}
+	}()
+
+	c, err := DialTLS(srv.URL, tlsClientConfig())
+	if err != nil {
+		t.Fatalf("expected to open a TLS connection, got err: %v", err)
 	}
+	defer c.Close()
 
 	if st := c.ConnectionState(); !st.HandshakeComplete {
-		t.Errorf("TLS handshake failed, TLS connection state: %+v", st)
+		t.Errorf("expected to complete a TLS handshake, TLS connection state: %+v", st)
 	}
 }
 
