@@ -70,11 +70,11 @@ func TestIntegrationOpenConfig(t *testing.T) {
 	}
 
 	if _, err := c.Channel(); err != nil {
-		t.Fatalf("expected to open channel: %s", err)
+		t.Errorf("expected to open channel: %s", err)
 	}
 
 	if err := c.Close(); err != nil {
-		t.Fatalf("connection close: %s", err)
+		t.Errorf("expected to close the connection: %s", err)
 	}
 }
 
@@ -83,15 +83,15 @@ func TestIntegrationOpenConfigWithNetDial(t *testing.T) {
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
 	if err != nil {
-		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
+		t.Fatalf("expected to dial with config %+v integration server: %s", config, err)
 	}
 
 	if _, err := c.Channel(); err != nil {
-		t.Fatalf("expected to open channel: %s", err)
+		t.Errorf("expected to open channel: %s", err)
 	}
 
 	if err := c.Close(); err != nil {
-		t.Fatalf("connection close: %s", err)
+		t.Errorf("expected to close the connection: %s", err)
 	}
 }
 
@@ -99,10 +99,10 @@ func TestIntegrationLocalAddr(t *testing.T) {
 	config := Config{}
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
-	defer c.Close()
 	if err != nil {
-		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
+		t.Fatalf("expected to dial with config %+v integration server: %s", config, err)
 	}
+	defer c.Close()
 
 	a := c.LocalAddr()
 	_, portString, err := net.SplitHostPort(a.String())
@@ -399,12 +399,12 @@ func TestIntegrationConnectionNegotiatesMaxChannels(t *testing.T) {
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
 	if err != nil {
-		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
+		t.Fatalf("expected to dial with config %+v integration server: %s", config, err)
 	}
 	defer c.Close()
 
 	if want, got := defaultChannelMax, c.Config.ChannelMax; want != got {
-		t.Fatalf("expected connection to negotiate uint16 (%d) channels, got: %d", want, got)
+		t.Errorf("expected connection to negotiate uint16 (%d) channels, got: %d", want, got)
 	}
 }
 
@@ -413,12 +413,12 @@ func TestIntegrationConnectionNegotiatesClientMaxChannels(t *testing.T) {
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
 	if err != nil {
-		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
+		t.Fatalf("expected to dial with config %+v integration server: %s", config, err)
 	}
 	defer c.Close()
 
 	if want, got := config.ChannelMax, c.Config.ChannelMax; want != got {
-		t.Fatalf("expected client specified channel limit after handshake %d, got: %d", want, got)
+		t.Errorf("expected client specified channel limit after handshake %d, got: %d", want, got)
 	}
 }
 
@@ -427,7 +427,7 @@ func TestIntegrationChannelIDsExhausted(t *testing.T) {
 
 	c, err := DialConfig(integrationURLFromEnv(), config)
 	if err != nil {
-		t.Errorf("expected to dial with config %+v integration server: %s", config, err)
+		t.Fatalf("expected to dial with config %+v integration server: %s", config, err)
 	}
 	defer c.Close()
 
@@ -1800,7 +1800,7 @@ func loggedConnection(t *testing.T, conn *Connection, name string) *Connection {
 func integrationConnection(t *testing.T, name string) *Connection {
 	conn, err := Dial(integrationURLFromEnv())
 	if err != nil {
-		t.Errorf("dial integration server: %s", err)
+		t.Fatalf("cannot dial integration server. Is the rabbitmq-server service running? %s", err)
 		return nil
 	}
 	return loggedConnection(t, conn, name)
