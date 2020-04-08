@@ -31,7 +31,11 @@ const (
 	defaultLocale     = "en_US"
 )
 
-// Config is used in DialConfig and Open to specify the desired tuning
+// DialFn returns a net.Conn prepared for a TLS handshake with TSLClientConfig,
+// then an AMQP connection handshake.
+type DialFn func(network, addr string) (net.Conn, error)
+
+// Config is used in DialConfig and Open to specify the des ired tuning
 // parameters used during a connection open handshake.  The negotiated tuning
 // will be stored in the returned connection's Config field.
 type Config struct {
@@ -68,7 +72,7 @@ type Config struct {
 	// then an AMQP connection handshake.
 	// If Dial is nil, net.DialTimeout with a 30s connection and 30s deadline is
 	// used during TLS and AMQP handshaking.
-	Dial func(network, addr string) (net.Conn, error)
+	Dial DialFn
 }
 
 // Connection manages the serialization and deserialization of frames from IO
@@ -204,6 +208,83 @@ func DialConfig(url string, config Config) (*Connection, error) {
 		client := tls.Client(conn, config.TLSClientConfig)
 		if err := client.Handshake(); err != nil {
 
+			conn.Close()
+			return nil, err
+		}
+
+		conn = client
+	}
+
+	return Open(conn, config)
+}
+
+// DialOptions accepts a string in the AMQP URI format and a configuration options for
+// the transport and connection setup, returning a new Connection. Defaults to
+// a server heartbeat interval of 10 seconds and sets the initial read deadline
+// to 30 seconds.
+func DialOptions(url string, opts ...Option) (*Connection, error) {
+	var err error
+	var conn net.Conn
+
+	uri, err := ParseURI(url)
+	if err != nil {
+		return nil, err
+	}
+
+	addr := net.JoinHostPort(uri.Host, strconv.FormatInt(int64(uri.Port), 10))
+
+	var config Config
+	if err = config.SetOptions(opts...); err != nil {
+		return nil, err
+	}
+
+	if config.SASL == nil {
+		if err = config.SetOptions(SetAuth([]Authentication{uri.PlainAuth()})); err != nil {
+			return nil, err
+		}
+	}
+
+	if config.Vhost == "" {
+		if err = config.SetOptions(SetVhost(uri.Vhost)); err != nil {
+			return nil, err
+		}
+	}
+
+	if config.Heartbeat == 0 {
+		if err = config.SetOptions(SetHeartbeat(defaultHeartbeat)); err != nil {
+			return nil, err
+		}
+	}
+
+	if config.Locale == "" {
+		if err = config.SetOptions(SetLocale(defaultLocale)); err != nil {
+			return nil, err
+		}
+	}
+
+	dialer := config.Dial
+	if dialer == nil {
+		dialer = DefaultDial(defaultConnectionTimeout)
+	}
+
+	conn, err = dialer("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	if uri.Scheme == "amqps" {
+		if config.TLSClientConfig == nil {
+			config.TLSClientConfig = new(tls.Config)
+		}
+
+		// If ServerName has not been specified in TLSClientConfig,
+		// set it to the URI host used for this connection.
+		if config.TLSClientConfig.ServerName == "" {
+			config.TLSClientConfig.ServerName = uri.Host
+		}
+
+		client := tls.Client(conn, config.TLSClientConfig)
+		if err = client.Handshake(); err != nil {
 			conn.Close()
 			return nil, err
 		}
