@@ -532,7 +532,7 @@ func (c *Connection) reader(r io.Reader) {
 			case c.deadlines <- conn:
 			default:
 				// On c.Close() c.heartbeater() might exit just before c.deadlines <- conn is called.
-				// Which result in this goroutine being stuck forever.
+				// Which results in this goroutine being stuck forever.
 			}
 		}
 	}
