@@ -189,6 +189,7 @@ func DialConfig(url string, config Config) (*Connection, error) {
 	if err != nil {
 		return nil, err
 	}
+	conn.(*net.TCPConn).SetNoDelay(false)
 
 	if uri.Scheme == "amqps" {
 		if config.TLSClientConfig == nil {
