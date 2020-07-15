@@ -27,6 +27,20 @@ func (w *writer) WriteFrame(frame frame) (err error) {
 	return
 }
 
+func (w *writer) WriteFrames(frames [3]frame) (err error) {
+	for _, frame := range frames {
+		if err = frame.write(w.w); err != nil {
+			return
+		}
+	}
+
+	if buf, ok := w.w.(*bufio.Writer); ok {
+		err = buf.Flush()
+	}
+
+	return
+}
+
 func (f *methodFrame) write(w io.Writer) (err error) {
 	var payload bytes.Buffer
 
