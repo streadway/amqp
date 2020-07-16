@@ -528,7 +528,12 @@ func (c *Connection) reader(r io.Reader) {
 		c.demux(frame)
 
 		if haveDeadliner {
-			c.deadlines <- conn
+			select {
+			case c.deadlines <- conn:
+			default:
+				// On c.Close() c.heartbeater() might exit just before c.deadlines <- conn is called.
+				// Which results in this goroutine being stuck forever.
+			}
 		}
 	}
 }
