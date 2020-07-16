@@ -26,7 +26,7 @@ func Example() {
 	message := []byte("message")
 	// Attempt to push a message every 2 seconds
 	for {
-		time.Sleep(time.Second * 3)
+		time.Sleep(time.Second * 2)
 		if err := queue.Push(message); err != nil {
 			fmt.Printf("Push failed: %s\n", err)
 		} else {
@@ -204,7 +204,7 @@ func (session *Session) changeChannel(channel *amqp.Channel) {
 // only returned if the push action itself fails, see UnsafePush.
 func (session *Session) Push(data []byte) error {
 	if !session.isReady {
-		return errors.New("failed to push push: not connected")
+		return errors.New("failed to push: not connected")
 	}
 	for {
 		err := session.UnsafePush(data)
