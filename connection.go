@@ -637,6 +637,7 @@ func (c *Connection) openChannel() (*Channel, error) {
 		c.releaseChannel(ch.id)
 		return nil, err
 	}
+
 	return ch, nil
 }
 
