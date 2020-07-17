@@ -328,8 +328,8 @@ func TestOpenFailedVhost(t *testing.T) {
 	}()
 
 	c, err := Open(rwc, defaultConfig())
-	if err != ErrVhost {
-		t.Fatalf("expected ErrVhost got: %+v on %+v", err, c)
+	if err == nil {
+		t.Fatalf("expected not nil error got: %+v on %+v", err, c)
 	}
 }
 
