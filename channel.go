@@ -229,21 +229,18 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 		} else {
 			size = len(body)
 		}
+		var frames [3]frame
 
-		if err = ch.connection.send(&methodFrame{
+		frames[0] = &methodFrame{
 			ChannelId: ch.id,
 			Method:    content,
-		}); err != nil {
-			return
 		}
 
-		if err = ch.connection.send(&headerFrame{
+		frames[1] = &headerFrame{
 			ChannelId:  ch.id,
 			ClassId:    class,
 			Size:       uint64(len(body)),
 			Properties: props,
-		}); err != nil {
-			return
 		}
 
 		// chunk body into size (max frame size - frame header size)
@@ -252,11 +249,22 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 				j = len(body)
 			}
 
-			if err = ch.connection.send(&bodyFrame{
-				ChannelId: ch.id,
-				Body:      body[i:j],
-			}); err != nil {
-				return
+			// Send first body frame together with the publish and header frame
+			if i == 0 {
+				frames[2] = &bodyFrame{
+					ChannelId: ch.id,
+					Body:      body[i:j],
+				}
+				if err = ch.connection.sendFrames(frames); err != nil {
+					return
+				}
+			} else {
+				if err = ch.connection.send(&bodyFrame{
+					ChannelId: ch.id,
+					Body:      body[i:j],
+				}); err != nil {
+					return
+				}
 			}
 		}
 	} else {

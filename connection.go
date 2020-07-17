@@ -189,6 +189,7 @@ func DialConfig(url string, config Config) (*Connection, error) {
 	if err != nil {
 		return nil, err
 	}
+	conn.(*net.TCPConn).SetNoDelay(false)
 
 	if uri.Scheme == "amqps" {
 		if config.TLSClientConfig == nil {
@@ -362,6 +363,34 @@ func (c *Connection) send(f frame) error {
 
 	c.sendM.Lock()
 	err := c.writer.WriteFrame(f)
+	c.sendM.Unlock()
+
+	if err != nil {
+		// shutdown could be re-entrant from signaling notify chans
+		go c.shutdown(&Error{
+			Code:   FrameError,
+			Reason: err.Error(),
+		})
+	} else {
+		// Broadcast we sent a frame, reducing heartbeats, only
+		// if there is something that can receive - like a non-reentrant
+		// call or if the heartbeater isn't running
+		select {
+		case c.sends <- time.Now():
+		default:
+		}
+	}
+
+	return err
+}
+
+func (c *Connection) sendFrames(frames [3]frame) error {
+	if c.IsClosed() {
+		return ErrClosed
+	}
+
+	c.sendM.Lock()
+	err := c.writer.WriteFrames(frames)
 	c.sendM.Unlock()
 
 	if err != nil {
