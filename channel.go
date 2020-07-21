@@ -1367,10 +1367,10 @@ func (ch *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 }
 
 /*
-Publish with context can be used for canceling request and closing goroutine
+PublishWithContext can be used for canceling request and closing goroutine
 
 */
-func (ch *Channel) PublishWithContext(exchange, key string, mandatory, immediate bool, msg Publishing, ctx context.Context) error {
+func (ch *Channel) PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg Publishing) error {
 	returnChannel := make(chan error, 1)
 	defer close(returnChannel)
 	go func(ctx context.Context) {
@@ -1393,15 +1393,13 @@ func (ch *Channel) PublishWithContext(exchange, key string, mandatory, immediate
 }
 
 /*
-Publish with timeout
-
-If MQ does not respond earlier than duration returns error
+PublishWithTimeout If MQ does not respond earlier than duration returns error
 
 */
 func (ch *Channel) PublishWithTimeout(exchange, key string, mandatory, immediate bool, msg Publishing, duration time.Duration) error {
 	publishCtx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
-	return ch.PublishWithContext(exchange, key, mandatory, immediate, msg, publishCtx)
+	return ch.PublishWithContext(publishCtx, exchange, key, mandatory, immediate, msg)
 }
 
 /*
