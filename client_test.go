@@ -7,8 +7,10 @@ package amqp
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
@@ -713,4 +715,259 @@ func TestLeakClosedConsumersIssue264(t *testing.T) {
 	if _, open := <-consumer; open {
 		t.Fatalf("expected deliveries channel to be closed immediately when the connection is closed so not to leak the bufferDeliveries goroutine")
 	}
+}
+
+func TestTimeoutQosContextTimeout(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+	defer srv.C.Close()
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(1, &basicQos{})
+
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
+		srv.C.Close()
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	if err := ch.QosContext(ctx, 2, 0, false); err != ErrCanceled {
+		t.Fatalf("wrong timeout error: %v", err)
+	}
+
+	select {
+	case <-ch.NotifyClose(make(chan *Error)):
+		t.Errorf("Channel should not be closed")
+	default:
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("unexpected error during connection close: %v", err)
+	}
+}
+
+func TestTimeoutQosContextTimeoutDropping(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+	defer srv.C.Close()
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(1, &basicQos{})
+		time.Sleep(150 * time.Millisecond)
+		srv.send(1, &basicQosOk{})
+
+		srv.recv(1, &basicQos{})
+		srv.send(1, &basicQosOk{})
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	if err := ch.QosContext(ctx, 2, 0, false); err != ErrCanceled {
+		t.Fatalf("wrong timeout error: %v", err)
+	}
+
+	ctx = context.Background()
+	if err := ch.QosContext(ctx, 2, 0, false); err != nil {
+		t.Fatalf("wrong error returned: %v", err)
+	}
+}
+
+func TestTimeoutQosContextCanceled(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+	defer srv.C.Close()
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(1, &basicQos{})
+		srv.send(1, &basicQosOk{})
+
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
+		srv.C.Close()
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := ch.QosContext(ctx, 2, 0, false); err != ErrCanceled {
+		t.Fatalf("wrong canceled error: %v", err)
+	}
+
+	errCh := make(chan *Error)
+
+	select {
+	case <-ch.NotifyClose(errCh):
+		t.Errorf("Channel should not be closed")
+	default:
+	}
+
+	if err := ch.QosContext(context.Background(), 2, 0, false); err != nil {
+		t.Fatalf("wrong error: %v", err)
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("unexpected error during connection close: %v", err)
+	}
+}
+
+func TestOpenContextTimeout(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+	defer srv.C.Close()
+
+	go func() {
+		srv.expectAMQP()
+		srv.connectionStart()
+		srv.connectionTune()
+
+		srv.recv(0, &connectionOpen{})
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	c, err := OpenContext(ctx, rwc, defaultConfig())
+
+	if err != ErrCanceled {
+		t.Fatalf("Open should return a Deadline exceeded error: %v (%s)", c, err)
+	}
+
+	if c.IsClosed() {
+		t.Errorf("Connection should not be closed")
+	}
+}
+
+func TestCanceledSequencing(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+	defer srv.C.Close()
+
+	var wg sync.WaitGroup
+
+	wg.Add(4)
+
+	go func() {
+		srv.connectionOpen()
+		srv.channelOpen(1)
+
+		srv.recv(1, &basicQos{})
+		srv.recv(1, &confirmSelect{})
+		srv.recv(1, &basicQos{})
+		srv.recv(1, &channelFlow{})
+
+		time.Sleep(10 * time.Millisecond)
+		srv.send(1, &basicQosOk{})
+
+		time.Sleep(10 * time.Millisecond)
+		srv.send(1, &confirmSelectOk{})
+
+		time.Sleep(10 * time.Millisecond)
+		srv.send(1, &basicQosOk{})
+
+		time.Sleep(10 * time.Millisecond)
+		srv.send(1, &channelFlowOk{})
+
+		srv.recv(0, &connectionClose{})
+		srv.send(0, &connectionCloseOk{})
+		srv.C.Close()
+	}()
+
+	c, err := Open(rwc, defaultConfig())
+	if err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
+	}
+
+	go func() {
+		defer wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		if err := ch.QosContext(ctx, 0, 0, false); err != ErrCanceled {
+			t.Fatalf("wrong error: %v", err)
+		}
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+
+	go func() {
+		defer wg.Done()
+		if err := ch.ConfirmContext(context.Background(), false); err != nil {
+			t.Fatalf("wrong error: %v", err)
+		}
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+
+	go func() {
+		defer wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		if err := ch.QosContext(ctx, 0, 0, false); err != ErrCanceled {
+			t.Fatalf("wrong error: %v", err)
+		}
+	}()
+
+	time.Sleep(5 * time.Millisecond)
+
+	go func() {
+		defer wg.Done()
+		if err := ch.FlowContext(context.Background(), false); err != nil {
+			t.Fatalf("wrong error: %v", err)
+		}
+	}()
+
+	wg.Wait()
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("unexpected error during connection close: %v", err)
+	}
+
 }

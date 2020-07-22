@@ -6,6 +6,7 @@
 package amqp
 
 import (
+	"context"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -36,6 +37,10 @@ type Channel struct {
 	consumers *consumers
 
 	id uint16
+
+	// Number of frame to drop before before considering it as the valid response
+	responsesM sync.Mutex
+	responses  []*uint32
 
 	// closed is set to 1 when the channel has been closed - see Channel.send()
 	closed int32
@@ -161,25 +166,45 @@ func (ch *Channel) send(msg message) (err error) {
 	return ch.sendOpen(msg)
 }
 
-func (ch *Channel) open() error {
-	return ch.call(&channelOpen{}, &channelOpenOk{})
+func (ch *Channel) open(ctx context.Context) error {
+	return ch.call(ctx, &channelOpen{}, &channelOpenOk{})
 }
 
 // Performs a request/response call for when the message is not NoWait and is
 // specified as Synchronous.
-func (ch *Channel) call(req message, res ...message) error {
+func (ch *Channel) call(ctx context.Context, req message, res ...message) error {
+	select {
+	case <-ctx.Done():
+		return ErrCanceled
+	default:
+	}
+
+	var status uint32
+
+	ch.responsesM.Lock()
+
 	if err := ch.send(req); err != nil {
+		ch.responsesM.Unlock()
 		return err
 	}
 
 	if req.wait() {
+		ch.responses = append(ch.responses, &status)
+	}
+
+	ch.responsesM.Unlock()
+
+	if req.wait() {
 		select {
+		case <-ctx.Done():
+			atomic.StoreUint32(&status, 1)
+			return ErrCanceled
 		case e, ok := <-ch.errors:
 			if ok {
 				return e
 			}
-			return ErrClosed
 
+			return ErrClosed
 		case msg := <-ch.rpc:
 			if msg != nil {
 				for _, try := range res {
@@ -330,7 +355,21 @@ func (ch *Channel) dispatch(msg message) {
 		// deliveries are in flight and a no-wait cancel has happened
 
 	default:
-		ch.rpc <- msg
+		var status *uint32
+
+		ch.responsesM.Lock()
+
+		if len(ch.responses) == 0 {
+			ch.responsesM.Unlock()
+			return
+		}
+
+		status, ch.responses = ch.responses[0], ch.responses[1:]
+		ch.responsesM.Unlock()
+
+		if atomic.LoadUint32(status) == 0 {
+			ch.rpc <- msg
+		}
 	}
 }
 
@@ -426,8 +465,20 @@ It is safe to call this method multiple times.
 
 */
 func (ch *Channel) Close() error {
+	return ch.CloseContext(context.Background())
+}
+
+/*
+CloseContext initiate a clean channel closure by sending a close message with
+the error code set to '200'.
+
+It is safe to call this method multiple times.
+
+*/
+func (ch *Channel) CloseContext(ctx context.Context) error {
 	defer ch.connection.closeChannel(ch, nil)
 	return ch.call(
+		ctx,
 		&channelClose{ReplyCode: replySuccess},
 		&channelCloseOk{},
 	)
@@ -645,7 +696,52 @@ greater as described by benchmarks on RabbitMQ.
 http://www.rabbitmq.com/blog/2012/04/25/rabbitmq-performance-measurements-part-2/
 */
 func (ch *Channel) Qos(prefetchCount, prefetchSize int, global bool) error {
+	return ch.QosContext(
+		context.Background(),
+		prefetchCount,
+		prefetchSize,
+		global,
+	)
+}
+
+/*
+QosContext controls how many messages or how many bytes the server will try to
+keep on the network for consumers before receiving delivery acks.  The intent of
+Qos is to make sure the network buffers stay full between the server and client.
+
+With a prefetch count greater than zero, the server will deliver that many
+messages to consumers before acknowledgments are received.  The server ignores
+this option when consumers are started with noAck because no acknowledgments
+are expected or sent.
+
+With a prefetch size greater than zero, the server will try to keep at least
+that many bytes of deliveries flushed to the network before receiving
+acknowledgments from the consumers.  This option is ignored when consumers are
+started with noAck.
+
+When global is true, these Qos settings apply to all existing and future
+consumers on all channels on the same connection.  When false, the Channel.Qos
+settings will apply to all existing and future consumers on this channel.
+
+Please see the RabbitMQ Consumer Prefetch documentation for an explanation of
+how the global flag is implemented in RabbitMQ, as it differs from the
+AMQP 0.9.1 specification in that global Qos settings are limited in scope to
+channels, not connections (https://www.rabbitmq.com/consumer-prefetch.html).
+
+To get round-robin behavior between consumers consuming from the same queue on
+different connections, set the prefetch count to 1, and the next available
+message on the server will be delivered to the next available consumer.
+
+If your consumer work time is reasonably consistent and not much greater
+than two times your network round trip time, you will see significant
+throughput improvements starting with a prefetch count of 2 or slightly
+greater as described by benchmarks on RabbitMQ.
+
+http://www.rabbitmq.com/blog/2012/04/25/rabbitmq-performance-measurements-part-2/
+*/
+func (ch *Channel) QosContext(ctx context.Context, prefetchCount, prefetchSize int, global bool) error {
 	return ch.call(
+		ctx,
 		&basicQos{
 			PrefetchCount: uint16(prefetchCount),
 			PrefetchSize:  uint32(prefetchSize),
@@ -675,13 +771,36 @@ client without an ack, and will not be redelivered to other consumers.
 
 */
 func (ch *Channel) Cancel(consumer string, noWait bool) error {
+	return ch.CancelContext(context.Background(), consumer, noWait)
+}
+
+/*
+CancelContext stops deliveries to the consumer chan established in
+Channel.Consume and identified by consumer.
+
+Only use this method to cleanly stop receiving deliveries from the server and
+cleanly shut down the consumer chan identified by this tag.  Using this method
+and waiting for remaining messages to flush from the consumer chan will ensure
+all messages received on the network will be delivered to the receiver of your
+consumer chan.
+
+Continue consuming from the chan Delivery provided by Channel.Consume until the
+chan closes.
+
+When noWait is true, do not wait for the server to acknowledge the cancel.
+Only use this when you are certain there are no deliveries in flight that
+require an acknowledgment, otherwise they will arrive and be dropped in the
+client without an ack, and will not be redelivered to other consumers.
+
+*/
+func (ch *Channel) CancelContext(ctx context.Context, consumer string, noWait bool) error {
 	req := &basicCancel{
 		ConsumerTag: consumer,
 		NoWait:      noWait,
 	}
 	res := &basicCancelOk{}
 
-	if err := ch.call(req, res); err != nil {
+	if err := ch.call(ctx, req, res); err != nil {
 		return err
 	}
 
@@ -749,6 +868,71 @@ declared with these parameters, and the channel will be closed.
 
 */
 func (ch *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
+	return ch.QueueDeclareContext(
+		context.Background(),
+		name,
+		durable,
+		autoDelete,
+		exclusive,
+		noWait,
+		args,
+	)
+}
+
+/*
+QueueDeclareContext declares a queue to hold messages and deliver to consumers.
+Declaring creates a queue if it doesn't already exist, or ensures that an
+existing queue matches the same parameters.
+
+Every queue declared gets a default binding to the empty exchange "" which has
+the type "direct" with the routing key matching the queue's name.  With this
+default binding, it is possible to publish messages that route directly to
+this queue by publishing to "" with the routing key of the queue name.
+
+  QueueDeclareContext(ctx, "alerts", true, false, false, false, nil)
+  Publish("", "alerts", false, false, Publishing{Body: []byte("...")})
+
+  Delivery       Exchange  Key       Queue
+  -----------------------------------------------
+  key: alerts -> ""     -> alerts -> alerts
+
+The queue name may be empty, in which case the server will generate a unique name
+which will be returned in the Name field of Queue struct.
+
+Durable and Non-Auto-Deleted queues will survive server restarts and remain
+when there are no remaining consumers or bindings.  Persistent publishings will
+be restored in this queue on server restart.  These queues are only able to be
+bound to durable exchanges.
+
+Non-Durable and Auto-Deleted queues will not be redeclared on server restart
+and will be deleted by the server after a short time when the last consumer is
+canceled or the last consumer's channel is closed.  Queues with this lifetime
+can also be deleted normally with QueueDelete.  These durable queues can only
+be bound to non-durable exchanges.
+
+Non-Durable and Non-Auto-Deleted queues will remain declared as long as the
+server is running regardless of how many consumers.  This lifetime is useful
+for temporary topologies that may have long delays between consumer activity.
+These queues can only be bound to non-durable exchanges.
+
+Durable and Auto-Deleted queues will be restored on server restart, but without
+active consumers will not survive and be removed.  This Lifetime is unlikely
+to be useful.
+
+Exclusive queues are only accessible by the connection that declares them and
+will be deleted when the connection closes.  Channels on other connections
+will receive an error when attempting  to declare, bind, consume, purge or
+delete a queue with the same name.
+
+When noWait is true, the queue will assume to be declared on the server.  A
+channel exception will arrive if the conditions are met for existing queues
+or attempting to modify an existing queue from a different connection.
+
+When the error return value is not nil, you can assume the queue could not be
+declared with these parameters, and the channel will be closed.
+
+*/
+func (ch *Channel) QueueDeclareContext(ctx context.Context, name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
 	if err := args.Validate(); err != nil {
 		return Queue{}, err
 	}
@@ -764,7 +948,7 @@ func (ch *Channel) QueueDeclare(name string, durable, autoDelete, exclusive, noW
 	}
 	res := &queueDeclareOk{}
 
-	if err := ch.call(req, res); err != nil {
+	if err := ch.call(ctx, req, res); err != nil {
 		return Queue{}, err
 	}
 
@@ -789,6 +973,27 @@ can be used to test for the existence of a queue.
 
 */
 func (ch *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
+	return ch.QueueDeclarePassiveContext(
+		context.Background(),
+		name,
+		durable,
+		autoDelete,
+		exclusive,
+		noWait,
+		args,
+	)
+}
+
+/*
+
+QueueDeclarePassiveContext is functionally and parametrically equivalent to
+QueueDeclareContext, except that it sets the "passive" attribute to true.
+A passive queue is assumed by RabbitMQ to already exist, and attempting to
+connect to a non-existent queue will cause RabbitMQ to throw an exception.
+This function can be used to test for the existence of a queue.
+
+*/
+func (ch *Channel) QueueDeclarePassiveContext(ctx context.Context, name string, durable, autoDelete, exclusive, noWait bool, args Table) (Queue, error) {
 	if err := args.Validate(); err != nil {
 		return Queue{}, err
 	}
@@ -804,7 +1009,7 @@ func (ch *Channel) QueueDeclarePassive(name string, durable, autoDelete, exclusi
 	}
 	res := &queueDeclareOk{}
 
-	if err := ch.call(req, res); err != nil {
+	if err := ch.call(ctx, req, res); err != nil {
 		return Queue{}, err
 	}
 
@@ -835,13 +1040,32 @@ channel will be closed.
 
 */
 func (ch *Channel) QueueInspect(name string) (Queue, error) {
+	return ch.QueueInspectContext(context.Background(), name)
+}
+
+/*
+QueueInspectContext passively declares a queue by name to inspect the current
+message count and consumer count.
+
+Use this method to check how many messages ready for delivery reside in the queue,
+how many consumers are receiving deliveries, and whether a queue by this
+name already exists.
+
+If the queue by this name exists, use Channel.QueueDeclare check if it is
+declared with specific parameters.
+
+If a queue by this name does not exist, an error will be returned and the
+channel will be closed.
+
+*/
+func (ch *Channel) QueueInspectContext(ctx context.Context, name string) (Queue, error) {
 	req := &queueDeclare{
 		Queue:   name,
 		Passive: true,
 	}
 	res := &queueDeclareOk{}
 
-	err := ch.call(req, res)
+	err := ch.call(ctx, req, res)
 
 	state := Queue{
 		Name:      name,
@@ -897,11 +1121,67 @@ closed with an error.
 
 */
 func (ch *Channel) QueueBind(name, key, exchange string, noWait bool, args Table) error {
+	return ch.QueueBindContext(
+		context.Background(),
+		name,
+		key,
+		exchange,
+		noWait,
+		args,
+	)
+}
+
+/*
+QueueBindContext binds an exchange to a queue so that publishings to the
+exchange will be routed to the queue when the publishing routing key matches the
+binding routing key.
+
+  QueueBindContext(ctx, "pagers", "alert", "log", false, nil)
+  QueueBindContext(ctx, "emails", "info", "log", false, nil)
+
+  Delivery       Exchange  Key       Queue
+  -----------------------------------------------
+  key: alert --> log ----> alert --> pagers
+  key: info ---> log ----> info ---> emails
+  key: debug --> log       (none)    (dropped)
+
+If a binding with the same key and arguments already exists between the
+exchange and queue, the attempt to rebind will be ignored and the existing
+binding will be retained.
+
+In the case that multiple bindings may cause the message to be routed to the
+same queue, the server will only route the publishing once.  This is possible
+with topic exchanges.
+
+  QueueBindContext(ctx, "pagers", "alert", "amq.topic", false, nil)
+  QueueBindContext(ctx, "emails", "info", "amq.topic", false, nil)
+  QueueBindContext(ctx, "emails", "#", "amq.topic", false, nil) // match everything
+
+  Delivery       Exchange        Key       Queue
+  -----------------------------------------------
+  key: alert --> amq.topic ----> alert --> pagers
+  key: info ---> amq.topic ----> # ------> emails
+                           \---> info ---/
+  key: debug --> amq.topic ----> # ------> emails
+
+It is only possible to bind a durable queue to a durable exchange regardless of
+whether the queue or exchange is auto-deleted.  Bindings between durable queues
+and exchanges will also be restored on server restart.
+
+If the binding could not complete, an error will be returned and the channel
+will be closed.
+
+When noWait is false and the queue could not be bound, the channel will be
+closed with an error.
+
+*/
+func (ch *Channel) QueueBindContext(ctx context.Context, name, key, exchange string, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&queueBind{
 			Queue:      name,
 			Exchange:   exchange,
@@ -922,11 +1202,24 @@ unbind the queue from the default exchange.
 
 */
 func (ch *Channel) QueueUnbind(name, key, exchange string, args Table) error {
+	return ch.QueueUnbindContext(context.Background(), name, key, exchange, args)
+}
+
+/*
+QueueUnbindContext removes a binding between an exchange and queue matching the
+key and arguments.
+
+It is possible to send and empty string for the exchange name which means to
+unbind the queue from the default exchange.
+
+*/
+func (ch *Channel) QueueUnbindContext(ctx context.Context, name, key, exchange string, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&queueUnbind{
 			Queue:      name,
 			Exchange:   exchange,
@@ -948,13 +1241,27 @@ If noWait is true, do not wait for the server response and the number of
 messages purged will not be meaningful.
 */
 func (ch *Channel) QueuePurge(name string, noWait bool) (int, error) {
+	return ch.QueuePurgeContext(context.Background(), name, noWait)
+}
+
+/*
+QueuePurgeContext removes all messages from the named queue which are not
+waiting to be acknowledged. Messages that have been delivered but have not yet
+been acknowledged will not be removed.
+
+When successful, returns the number of messages purged.
+
+If noWait is true, do not wait for the server response and the number of
+messages purged will not be meaningful.
+*/
+func (ch *Channel) QueuePurgeContext(ctx context.Context, name string, noWait bool) (int, error) {
 	req := &queuePurge{
 		Queue:  name,
 		NoWait: noWait,
 	}
 	res := &queuePurgeOk{}
 
-	err := ch.call(req, res)
+	err := ch.call(ctx, req, res)
 
 	return int(res.MessageCount), err
 }
@@ -979,6 +1286,35 @@ be closed.
 
 */
 func (ch *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int, error) {
+	return ch.QueueDeleteContext(
+		context.Background(),
+		name,
+		ifUnused,
+		ifEmpty,
+		noWait,
+	)
+}
+
+/*
+QueueDeleteContext removes the queue from the server including all bindings then
+purges the messages based on server configuration, returning the number of
+messages purged.
+
+When ifUnused is true, the queue will not be deleted if there are any
+consumers on the queue.  If there are consumers, an error will be returned and
+the channel will be closed.
+
+When ifEmpty is true, the queue will not be deleted if there are any messages
+remaining on the queue.  If there are messages, an error will be returned and
+the channel will be closed.
+
+When noWait is true, the queue will be deleted without waiting for a response
+from the server.  The purged message count will not be meaningful. If the queue
+could not be deleted, a channel exception will be raised and the channel will
+be closed.
+
+*/
+func (ch *Channel) QueueDeleteContext(ctx context.Context, name string, ifUnused, ifEmpty, noWait bool) (int, error) {
 	req := &queueDelete{
 		Queue:    name,
 		IfUnused: ifUnused,
@@ -987,7 +1323,7 @@ func (ch *Channel) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int
 	}
 	res := &queueDeleteOk{}
 
-	err := ch.call(req, res)
+	err := ch.call(ctx, req, res)
 
 	return int(res.MessageCount), err
 }
@@ -1050,6 +1386,76 @@ the returned chan is closed.
 
 */
 func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args Table) (<-chan Delivery, error) {
+	return ch.ConsumeContext(
+		context.Background(),
+		queue,
+		consumer,
+		autoAck,
+		exclusive,
+		noLocal,
+		noWait,
+		args,
+	)
+}
+
+/*
+ConsumeContext immediately starts delivering queued messages.
+
+Begin receiving on the returned chan Delivery before any other operation on the
+Connection or Channel.
+
+Continues deliveries to the returned chan Delivery until Channel.Cancel,
+Connection.Close, Channel.Close, or an AMQP exception occurs.  Consumers must
+range over the chan to ensure all deliveries are received.  Unreceived
+deliveries will block all methods on the same connection.
+
+All deliveries in AMQP must be acknowledged.  It is expected of the consumer to
+call Delivery.Ack after it has successfully processed the delivery.  If the
+consumer is cancelled or the channel or connection is closed any unacknowledged
+deliveries will be requeued at the end of the same queue.
+
+The consumer is identified by a string that is unique and scoped for all
+consumers on this channel.  If you wish to eventually cancel the consumer, use
+the same non-empty identifier in Channel.Cancel.  An empty string will cause
+the library to generate a unique identity.  The consumer identity will be
+included in every Delivery in the ConsumerTag field
+
+When autoAck (also known as noAck) is true, the server will acknowledge
+deliveries to this consumer prior to writing the delivery to the network.  When
+autoAck is true, the consumer should not call Delivery.Ack. Automatically
+acknowledging deliveries means that some deliveries may get lost if the
+consumer is unable to process them after the server delivers them.
+See http://www.rabbitmq.com/confirms.html for more details.
+
+When exclusive is true, the server will ensure that this is the sole consumer
+from this queue. When exclusive is false, the server will fairly distribute
+deliveries across multiple consumers.
+
+The noLocal flag is not supported by RabbitMQ.
+
+It's advisable to use separate connections for
+Channel.Publish and Channel.Consume so not to have TCP pushback on publishing
+affect the ability to consume messages, so this parameter is here mostly for
+completeness.
+
+When noWait is true, do not wait for the server to confirm the request and
+immediately begin deliveries.  If it is not possible to consume, a channel
+exception will be raised and the channel will be closed.
+
+Optional arguments can be provided that have specific semantics for the queue
+or server.
+
+Inflight messages, limited by Channel.Qos will be buffered until received from
+the returned chan.
+
+When the Channel or Connection is closed, all buffered and inflight messages will
+be dropped.
+
+When the consumer tag is cancelled, all inflight messages will be delivered until
+the returned chan is closed.
+
+*/
+func (ch *Channel) ConsumeContext(ctx context.Context, queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args Table) (<-chan Delivery, error) {
 	// When we return from ch.call, there may be a delivery already for the
 	// consumer that hasn't been added to the consumer hash yet.  Because of
 	// this, we never rely on the server picking a consumer tag for us.
@@ -1077,12 +1483,12 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 
 	ch.consumers.add(consumer, deliveries)
 
-	if err := ch.call(req, res); err != nil {
+	if err := ch.call(ctx, req, res); err != nil {
 		ch.consumers.cancel(consumer)
 		return nil, err
 	}
 
-	return (<-chan Delivery)(deliveries), nil
+	return deliveries, nil
 }
 
 /*
@@ -1138,11 +1544,77 @@ Optional amqp.Table of arguments that are specific to the server's implementatio
 the exchange can be sent for exchange types that require extra parameters.
 */
 func (ch *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
+	return ch.ExchangeDeclareContext(
+		context.Background(),
+		name,
+		kind,
+		durable,
+		autoDelete,
+		internal,
+		noWait,
+		args,
+	)
+}
+
+/*
+ExchangeDeclareContext declares an exchange on the server. If the exchange does
+not already exist, the server will create it. If the exchange exists, the server
+verifies that it is of the provided type, durability and auto-delete flags.
+
+Errors returned from this method will close the channel.
+
+Exchange names starting with "amq." are reserved for pre-declared and
+standardized exchanges. The client MAY declare an exchange starting with
+"amq." if the passive option is set, or the exchange already exists.  Names can
+consist of a non-empty sequence of letters, digits, hyphen, underscore,
+period, or colon.
+
+Each exchange belongs to one of a set of exchange kinds/types implemented by
+the server. The exchange types define the functionality of the exchange - i.e.
+how messages are routed through it. Once an exchange is declared, its type
+cannot be changed.  The common types are "direct", "fanout", "topic" and
+"headers".
+
+Durable and Non-Auto-Deleted exchanges will survive server restarts and remain
+declared when there are no remaining bindings.  This is the best lifetime for
+long-lived exchange configurations like stable routes and default exchanges.
+
+Non-Durable and Auto-Deleted exchanges will be deleted when there are no
+remaining bindings and not restored on server restart.  This lifetime is
+useful for temporary topologies that should not pollute the virtual host on
+failure or after the consumers have completed.
+
+Non-Durable and Non-Auto-deleted exchanges will remain as long as the server is
+running including when there are no remaining bindings.  This is useful for
+temporary topologies that may have long delays between bindings.
+
+Durable and Auto-Deleted exchanges will survive server restarts and will be
+removed before and after server restarts when there are no remaining bindings.
+These exchanges are useful for robust temporary topologies or when you require
+binding durable queues to auto-deleted exchanges.
+
+Note: RabbitMQ declares the default exchange types like 'amq.fanout' as
+durable, so queues that bind to these pre-declared exchanges must also be
+durable.
+
+Exchanges declared as `internal` do not accept accept publishings. Internal
+exchanges are useful when you wish to implement inter-exchange topologies
+that should not be exposed to users of the broker.
+
+When noWait is true, declare without waiting for a confirmation from the server.
+The channel may be closed as a result of an error.  Add a NotifyClose listener
+to respond to any exceptions.
+
+Optional amqp.Table of arguments that are specific to the server's implementation of
+the exchange can be sent for exchange types that require extra parameters.
+*/
+func (ch *Channel) ExchangeDeclareContext(ctx context.Context, name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&exchangeDeclare{
 			Exchange:   name,
 			Type:       kind,
@@ -1158,20 +1630,39 @@ func (ch *Channel) ExchangeDeclare(name, kind string, durable, autoDelete, inter
 }
 
 /*
-
 ExchangeDeclarePassive is functionally and parametrically equivalent to
 ExchangeDeclare, except that it sets the "passive" attribute to true. A passive
 exchange is assumed by RabbitMQ to already exist, and attempting to connect to a
 non-existent exchange will cause RabbitMQ to throw an exception. This function
 can be used to detect the existence of an exchange.
-
 */
 func (ch *Channel) ExchangeDeclarePassive(name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
+	return ch.ExchangeDeclarePassiveContext(
+		context.Background(),
+		name,
+		kind,
+		durable,
+		autoDelete,
+		internal,
+		noWait,
+		args,
+	)
+}
+
+/*
+ExchangeDeclarePassiveContext is functionally and parametrically equivalent to
+ExchangeDeclareContext, except that it sets the "passive" attribute to true.
+A passive exchange is assumed by RabbitMQ to already exist, and attempting to
+connect to a non-existent exchange will cause RabbitMQ to throw an exception.
+This function can be used to detect the existence of an exchange.
+*/
+func (ch *Channel) ExchangeDeclarePassiveContext(ctx context.Context, name, kind string, durable, autoDelete, internal, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&exchangeDeclare{
 			Exchange:   name,
 			Type:       kind,
@@ -1201,7 +1692,26 @@ been deleted.  Failing to delete the channel could close the channel.  Add a
 NotifyClose listener to respond to these channel exceptions.
 */
 func (ch *Channel) ExchangeDelete(name string, ifUnused, noWait bool) error {
+	return ch.ExchangeDeleteContext(context.Background(), name, ifUnused, noWait)
+}
+
+/*
+ExchangeDeleteContext removes the named exchange from the server. When an
+exchange is deleted all queue bindings on the exchange are also deleted. If this
+exchange does not exist, the channel will be closed with an error.
+
+When ifUnused is true, the server will only delete the exchange if it has no queue
+bindings.  If the exchange has queue bindings the server does not delete it
+but close the channel with an exception instead.  Set this to true if you are
+not the sole owner of the exchange.
+
+When noWait is true, do not wait for a server confirmation that the exchange has
+been deleted.  Failing to delete the channel could close the channel.  Add a
+NotifyClose listener to respond to these channel exceptions.
+*/
+func (ch *Channel) ExchangeDeleteContext(ctx context.Context, name string, ifUnused, noWait bool) error {
 	return ch.call(
+		ctx,
 		&exchangeDelete{
 			Exchange: name,
 			IfUnused: ifUnused,
@@ -1243,11 +1753,55 @@ handle these errors.
 Optional arguments specific to the exchanges bound can also be specified.
 */
 func (ch *Channel) ExchangeBind(destination, key, source string, noWait bool, args Table) error {
+	return ch.ExchangeBindContext(
+		context.Background(),
+		destination,
+		key,
+		source,
+		noWait,
+		args,
+	)
+}
+
+/*
+ExchangeBindContext binds an exchange to another exchange to create
+inter-exchange routing topologies on the server. This can decouple the private
+topology and routing exchanges from exchanges intended solely for publishing
+endpoints.
+
+Binding two exchanges with identical arguments will not create duplicate
+bindings.
+
+Binding one exchange to another with multiple bindings will only deliver a
+message once.  For example if you bind your exchange to `amq.fanout` with two
+different binding keys, only a single message will be delivered to your
+exchange even though multiple bindings will match.
+
+Given a message delivered to the source exchange, the message will be forwarded
+to the destination exchange when the routing key is matched.
+
+  ExchangeBindContext(ctx, "sell", "MSFT", "trade", false, nil)
+  ExchangeBindContext(ctx, "buy", "AAPL", "trade", false, nil)
+
+  Delivery       Source      Key      Destination
+  example        exchange             exchange
+  -----------------------------------------------
+  key: AAPL  --> trade ----> MSFT     sell
+                       \---> AAPL --> buy
+
+When noWait is true, do not wait for the server to confirm the binding.  If any
+error occurs the channel will be closed.  Add a listener to NotifyClose to
+handle these errors.
+
+Optional arguments specific to the exchanges bound can also be specified.
+*/
+func (ch *Channel) ExchangeBindContext(ctx context.Context, destination, key, source string, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&exchangeBind{
 			Destination: destination,
 			Source:      source,
@@ -1274,11 +1828,37 @@ provided.  These must match the same arguments specified in ExchangeBind to
 identify the binding.
 */
 func (ch *Channel) ExchangeUnbind(destination, key, source string, noWait bool, args Table) error {
+	return ch.ExchangeBindContext(
+		context.Background(),
+		destination,
+		key,
+		source,
+		noWait,
+		args,
+	)
+}
+
+/*
+ExchangeUnbindContext unbinds the destination exchange from the source exchange
+on the server by removing the routing key between them. This is the inverse of
+ExchangeBind.  If the binding does not currently exist, an error will be
+returned.
+
+When noWait is true, do not wait for the server to confirm the deletion of the
+binding.  If any error occurs the channel will be closed.  Add a listener to
+NotifyClose to handle these errors.
+
+Optional arguments that are specific to the type of exchanges bound can also be
+provided.  These must match the same arguments specified in ExchangeBind to
+identify the binding.
+*/
+func (ch *Channel) ExchangeUnbindContext(ctx context.Context, destination, key, source string, noWait bool, args Table) error {
 	if err := args.Validate(); err != nil {
 		return err
 	}
 
 	return ch.call(
+		ctx,
 		&exchangeUnbind{
 			Destination: destination,
 			Source:      source,
@@ -1382,11 +1962,33 @@ the channel or connection is closed, the message will not get requeued.
 
 */
 func (ch *Channel) Get(queue string, autoAck bool) (msg Delivery, ok bool, err error) {
+	return ch.GetContext(context.Background(), queue, autoAck)
+}
+
+/*
+GetContext synchronously receives a single Delivery from the head of a queue
+from the server to the client. In almost all cases, using Channel.Consume will
+be preferred.
+
+If there was a delivery waiting on the queue and that delivery was received, the
+second return value will be true.  If there was no delivery waiting or an error
+occurred, the ok bool will be false.
+
+All deliveries must be acknowledged including those from Channel.Get.  Call
+Delivery.Ack on the returned delivery when you have fully processed this
+delivery.
+
+When autoAck is true, the server will automatically acknowledge this message so
+you don't have to.  But if you are unable to fully process this message before
+the channel or connection is closed, the message will not get requeued.
+
+*/
+func (ch *Channel) GetContext(ctx context.Context, queue string, autoAck bool) (msg Delivery, ok bool, err error) {
 	req := &basicGet{Queue: queue, NoAck: autoAck}
 	res := &basicGetOk{}
 	empty := &basicGetEmpty{}
 
-	if err := ch.call(req, res, empty); err != nil {
+	if err := ch.call(ctx, req, res, empty); err != nil {
 		return Delivery{}, false, err
 	}
 
@@ -1413,8 +2015,27 @@ Once a channel has been put into transaction mode, it cannot be taken out of
 transaction mode.  Use a different channel for non-transactional semantics.
 
 */
-func (ch *Channel) Tx() error {
+func (ch *Channel) Tx() error { return ch.TxContext(context.Background()) }
+
+/*
+TxContext puts the channel into transaction mode on the server.  All publishings
+and acknowledgments following this method will be atomically committed or rolled
+back for a single queue.  Call either Channel.TxCommit or Channel.TxRollback to
+leave a this transaction and immediately start a new transaction.
+
+The atomicity across multiple queues is not defined as queue declarations and
+bindings are not included in the transaction.
+
+The behavior of publishings that are delivered as mandatory or immediate while
+the channel is in a transaction is not defined.
+
+Once a channel has been put into transaction mode, it cannot be taken out of
+transaction mode.  Use a different channel for non-transactional semantics.
+
+*/
+func (ch *Channel) TxContext(ctx context.Context) error {
 	return ch.call(
+		ctx,
 		&txSelect{},
 		&txSelectOk{},
 	)
@@ -1428,7 +2049,19 @@ Calling this method without having called Channel.Tx is an error.
 
 */
 func (ch *Channel) TxCommit() error {
+	return ch.TxCommitContext(context.Background())
+}
+
+/*
+TxCommitContext atomically commits all publishings and acknowledgments for a
+single queue and immediately start a new transaction.
+
+Calling this method without having called Channel.Tx is an error.
+
+*/
+func (ch *Channel) TxCommitContext(ctx context.Context) error {
 	return ch.call(
+		ctx,
 		&txCommit{},
 		&txCommitOk{},
 	)
@@ -1442,7 +2075,19 @@ Calling this method without having called Channel.Tx is an error.
 
 */
 func (ch *Channel) TxRollback() error {
+	return ch.TxRollbackContext(context.Background())
+}
+
+/*
+TxRollbackContext atomically rolls back all publishings and acknowledgments for
+a single queue and immediately start a new transaction.
+
+Calling this method without having called Channel.Tx is an error.
+
+*/
+func (ch *Channel) TxRollbackContext(ctx context.Context) error {
 	return ch.call(
+		ctx,
 		&txRollback{},
 		&txRollbackOk{},
 	)
@@ -1472,7 +2117,35 @@ Connections for publishings and deliveries.
 
 */
 func (ch *Channel) Flow(active bool) error {
+	return ch.FlowContext(context.Background(), active)
+}
+
+/*
+FlowContext pauses the delivery of messages to consumers on this channel.
+Channels are opened with flow control active, to open a channel with paused
+deliveries immediately call this method with `false` after calling
+Connection.Channel.
+
+When active is `false`, this method asks the server to temporarily pause deliveries
+until called again with active as `true`.
+
+Channel.Get methods will not be affected by flow control.
+
+This method is not intended to act as window control.  Use Channel.Qos to limit
+the number of unacknowledged messages or bytes in flight instead.
+
+The server may also send us flow methods to throttle our publishings.  A well
+behaving publishing client should add a listener with Channel.NotifyFlow and
+pause its publishings when `false` is sent on that channel.
+
+Note: RabbitMQ prefers to use TCP push back to control flow for all channels on
+a connection, so under high volume scenarios, it's wise to open separate
+Connections for publishings and deliveries.
+
+*/
+func (ch *Channel) FlowContext(ctx context.Context, active bool) error {
 	return ch.call(
+		ctx,
 		&channelFlow{Active: active},
 		&channelFlowOk{},
 	)
@@ -1504,7 +2177,37 @@ exception could occur if the server does not support this method.
 
 */
 func (ch *Channel) Confirm(noWait bool) error {
+	return ch.ConfirmContext(context.Background(), noWait)
+}
+
+/*
+ConfirmContext puts this channel into confirm mode so that the client can
+ensure all publishings have successfully been received by the server.
+After entering this mode, the server will send a basic.ack or basic.nack
+message with the deliver tag set to a 1 based incremental index corresponding
+to every publishing received after the this method returns.
+
+Add a listener to Channel.NotifyPublish to respond to the Confirmations. If
+Channel.NotifyPublish is not called, the Confirmations will be silently
+ignored.
+
+The order of acknowledgments is not bound to the order of deliveries.
+
+Ack and Nack confirmations will arrive at some point in the future.
+
+Unroutable mandatory or immediate messages are acknowledged immediately after
+any Channel.NotifyReturn listeners have been notified.  Other messages are
+acknowledged when all queues that should have the message routed to them have
+either received acknowledgment of delivery or have enqueued the message,
+persisting the message if necessary.
+
+When noWait is true, the client will not wait for a response.  A channel
+exception could occur if the server does not support this method.
+
+*/
+func (ch *Channel) ConfirmContext(ctx context.Context, noWait bool) error {
 	if err := ch.call(
+		ctx,
 		&confirmSelect{Nowait: noWait},
 		&confirmSelectOk{},
 	); err != nil {
@@ -1532,7 +2235,25 @@ will be closed.
 Note: this method is not implemented on RabbitMQ, use Delivery.Nack instead
 */
 func (ch *Channel) Recover(requeue bool) error {
+	return ch.RecoverContext(context.Background(), requeue)
+}
+
+/*
+RecoverContext redelivers all unacknowledged deliveries on this channel.
+
+When requeue is false, messages will be redelivered to the original consumer.
+
+When requeue is true, messages will be redelivered to any available consumer,
+potentially including the original.
+
+If the deliveries cannot be recovered, an error will be returned and the channel
+will be closed.
+
+Note: this method is not implemented on RabbitMQ, use Delivery.Nack instead
+*/
+func (ch *Channel) RecoverContext(ctx context.Context, requeue bool) error {
 	return ch.call(
+		ctx,
 		&basicRecover{Requeue: requeue},
 		&basicRecoverOk{},
 	)

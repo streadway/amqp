@@ -7,6 +7,7 @@ package amqp
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"io"
 	"net"
@@ -221,6 +222,17 @@ to use your own custom transport.
 
 */
 func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
+	return OpenContext(context.Background(), conn, config)
+}
+
+/*
+OpenContext accepts an already established connection, or other io.ReadWriteCloser as
+a transport.  Use this method if you have established a TLS connection or wish
+to use your own custom transport.
+
+The connection will be automaticaly closed if the context is canceled
+*/
+func OpenContext(ctx context.Context, conn io.ReadWriteCloser, config Config) (*Connection, error) {
 	c := &Connection{
 		conn:      conn,
 		writer:    &writer{bufio.NewWriter(conn)},
@@ -231,7 +243,7 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 		deadlines: make(chan readDeadliner, 1),
 	}
 	go c.reader(conn)
-	return c, c.open(config)
+	return c, c.open(ctx, config)
 }
 
 /*
@@ -320,12 +332,29 @@ including the underlying io, Channels, Notify listeners and Channel consumers
 will also be closed.
 */
 func (c *Connection) Close() error {
+	return c.CloseContext(context.Background())
+}
+
+/*
+CloseContext requests and waits for the response to close the AMQP connection.
+
+It's advisable to use this message when publishing to ensure all kernel buffers
+have been flushed on the server and client before exiting.
+
+An error indicates that server may not have received this request to close but
+the connection should be treated as closed regardless.
+
+All resources associated with this connection, including the underlying io,
+Channels, Notify listeners and Channel consumers will also be closed.
+*/
+func (c *Connection) CloseContext(ctx context.Context) error {
 	if c.IsClosed() {
 		return ErrClosed
 	}
 
 	defer c.shutdown(nil)
 	return c.call(
+		ctx,
 		&connectionClose{
 			ReplyCode: replySuccess,
 			ReplyText: "kthxbai",
@@ -334,13 +363,14 @@ func (c *Connection) Close() error {
 	)
 }
 
-func (c *Connection) closeWith(err *Error) error {
+func (c *Connection) closeWith(ctx context.Context, err *Error) error {
 	if c.IsClosed() {
 		return ErrClosed
 	}
 
 	defer c.shutdown(err)
 	return c.call(
+		ctx,
 		&connectionClose{
 			ReplyCode: uint16(err.Code),
 			ReplyText: err.Reason,
@@ -464,7 +494,7 @@ func (c *Connection) dispatch0(f frame) {
 		// kthx - all reads reset our deadline.  so we can drop this
 	default:
 		// lolwat - channel0 only responds to methods and heartbeats
-		c.closeWith(ErrUnexpectedFrame)
+		c.closeWith(context.Background(), ErrUnexpectedFrame)
 	}
 }
 
@@ -504,7 +534,7 @@ func (c *Connection) dispatchClosed(f frame) {
 			// we are already closed, so do nothing
 		default:
 			// unexpected method on closed channel
-			c.closeWith(ErrClosed)
+			c.closeWith(context.Background(), ErrClosed)
 		}
 	}
 }
@@ -627,13 +657,13 @@ func (c *Connection) releaseChannel(id uint16) {
 }
 
 // openChannel allocates and opens a channel, must be paired with closeChannel
-func (c *Connection) openChannel() (*Channel, error) {
+func (c *Connection) openChannel(ctx context.Context) (*Channel, error) {
 	ch, err := c.allocateChannel()
 	if err != nil {
 		return nil, err
 	}
 
-	if err := ch.open(); err != nil {
+	if err := ch.open(ctx); err != nil {
 		c.releaseChannel(ch.id)
 		return nil, err
 	}
@@ -650,15 +680,31 @@ func (c *Connection) closeChannel(ch *Channel, e *Error) {
 
 /*
 Channel opens a unique, concurrent server channel to process the bulk of AMQP
-messages.  Any error from methods on this receiver will render the receiver
+messages. Any error from methods on this receiver will render the receiver
 invalid and a new Channel should be opened.
 
 */
 func (c *Connection) Channel() (*Channel, error) {
-	return c.openChannel()
+	return c.ChannelContext(context.Background())
 }
 
-func (c *Connection) call(req message, res ...message) error {
+/*
+ChannelContext opens a unique, concurrent server channel to process the bulk of AMQP
+messages. Any error from methods on this receiver will render the receiver
+invalid and a new Channel should be opened.
+
+*/
+func (c *Connection) ChannelContext(ctx context.Context) (*Channel, error) {
+	return c.openChannel(ctx)
+}
+
+func (c *Connection) call(ctx context.Context, req message, res ...message) error {
+	select {
+	case <-ctx.Done():
+		return ErrCanceled
+	default:
+	}
+
 	// Special case for when the protocol header frame is sent insted of a
 	// request method
 	if req != nil {
@@ -668,6 +714,8 @@ func (c *Connection) call(req message, res ...message) error {
 	}
 
 	select {
+	case <-ctx.Done():
+		return ErrCanceled
 	case err, ok := <-c.errors:
 		if !ok {
 			return ErrClosed
@@ -700,18 +748,18 @@ func (c *Connection) call(req message, res ...message) error {
 //    use-Connection      = *channel
 //    close-Connection    = C:CLOSE S:CLOSE-OK
 //                        / S:CLOSE C:CLOSE-OK
-func (c *Connection) open(config Config) error {
+func (c *Connection) open(ctx context.Context, config Config) error {
 	if err := c.send(&protocolHeader{}); err != nil {
 		return err
 	}
 
-	return c.openStart(config)
+	return c.openStart(ctx, config)
 }
 
-func (c *Connection) openStart(config Config) error {
+func (c *Connection) openStart(ctx context.Context, config Config) error {
 	start := &connectionStart{}
 
-	if err := c.call(nil, start); err != nil {
+	if err := c.call(ctx, nil, start); err != nil {
 		return err
 	}
 
@@ -733,10 +781,10 @@ func (c *Connection) openStart(config Config) error {
 	// Set the connection locale to client locale
 	c.Config.Locale = config.Locale
 
-	return c.openTune(config, auth)
+	return c.openTune(ctx, config, auth)
 }
 
-func (c *Connection) openTune(config Config, auth Authentication) error {
+func (c *Connection) openTune(ctx context.Context, config Config, auth Authentication) error {
 	if len(config.Properties) == 0 {
 		config.Properties = Table{
 			"product": defaultProduct,
@@ -757,7 +805,7 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 	}
 	tune := &connectionTune{}
 
-	if err := c.call(ok, tune); err != nil {
+	if err := c.call(ctx, ok, tune); err != nil {
 		// per spec, a connection can only be closed when it has been opened
 		// so at this point, we know it's an auth error, but the socket
 		// was closed instead.  Return a meaningful error.
@@ -797,14 +845,17 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 		return err
 	}
 
-	return c.openVhost(config)
+	return c.openVhost(ctx, config)
 }
 
-func (c *Connection) openVhost(config Config) error {
+func (c *Connection) openVhost(ctx context.Context, config Config) error {
 	req := &connectionOpen{VirtualHost: config.Vhost}
 	res := &connectionOpenOk{}
 
-	if err := c.call(req, res); err != nil {
+	if err := c.call(ctx, req, res); err != nil {
+		if err == ErrCanceled {
+			return err
+		}
 		// Cannot be closed yet, but we know it's a vhost problem
 		return ErrVhost
 	}
