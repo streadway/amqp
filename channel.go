@@ -260,10 +260,13 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 			}
 		}
 	} else {
-		err = ch.connection.send(&methodFrame{
+		if err = ch.connection.send(&methodFrame{
 			ChannelId: ch.id,
 			Method:    msg,
-		})
+		}); err != nil {
+			return err
+		}
+
 	}
 
 	return nil
