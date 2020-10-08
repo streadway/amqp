@@ -234,7 +234,7 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 			ChannelId: ch.id,
 			Method:    content,
 		}); err != nil {
-			return
+			return err
 		}
 
 		if err = ch.connection.send(&headerFrame{
@@ -243,7 +243,7 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 			Size:       uint64(len(body)),
 			Properties: props,
 		}); err != nil {
-			return
+			return err
 		}
 
 		// chunk body into size (max frame size - frame header size)
@@ -256,7 +256,7 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 				ChannelId: ch.id,
 				Body:      body[i:j],
 			}); err != nil {
-				return
+				return err
 			}
 		}
 	} else {
@@ -266,7 +266,7 @@ func (ch *Channel) sendOpen(msg message) (err error) {
 		})
 	}
 
-	return
+	return nil
 }
 
 // Eventually called via the state machine from the connection's reader
