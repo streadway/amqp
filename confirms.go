@@ -92,3 +92,13 @@ func (c *confirms) Close() error {
 	c.listeners = nil
 	return nil
 }
+
+// Lock acquire the lock on confirms.
+func (c *confirms) Lock() {
+	c.m.Lock()
+}
+
+// Unlock release the locks on confirms.
+func (c *confirms) Unlock() {
+	c.m.Unlock()
+}
