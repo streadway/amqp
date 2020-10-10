@@ -57,12 +57,12 @@ func (r *reader) ReadFrame() (frame frame, err error) {
 	switch typ {
 	case frameMethod:
 		if frame, err = r.parseMethodFrame(channel, size); err != nil {
-			return
+			return nil, err
 		}
 
 	case frameHeader:
 		if frame, err = r.parseHeaderFrame(channel, size); err != nil {
-			return
+			return nil, err
 		}
 
 	case frameBody:
@@ -72,7 +72,7 @@ func (r *reader) ReadFrame() (frame frame, err error) {
 
 	case frameHeartbeat:
 		if frame, err = r.parseHeartbeatFrame(channel, size); err != nil {
-			return
+			return nil, err
 		}
 
 	default:
