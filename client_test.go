@@ -29,7 +29,7 @@ func defaultConfig() Config {
 	return Config{
 		SASL:   []Authentication{&PlainAuth{"guest", "guest"}},
 		Vhost:  "/",
-		Locale: defaultLocale,
+		Locale: DefaultLocale,
 	}
 }
 
@@ -214,7 +214,7 @@ func TestDefaultClientProperties(t *testing.T) {
 		t.Errorf("expected version %s got: %s", want, got)
 	}
 
-	if want, got := defaultLocale, srv.start.Locale; want != got {
+	if want, got := DefaultLocale, srv.start.Locale; want != got {
 		t.Errorf("expected locale %s got: %s", want, got)
 	}
 }

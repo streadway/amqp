@@ -21,14 +21,14 @@ import (
 const (
 	maxChannelMax = (2 << 15) - 1
 
-	defaultHeartbeat         = 10 * time.Second
-	defaultConnectionTimeout = 30 * time.Second
+	DefaultHeartbeat         = 10 * time.Second
+	DefaultConnectionTimeout = 30 * time.Second
 	defaultProduct           = "https://github.com/streadway/amqp"
 	defaultVersion           = "β"
 	// Safer default that makes channel leaks a lot easier to spot
 	// before they create operational headaches. See https://github.com/rabbitmq/rabbitmq-server/issues/1593.
 	defaultChannelMax = (2 << 10) - 1
-	defaultLocale     = "en_US"
+	DefaultLocale     = "en_US"
 )
 
 // Config is used in DialConfig and Open to specify the desired tuning
@@ -139,8 +139,8 @@ func DefaultDial(connectionTimeout time.Duration) func(network, addr string) (ne
 // scheme.  It is equivalent to calling DialTLS(amqp, nil).
 func Dial(url string) (*Connection, error) {
 	return DialConfig(url, Config{
-		Heartbeat: defaultHeartbeat,
-		Locale:    defaultLocale,
+		Heartbeat: DefaultHeartbeat,
+		Locale:    DefaultLocale,
 	})
 }
 
@@ -151,9 +151,9 @@ func Dial(url string) (*Connection, error) {
 // DialTLS uses the provided tls.Config when encountering an amqps:// scheme.
 func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 	return DialConfig(url, Config{
-		Heartbeat:       defaultHeartbeat,
+		Heartbeat:       DefaultHeartbeat,
 		TLSClientConfig: amqps,
-		Locale:          defaultLocale,
+		Locale:          DefaultLocale,
 	})
 }
 
@@ -182,7 +182,7 @@ func DialConfig(url string, config Config) (*Connection, error) {
 
 	dialer := config.Dial
 	if dialer == nil {
-		dialer = DefaultDial(defaultConnectionTimeout)
+		dialer = DefaultDial(DefaultConnectionTimeout)
 	}
 
 	conn, err = dialer("tcp", addr)
