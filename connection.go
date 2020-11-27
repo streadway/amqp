@@ -21,7 +21,9 @@ import (
 const (
 	maxChannelMax = (2 << 15) - 1
 
-	DefaultHeartbeat         = 10 * time.Second
+	// DefaultHeartbeat is the default heartbeat interval
+	DefaultHeartbeat = 10 * time.Second
+	// DefaultConnectionTimeout is the default connection timeout
 	DefaultConnectionTimeout = 30 * time.Second
 	defaultProduct           = "https://github.com/streadway/amqp"
 	defaultVersion           = "β"
