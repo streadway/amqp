@@ -30,7 +30,8 @@ const (
 	// Safer default that makes channel leaks a lot easier to spot
 	// before they create operational headaches. See https://github.com/rabbitmq/rabbitmq-server/issues/1593.
 	defaultChannelMax = (2 << 10) - 1
-	DefaultLocale     = "en_US"
+	// DefaultLocale is the default connection locale.
+	DefaultLocale = "en_US"
 )
 
 // Config is used in DialConfig and Open to specify the desired tuning
