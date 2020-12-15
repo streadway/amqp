@@ -193,3 +193,19 @@ func TestIsClosed(t *testing.T) {
 		t.Fatal("connection expected to be marked as closed")
 	}
 }
+
+// TestChannelIsClosed will test the public method IsClosed on a channel.
+func TestChannelIsClosed(t *testing.T) {
+	conn := integrationConnection(t, "public channel.IsClosed()")
+	ch, _ := conn.Channel()
+
+	if ch.IsClosed() {
+		t.Fatalf("connection expected to not be marked as closed")
+	}
+
+	ch.Close()
+
+	if !ch.IsClosed() {
+		t.Fatal("connection expected to be marked as closed")
+	}
+}
