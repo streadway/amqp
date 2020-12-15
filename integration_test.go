@@ -1160,6 +1160,38 @@ func TestIntegrationCancel(t *testing.T) {
 	}
 }
 
+func TestIntegrationGetNextPublishSeqNo(t *testing.T) {
+	if c := integrationConnection(t, "GetNextPublishSeqNo"); c != nil {
+		defer c.Close()
+
+		ch, err := c.Channel()
+		if err != nil {
+			t.Fatalf("channel: %v", err)
+		}
+
+		if err = ch.Confirm(false); err != nil {
+			t.Fatalf("could not confirm")
+		}
+
+		ex := "test-get-next-pub"
+		if err = ch.ExchangeDeclare(ex, "direct", false, false, false, false, nil); err != nil {
+			t.Fatalf("cannot declare %v: got: %v", ex, err)
+		}
+
+		n := ch.GetNextPublishSeqNo()
+		if n != 1 {
+			t.Errorf("wrong next publish seqence number before any publish, expected: %d, got: %d", 1, n)
+		}
+
+		ch.Publish("test-get-next-pub-seq", "", false, false, Publishing{})
+
+		n = ch.GetNextPublishSeqNo()
+		if n != 2 {
+			t.Errorf("wrong next publish seqence number after 1 publishing, expected: %d, got: %d", 2, n)
+		}
+	}
+}
+
 func TestIntegrationConfirm(t *testing.T) {
 	if c, ch := integrationQueue(t, "confirm"); c != nil {
 		defer c.Close()
