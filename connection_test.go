@@ -200,12 +200,12 @@ func TestChannelIsClosed(t *testing.T) {
 	ch, _ := conn.Channel()
 
 	if ch.IsClosed() {
-		t.Fatalf("connection expected to not be marked as closed")
+		t.Fatalf("channel expected to not be marked as closed")
 	}
 
 	ch.Close()
 
 	if !ch.IsClosed() {
-		t.Fatal("connection expected to be marked as closed")
+		t.Fatal("channel expected to be marked as closed")
 	}
 }
