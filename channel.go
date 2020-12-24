@@ -434,6 +434,13 @@ func (ch *Channel) Close() error {
 }
 
 /*
+Detect a channel is closed.
+*/
+func (c *Channel) IsClosed() bool {
+    return (atomic.LoadInt32(&c.closed) == 1)
+}
+
+/*
 NotifyClose registers a listener for when the server sends a channel or
 connection exception in the form of a Connection.Close or Channel.Close method.
 Connection exceptions will be broadcast to all open channels and all channels
