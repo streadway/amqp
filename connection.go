@@ -283,6 +283,13 @@ func (c *Connection) NotifyClose(receiver chan *Error) chan *Error {
 }
 
 /*
+Detect a connection is closed
+*/
+func (c *Connection) IsClosed() bool {
+    return (atomic.LoadInt32(&c.closed) == 1)
+}
+
+/*
 NotifyBlocked registers a listener for RabbitMQ specific TCP flow control
 method extensions connection.blocked and connection.unblocked.  Flow control is
 active with a reason when Blocking.Blocked is true.  When a Connection is
