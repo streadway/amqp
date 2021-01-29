@@ -114,8 +114,6 @@ func (ch *Channel) shutdown(e *Error) {
 			ch.errors <- e
 		}
 
-		ch.consumers.close()
-
 		for _, c := range ch.closes {
 			close(c)
 		}
@@ -131,6 +129,8 @@ func (ch *Channel) shutdown(e *Error) {
 		for _, c := range ch.cancels {
 			close(c)
 		}
+
+		ch.consumers.close()
 
 		// Set the slices to nil to prevent the dispatch() range from sending on
 		// the now closed channels after we release the notifyM mutex
