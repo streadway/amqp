@@ -155,18 +155,23 @@ func readTimestamp(r io.Reader) (v time.Time, err error) {
 
 /*
 'A': []interface{}
+'B': byte
 'D': Decimal
 'F': Table
 'I': int32
+'L': int64
 'S': string
 'T': time.Time
+'U': int16
 'V': nil
-'b': byte
+'b': int8
 'd': float64
 'f': float32
+'i': uint32
 'l': int64
 's': int16
 't': bool
+'u': uint16
 'x': []byte
 */
 func readField(r io.Reader) (v interface{}, err error) {
@@ -190,8 +195,29 @@ func readField(r io.Reader) (v interface{}, err error) {
 		}
 		return value[0], nil
 
+	case 'B':
+		var value int8
+		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
+			return
+		}
+		return value, nil
+
 	case 's':
 		var value int16
+		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
+			return
+		}
+		return value, nil
+
+	case 'U':
+		var value int16
+		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
+			return
+		}
+		return value, nil
+
+	case 'u':
+		var value uint16
 		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return
 		}
@@ -204,7 +230,21 @@ func readField(r io.Reader) (v interface{}, err error) {
 		}
 		return value, nil
 
+	case 'i':
+		var value uint32
+		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
+			return
+		}
+		return value, nil
+
 	case 'l':
+		var value int64
+		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
+			return
+		}
+		return value, nil
+
+	case 'L':
 		var value int64
 		if err = binary.Read(r, binary.BigEndian, &value); err != nil {
 			return
