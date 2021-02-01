@@ -72,6 +72,9 @@ type Channel struct {
 	message messageWithContent
 	header  *headerFrame
 	body    []byte
+
+	// Shutdown cause error
+	shutdownErr *Error
 }
 
 // Constructs a new channel with the given framing rules
@@ -84,6 +87,9 @@ func newChannel(c *Connection, id uint16) *Channel {
 		confirms:   newConfirms(),
 		recv:       (*Channel).recvMethod,
 		errors:     make(chan *Error, 1),
+		shutdownErr: &Error{
+			Reason: "unexpected shutdown",
+		},
 	}
 }
 
@@ -97,6 +103,9 @@ func (ch *Channel) shutdown(e *Error) {
 		// Grab an exclusive lock for the notify channels
 		ch.notifyM.Lock()
 		defer ch.notifyM.Unlock()
+
+		// Set shutdown error so it can be accessible through the whole shutdown process up to the end
+		ch.shutdownErr = e
 
 		// Broadcast abnormal shutdown
 		if e != nil {
@@ -1590,4 +1599,15 @@ func (ch *Channel) Reject(tag uint64, requeue bool) error {
 		DeliveryTag: tag,
 		Requeue:     requeue,
 	})
+}
+
+/*
+ShutdownErr returns an error initiated the shutdown process. It's the same
+error which to be broadcast to every closes chan upon shutdown process
+but it could be accessed explicitly at any time during shutdown process.
+
+See also Channel.NotifyClose on shutdown error's behavior
+*/
+func (ch *Channel) ShutdownErr() *Error {
+	return ch.shutdownErr
 }
