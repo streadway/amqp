@@ -57,6 +57,7 @@ func (me *ExternalAuth) Mechanism() string {
 	return "EXTERNAL"
 }
 
+// Response returns zero ?
 func (me *ExternalAuth) Response() string {
 	return "\000*\000*"
 }

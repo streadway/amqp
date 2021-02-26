@@ -130,6 +130,7 @@ func DefaultDial(connectionTimeout time.Duration) func(network, addr string) (ne
 	}
 }
 
+// Option type for Dial
 type Option func(*Config) error
 
 // SetOptions set amqp connection options
@@ -143,6 +144,7 @@ func (a *Config) SetOptions(opts ...Option) error {
 	return nil
 }
 
+// TLS is a wrapper for tls.Config to send as a Dial Option
 func TLS(val *tls.Config) Option {
 	return func(t *Config) error {
 		t.TLSClientConfig = val
@@ -150,6 +152,7 @@ func TLS(val *tls.Config) Option {
 	}
 }
 
+// Auth is a wrapper for SASL to send as a Dial Option
 func Auth(val []Authentication) Option {
 	return func(t *Config) error {
 		t.SASL = val
