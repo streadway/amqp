@@ -168,6 +168,9 @@ func (ch *Channel) open() error {
 // Performs a request/response call for when the message is not NoWait and is
 // specified as Synchronous.
 func (ch *Channel) call(req message, res ...message) error {
+	ch.m.Lock()
+	defer ch.m.Unlock()
+
 	if err := ch.send(req); err != nil {
 		return err
 	}
@@ -288,7 +291,9 @@ func (ch *Channel) dispatch(msg message) {
 			c <- m.Active
 		}
 		ch.notifyM.RUnlock()
+		ch.m.Lock()
 		ch.send(&channelFlowOk{Active: m.Active})
+		ch.m.Unlock()
 
 	case *basicCancel:
 		ch.notifyM.RLock()
