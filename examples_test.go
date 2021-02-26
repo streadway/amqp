@@ -104,7 +104,7 @@ func ExampleDialTLS() {
 	log.Printf("conn: %v, err: %v", conn, err)
 }
 
-func ExampleDialwithTLSandExternalAuth() {
+func ExampleDial_withTLSandExternalAuth() {
 	// This example assumes you enabled the rabbitmq-auth-mechanism-ssl plugin
 	// and your RabbitMQ server has TLS enabled
 
