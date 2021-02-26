@@ -130,6 +130,33 @@ func DefaultDial(connectionTimeout time.Duration) func(network, addr string) (ne
 	}
 }
 
+type Option func(*Config) error
+
+// SetOptions set amqp connection options
+func (a *Config) SetOptions(opts ...Option) error {
+	for _, opt := range opts {
+		if err := opt(a); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func TLS(val *tls.Config) Option {
+	return func(t *Config) error {
+		t.TLSClientConfig = val
+		return nil
+	}
+}
+
+func Auth(val []Authentication) Option {
+	return func(t *Config) error {
+		t.SASL = val
+		return nil
+	}
+}
+
 // Dial accepts a string in the AMQP URI format and returns a new Connection
 // over TCP using PlainAuth.  Defaults to a server heartbeat interval of 10
 // seconds and sets the handshake deadline to 30 seconds. After handshake,
@@ -137,11 +164,13 @@ func DefaultDial(connectionTimeout time.Duration) func(network, addr string) (ne
 //
 // Dial uses the zero value of tls.Config when it encounters an amqps://
 // scheme.  It is equivalent to calling DialTLS(amqp, nil).
-func Dial(url string) (*Connection, error) {
-	return DialConfig(url, Config{
+func Dial(url string, opts ...Option) (*Connection, error) {
+	config := Config{
 		Heartbeat: defaultHeartbeat,
 		Locale:    defaultLocale,
-	})
+	}
+	config.SetOptions(opts...)
+	return DialConfig(url, config)
 }
 
 // DialTLS accepts a string in the AMQP URI format and returns a new Connection
@@ -158,7 +187,7 @@ func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 
 }
 
-// DialTLS_CertAuth accepts a string in the AMQP URI format and returns a new
+// DialTLSExternalAuth accepts a string in the AMQP URI format and returns a new
 // Connection over TCP using EXTERNAL auth.  Defaults to a server heartbeat
 // interval of 10 seconds and sets the initial read deadline to 30 seconds.
 //
@@ -167,12 +196,12 @@ func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 //
 // DialTLS_CertAuth uses the provided tls.Config when encountering an amqps://
 // scheme.
-func DialTLS_CertAuth(url string, amqps *tls.Config) (*Connection, error) {
+func DialTLSExternalAuth(url string, amqps *tls.Config) (*Connection, error) {
 
 	return DialConfig(url, Config{
 		Heartbeat:       defaultHeartbeat,
 		TLSClientConfig: amqps,
-		SASL:            []Authentication{&CertAuth{}},
+		SASL:            []Authentication{&ExternalAuth{}},
 	})
 }
 

@@ -48,21 +48,21 @@ func (auth *AMQPlainAuth) Response() string {
 	return fmt.Sprintf("LOGIN:%sPASSWORD:%s", auth.Username, auth.Password)
 }
 
-// CertAuth for RabbitMQ-auth-mechanism-ssl.
-type CertAuth struct {
+// ExternalAuth for RabbitMQ-auth-mechanism-ssl.
+type ExternalAuth struct {
 }
 
-func (me *CertAuth) Mechanism() string {
+// Mechanism returns "EXTERNAL"
+func (me *ExternalAuth) Mechanism() string {
 	return "EXTERNAL"
 }
 
-func (me *CertAuth) Response() string {
-	return fmt.Sprintf("\000*\000*")
+func (me *ExternalAuth) Response() string {
+	return "\000*\000*"
 }
 
 // Finds the first mechanism preferred by the client that the server supports.
 func pickSASLMechanism(client []Authentication, serverMechanisms []string) (auth Authentication, ok bool) {
-
 	for _, auth = range client {
 		for _, mech := range serverMechanisms {
 			if auth.Mechanism() == mech {
