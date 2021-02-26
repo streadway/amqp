@@ -130,6 +130,36 @@ func DefaultDial(connectionTimeout time.Duration) func(network, addr string) (ne
 	}
 }
 
+// Option type for Dial
+type Option func(*Config) error
+
+// SetOptions set amqp connection options
+func (a *Config) SetOptions(opts ...Option) error {
+	for _, opt := range opts {
+		if err := opt(a); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// TLS is a wrapper for tls.Config to send as a Dial Option
+func TLS(val *tls.Config) Option {
+	return func(t *Config) error {
+		t.TLSClientConfig = val
+		return nil
+	}
+}
+
+// Auth is a wrapper for SASL to send as a Dial Option
+func Auth(val []Authentication) Option {
+	return func(t *Config) error {
+		t.SASL = val
+		return nil
+	}
+}
+
 // Dial accepts a string in the AMQP URI format and returns a new Connection
 // over TCP using PlainAuth.  Defaults to a server heartbeat interval of 10
 // seconds and sets the handshake deadline to 30 seconds. After handshake,
@@ -137,11 +167,13 @@ func DefaultDial(connectionTimeout time.Duration) func(network, addr string) (ne
 //
 // Dial uses the zero value of tls.Config when it encounters an amqps://
 // scheme.  It is equivalent to calling DialTLS(amqp, nil).
-func Dial(url string) (*Connection, error) {
-	return DialConfig(url, Config{
+func Dial(url string, opts ...Option) (*Connection, error) {
+	config := Config{
 		Heartbeat: defaultHeartbeat,
 		Locale:    defaultLocale,
-	})
+	}
+	config.SetOptions(opts...)
+	return DialConfig(url, config)
 }
 
 // DialTLS accepts a string in the AMQP URI format and returns a new Connection
@@ -154,6 +186,25 @@ func DialTLS(url string, amqps *tls.Config) (*Connection, error) {
 		Heartbeat:       defaultHeartbeat,
 		TLSClientConfig: amqps,
 		Locale:          defaultLocale,
+	})
+
+}
+
+// DialTLSExternalAuth accepts a string in the AMQP URI format and returns a new
+// Connection over TCP using EXTERNAL auth.  Defaults to a server heartbeat
+// interval of 10 seconds and sets the initial read deadline to 30 seconds.
+//
+// This mechanism is used, when RabbitMQ is configured for EXTERNAL auth with
+// ssl_cert_login plugin for userless/passwordless logons
+//
+// DialTLS_CertAuth uses the provided tls.Config when encountering an amqps://
+// scheme.
+func DialTLSExternalAuth(url string, amqps *tls.Config) (*Connection, error) {
+
+	return DialConfig(url, Config{
+		Heartbeat:       defaultHeartbeat,
+		TLSClientConfig: amqps,
+		SASL:            []Authentication{&ExternalAuth{}},
 	})
 }
 
