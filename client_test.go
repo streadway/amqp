@@ -7,6 +7,7 @@ package amqp
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"reflect"
 	"testing"
@@ -712,5 +713,49 @@ func TestLeakClosedConsumersIssue264(t *testing.T) {
 
 	if _, open := <-consumer; open {
 		t.Fatalf("expected deliveries channel to be closed immediately when the connection is closed so not to leak the bufferDeliveries goroutine")
+	}
+}
+
+func TestPublishWithContext(t *testing.T) {
+	rwc, srv := newSession(t)
+	defer rwc.Close()
+
+	done := make(chan bool)
+
+	go func() {
+		defer close(done)
+		srv.connectionOpen()
+		srv.channelOpen(1)
+		srv.recv(1, &basicPublish{})
+	}()
+
+	cfg := defaultConfig()
+
+	c, err := Open(rwc, cfg)
+	if err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+
+	ch, err := c.Channel()
+	if err != nil {
+		t.Fatalf("could not open channel: %v (%s)", ch, err)
+	}
+
+	canclledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = ch.PublishWithContext(canclledCtx, "", "q", false, false, Publishing{Body: []byte("anything")})
+	if err != canclledCtx.Err() {
+		t.Fatalf("unexpected error during publish with closed context: %v", err)
+	}
+
+	err = ch.PublishWithContext(context.Background(), "", "q", false, false, Publishing{Body: []byte("anything")})
+	if err != nil {
+		t.Fatalf("unexpected error during publish with valid context: %v", err)
+	}
+
+	select {
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout")
+	case <-done:
 	}
 }

@@ -7,6 +7,7 @@ package amqp
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"io"
 	"net"
@@ -77,9 +78,9 @@ type Config struct {
 // multiplexed on this channel.  There must always be active receivers for
 // every asynchronous message on this connection.
 type Connection struct {
-	destructor sync.Once  // shutdown once
-	sendM      sync.Mutex // conn writer mutex
-	m          sync.Mutex // struct field mutex
+	destructor sync.Once     // shutdown once
+	sendSema   chan struct{} // conn writer semaphor
+	m          sync.Mutex    // struct field mutex
 
 	conn io.ReadWriteCloser
 
@@ -229,6 +230,7 @@ func Open(conn io.ReadWriteCloser, config Config) (*Connection, error) {
 		sends:     make(chan time.Time),
 		errors:    make(chan *Error, 1),
 		deadlines: make(chan readDeadliner, 1),
+		sendSema:  make(chan struct{}, 1),
 	}
 	go c.reader(conn)
 	return c, c.open(config)
@@ -355,14 +357,18 @@ func (c *Connection) IsClosed() bool {
 	return (atomic.LoadInt32(&c.closed) == 1)
 }
 
-func (c *Connection) send(f frame) error {
+func (c *Connection) send(ctx context.Context, f frame) error {
 	if c.IsClosed() {
 		return ErrClosed
 	}
 
-	c.sendM.Lock()
+	select {
+	case c.sendSema <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	err := c.writer.WriteFrame(f)
-	c.sendM.Unlock()
+	<-c.sendSema
 
 	if err != nil {
 		// shutdown could be re-entrant from signaling notify chans
@@ -443,7 +449,7 @@ func (c *Connection) dispatch0(f frame) {
 		switch m := mf.Method.(type) {
 		case *connectionClose:
 			// Send immediately as shutdown will close our side of the writer.
-			c.send(&methodFrame{
+			c.send(context.Background(), &methodFrame{
 				ChannelId: 0,
 				Method:    &connectionCloseOk{},
 			})
@@ -496,7 +502,7 @@ func (c *Connection) dispatchClosed(f frame) {
 	if mf, ok := f.(*methodFrame); ok {
 		switch mf.Method.(type) {
 		case *channelClose:
-			c.send(&methodFrame{
+			c.send(context.Background(), &methodFrame{
 				ChannelId: f.channel(),
 				Method:    &channelCloseOk{},
 			})
@@ -565,7 +571,7 @@ func (c *Connection) heartbeater(interval time.Duration, done chan *Error) {
 		case at := <-sendTicks:
 			// When idle, fill the space with a heartbeat frame
 			if at.Sub(lastSent) > interval-time.Second {
-				if err := c.send(&heartbeatFrame{}); err != nil {
+				if err := c.send(context.Background(), &heartbeatFrame{}); err != nil {
 					// send heartbeats even after close/closeOk so we
 					// tick until the connection starts erroring
 					return
@@ -662,7 +668,7 @@ func (c *Connection) call(req message, res ...message) error {
 	// Special case for when the protocol header frame is sent insted of a
 	// request method
 	if req != nil {
-		if err := c.send(&methodFrame{ChannelId: 0, Method: req}); err != nil {
+		if err := c.send(context.Background(), &methodFrame{ChannelId: 0, Method: req}); err != nil {
 			return err
 		}
 	}
@@ -701,7 +707,7 @@ func (c *Connection) call(req message, res ...message) error {
 //    close-Connection    = C:CLOSE S:CLOSE-OK
 //                        / S:CLOSE C:CLOSE-OK
 func (c *Connection) open(config Config) error {
-	if err := c.send(&protocolHeader{}); err != nil {
+	if err := c.send(context.Background(), &protocolHeader{}); err != nil {
 		return err
 	}
 
@@ -786,7 +792,7 @@ func (c *Connection) openTune(config Config, auth Authentication) error {
 	// Connection.Tune method"
 	go c.heartbeater(c.Config.Heartbeat, c.NotifyClose(make(chan *Error, 1)))
 
-	if err := c.send(&methodFrame{
+	if err := c.send(context.Background(), &methodFrame{
 		ChannelId: 0,
 		Method: &connectionTuneOk{
 			ChannelMax: uint16(c.Config.ChannelMax),
