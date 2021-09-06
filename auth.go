@@ -6,6 +6,7 @@
 package amqp
 
 import (
+	"bytes"
 	"fmt"
 )
 
@@ -43,9 +44,14 @@ func (auth *AMQPlainAuth) Mechanism() string {
 	return "AMQPLAIN"
 }
 
-// Response returns the null character delimited encoding for the SASL PLAIN Mechanism.
+// Response returns an AMQP encoded credentials table, without the field table size.
 func (auth *AMQPlainAuth) Response() string {
-	return fmt.Sprintf("LOGIN:%sPASSWORD:%s", auth.Username, auth.Password)
+	var buf bytes.Buffer
+	table := Table{"LOGIN": auth.Username, "PASSWORD": auth.Password}
+	if err := writeTable(&buf, table); err != nil {
+		return ""
+	}
+	return buf.String()[4:]
 }
 
 // Finds the first mechanism preferred by the client that the server supports.
