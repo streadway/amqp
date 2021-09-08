@@ -25,9 +25,20 @@ type server struct {
 	tune  connectionTuneOk
 }
 
+var defaultLogin = "guest"
+var defaultPassword = "guest"
+
 func defaultConfig() Config {
 	return Config{
-		SASL:   []Authentication{&PlainAuth{"guest", "guest"}},
+		SASL:   []Authentication{&PlainAuth{defaultLogin, defaultPassword}},
+		Vhost:  "/",
+		Locale: defaultLocale,
+	}
+}
+
+func amqplainConfig() Config {
+	return Config{
+		SASL:   []Authentication{&AMQPlainAuth{defaultLogin, defaultPassword}},
 		Vhost:  "/",
 		Locale: defaultLocale,
 	}
@@ -295,6 +306,42 @@ func TestOpenFailedSASLUnsupportedMechanisms(t *testing.T) {
 	c, err := Open(rwc, defaultConfig())
 	if err != ErrSASL {
 		t.Fatalf("expected ErrSASL got: %+v on %+v", err, c)
+	}
+}
+
+func TestOpenAMQPlainAuth(t *testing.T) {
+	auth := make(chan Table)
+	rwc, srv := newSession(t)
+
+	go func() {
+		srv.expectAMQP()
+		srv.send(0, &connectionStart{
+			VersionMajor: 0,
+			VersionMinor: 9,
+			Mechanisms:   "AMQPLAIN",
+			Locales:      "en_US",
+		})
+		srv.recv(0, &srv.start)
+		var authresp bytes.Buffer
+		_ = writeLongstr(&authresp, srv.start.Response)
+		table, _ := readTable(&authresp)
+		srv.connectionTune()
+
+		srv.recv(0, &connectionOpen{})
+		srv.send(0, &connectionOpenOk{})
+		rwc.Close()
+		auth <- table
+	}()
+
+	if c, err := Open(rwc, amqplainConfig()); err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+	table := <-auth
+	if table["LOGIN"] != defaultLogin {
+		t.Fatalf("unexpected login: want: %s, got: %s", defaultLogin, table["LOGIN"])
+	}
+	if table["PASSWORD"] != defaultPassword {
+		t.Fatalf("unexpected password: want: %s, got: %s", defaultPassword, table["PASSWORD"])
 	}
 }
 
