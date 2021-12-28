@@ -191,7 +191,7 @@ func (session *Session) changeConnection(connection *amqp.Connection) {
 // and updates the channel listeners to reflect this.
 func (session *Session) changeChannel(channel *amqp.Channel) {
 	session.channel = channel
-	session.notifyChanClose = make(chan *amqp.Error)
+	session.notifyChanClose = make(chan *amqp.Error, 1)
 	session.notifyConfirm = make(chan amqp.Confirmation, 1)
 	session.channel.NotifyClose(session.notifyChanClose)
 	session.channel.NotifyPublish(session.notifyConfirm)
