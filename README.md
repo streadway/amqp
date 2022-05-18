@@ -5,18 +5,20 @@
 ## Beware of Abandonware
 
 This repository is **NOT ACTIVELY MAINTAINED**. Consider using
-a different fork instead: [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go)
+a different fork instead: [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go).
+In case of questions, start a discussion in that repo or [use other RabbitMQ community resources](https://rabbitmq.com/contact.html).
 
 
 
 ## Project Maturity
 
-This project has been used in production systems for many years. It is reasonably mature
-and feature complete, and as of November 2016 has [a team of maintainers](https://github.com/streadway/amqp/issues/215).
+This project has been used in production systems for many years. As of 2022,
+this repository is **NOT ACTIVELY MAINTAINED**.
 
-Future API changes are unlikely but possible. They will be discussed on [Github
-issues](https://github.com/streadway/amqp/issues) along with any bugs or
-enhancements.
+This repository is **very strict** about any potential public API changes.
+You may want to consider [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) which
+is more willing to adapt the API.
+
 
 ## Supported Go Versions
 
