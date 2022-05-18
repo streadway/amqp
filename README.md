@@ -1,8 +1,13 @@
 [![Build Status](https://api.travis-ci.org/streadway/amqp.svg)](http://travis-ci.org/streadway/amqp) [![GoDoc](https://godoc.org/github.com/streadway/amqp?status.svg)](http://godoc.org/github.com/streadway/amqp)
 
-# Go RabbitMQ Client Library
+# Go RabbitMQ Client Library (Unmaintained Fork)
 
-This is an AMQP 0.9.1 client with RabbitMQ extensions in Go.
+## Beware of Abandonware
+
+This repository is **NOT ACTIVELY MAINTAINED**. Consider using
+a different fork instead: [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go)
+
+
 
 ## Project Maturity
 
