@@ -1,7 +1,7 @@
 // Command pubsub is an example of a fanout exchange with dynamic reliable
 // membership, reading from stdin, writing to stdout.
 //
-// This example shows how to implement reconnect logic independent from a
+// This example shows how to implement reconnect logic independent of a
 // publish/subscribe loop with bridges to application types.
 
 package main
@@ -168,7 +168,7 @@ func subscribe(sessions chan chan session, messages chan<- message) {
 			return
 		}
 
-		routingKey := "application specific routing key for fancy toplogies"
+		routingKey := "application specific routing key for fancy topologies"
 		if err := sub.QueueBind(queue, routingKey, exchange, false, nil); err != nil {
 			log.Printf("cannot consume without a binding to exchange: %q, %v", exchange, err)
 			return
