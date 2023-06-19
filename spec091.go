@@ -1174,7 +1174,7 @@ func (msg *queueDeclare) id() (uint16, uint16) {
 }
 
 func (msg *queueDeclare) wait() bool {
-	return true && !msg.NoWait
+	return !msg.NoWait
 }
 
 func (msg *queueDeclare) write(w io.Writer) (err error) {
