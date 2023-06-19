@@ -25,12 +25,25 @@ type server struct {
 	tune  connectionTuneOk
 }
 
-func defaultConfig() Config {
+var defaultLogin = "guest"
+var defaultPassword = "guest"
+var defaultPlainAuth = &PlainAuth{defaultLogin, defaultPassword}
+var defaultAMQPlainAuth = &AMQPlainAuth{defaultLogin, defaultPassword}
+
+func defaultConfigWithAuth(auth Authentication) Config {
 	return Config{
-		SASL:   []Authentication{&PlainAuth{"guest", "guest"}},
+		SASL:   []Authentication{auth},
 		Vhost:  "/",
 		Locale: defaultLocale,
 	}
+}
+
+func defaultConfig() Config {
+	return defaultConfigWithAuth(defaultPlainAuth)
+}
+
+func amqplainConfig() Config {
+	return defaultConfigWithAuth(defaultAMQPlainAuth)
 }
 
 func newServer(t *testing.T, serverIO, clientIO io.ReadWriteCloser) *server {
@@ -154,15 +167,21 @@ func (t *server) expectAMQP() {
 	t.expectBytes([]byte{'A', 'M', 'Q', 'P', 0, 0, 9, 1})
 }
 
-func (t *server) connectionStart() {
+func (t *server) connectionStartWithMechanisms(mechs string, recv bool) {
 	t.send(0, &connectionStart{
 		VersionMajor: 0,
 		VersionMinor: 9,
-		Mechanisms:   "PLAIN",
-		Locales:      "en_US",
+		Mechanisms:   mechs,
+		Locales:      defaultLocale,
 	})
 
-	t.recv(0, &t.start)
+	if recv {
+		t.recv(0, &t.start)
+	}
+}
+
+func (t *server) connectionStart() {
+	t.connectionStartWithMechanisms("PLAIN", true)
 }
 
 func (t *server) connectionTune() {
@@ -284,17 +303,42 @@ func TestOpenFailedSASLUnsupportedMechanisms(t *testing.T) {
 
 	go func() {
 		srv.expectAMQP()
-		srv.send(0, &connectionStart{
-			VersionMajor: 0,
-			VersionMinor: 9,
-			Mechanisms:   "KERBEROS NTLM",
-			Locales:      "en_US",
-		})
+		srv.connectionStartWithMechanisms("KERBEROS NTLM", false)
 	}()
 
 	c, err := Open(rwc, defaultConfig())
 	if err != ErrSASL {
 		t.Fatalf("expected ErrSASL got: %+v on %+v", err, c)
+	}
+}
+
+func TestOpenAMQPlainAuth(t *testing.T) {
+	auth := make(chan Table)
+	rwc, srv := newSession(t)
+
+	go func() {
+		srv.expectAMQP()
+		srv.connectionStartWithMechanisms("AMQPLAIN", true)
+		var authresp bytes.Buffer
+		_ = writeLongstr(&authresp, srv.start.Response)
+		table, _ := readTable(&authresp)
+		srv.connectionTune()
+
+		srv.recv(0, &connectionOpen{})
+		srv.send(0, &connectionOpenOk{})
+		rwc.Close()
+		auth <- table
+	}()
+
+	if c, err := Open(rwc, amqplainConfig()); err != nil {
+		t.Fatalf("could not create connection: %v (%s)", c, err)
+	}
+	table := <-auth
+	if table["LOGIN"] != defaultLogin {
+		t.Fatalf("unexpected login: want: %s, got: %s", defaultLogin, table["LOGIN"])
+	}
+	if table["PASSWORD"] != defaultPassword {
+		t.Fatalf("unexpected password: want: %s, got: %s", defaultPassword, table["PASSWORD"])
 	}
 }
 
