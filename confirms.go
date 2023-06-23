@@ -1,6 +1,9 @@
 package amqp
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // confirms resequences and notifies one or multiple publisher confirmation listeners
 type confirms struct {
@@ -29,11 +32,7 @@ func (c *confirms) Listen(l chan Confirmation) {
 
 // publish increments the publishing counter
 func (c *confirms) Publish() uint64 {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	c.published++
-	return c.published
+	return atomic.AddUint64(&c.published, 1)
 }
 
 // confirm confirms one publishing, increments the expecting delivery tag, and
