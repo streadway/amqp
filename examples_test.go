@@ -104,6 +104,36 @@ func ExampleDialTLS() {
 	log.Printf("conn: %v, err: %v", conn, err)
 }
 
+func ExampleDial_withTLSandExternalAuth() {
+	// This example assumes you enabled the rabbitmq-auth-mechanism-ssl plugin
+	// and your RabbitMQ server has TLS enabled
+
+	// The username will be read from the DN or CN fields of the certificate
+	// you provide, you can see the more detailed information provided here
+	// https://github.com/rabbitmq/rabbitmq-auth-mechanism-ssl#username-extraction-from-certificate
+
+	cfg := new(tls.Config)
+
+	// see at the top
+	cfg.RootCAs = x509.NewCertPool()
+
+	if ca, err := ioutil.ReadFile("testca/cacert.pem"); err == nil {
+		cfg.RootCAs.AppendCertsFromPEM(ca)
+	}
+
+	// Move the client cert and key to a location specific to your application
+	// and load them here.
+
+	if cert, err := tls.LoadX509KeyPair("client/cert.pem", "client/key.pem"); err == nil {
+		cfg.Certificates = append(cfg.Certificates, cert)
+	}
+
+	// If you don't supply the Auth method as EXTERNAL, connection wouldn't fail and you will be logged in as the guest user.
+	conn, err := amqp.Dial("amqps://server-name-from-certificate/", amqp.TLS(cfg), amqp.Auth([]amqp.Authentication{&amqp.ExternalAuth{}}))
+
+	log.Printf("conn: %v, err: %v", conn, err)
+}
+
 func ExampleChannel_Confirm_bridge() {
 	// This example acts as a bridge, shoveling all messages sent from the source
 	// exchange "log" to destination exchange "log".
