@@ -1290,6 +1290,15 @@ func (ch *Channel) ExchangeUnbind(destination, key, source string, noWait bool, 
 	)
 }
 
+// GetNextPublishSeqNo returns the sequence number of the next message to be
+// published, when in confirm mode.
+func (ch *Channel) GetNextPublishSeqNo() uint64 {
+	ch.confirms.Lock()
+	defer ch.confirms.Unlock()
+
+	return ch.confirms.published + 1
+}
+
 /*
 Publish sends a Publishing from the client to an exchange on the server.
 
