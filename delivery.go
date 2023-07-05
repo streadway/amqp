@@ -13,7 +13,7 @@ import (
 var errDeliveryNotInitialized = errors.New("delivery not initialized")
 
 // Acknowledger notifies the server of successful or failed consumption of
-// delivieries via identifier found in the Delivery.DeliveryTag field.
+// deliveries via identifier found in the Delivery.DeliveryTag field.
 //
 // Applications can provide mock implementations in tests of Delivery handlers.
 type Acknowledger interface {
