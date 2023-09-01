@@ -298,6 +298,11 @@ func writeField(w io.Writer, value interface{}) (err error) {
 		}
 		enc = buf[:2]
 
+	case int8:
+		buf[0] = 'B'
+		buf[1] = byte(v)
+		enc = buf[:2]
+
 	case byte:
 		buf[0] = 'b'
 		buf[1] = byte(v)
@@ -305,6 +310,11 @@ func writeField(w io.Writer, value interface{}) (err error) {
 
 	case int16:
 		buf[0] = 's'
+		binary.BigEndian.PutUint16(buf[1:3], uint16(v))
+		enc = buf[:3]
+
+	case uint16:
+		buf[0] = 'u'
 		binary.BigEndian.PutUint16(buf[1:3], uint16(v))
 		enc = buf[:3]
 
@@ -319,6 +329,11 @@ func writeField(w io.Writer, value interface{}) (err error) {
 		enc = buf[:5]
 
 	case int64:
+		buf[0] = 'l'
+		binary.BigEndian.PutUint64(buf[1:9], uint64(v))
+		enc = buf[:9]
+
+	case uint64:
 		buf[0] = 'l'
 		binary.BigEndian.PutUint64(buf[1:9], uint64(v))
 		enc = buf[:9]
