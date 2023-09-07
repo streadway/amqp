@@ -224,6 +224,10 @@ func DialUri(uri *URI) (*Connection, error) {
 	})
 }
 
+// DialUriConfig accepts a string in the AMQP URI format and a configuration for
+// the transport and connection setup, returning a new Connection.  Defaults to
+// a server heartbeat interval of 10 seconds and sets the initial read deadline
+// to 30 seconds.
 func DialUriConfig(uri *URI, config Config) (*Connection, error) {
 	var err error
 	var conn net.Conn
